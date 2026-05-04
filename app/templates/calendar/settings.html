@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Ustawienia kalendarzy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-10">
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+            <div>
+                <h1 class="h2 mb-1">Ustawienia kalendarzy</h1>
+                <p class="text-muted mb-0">Dodawaj osobne kalendarze przez ich tajne adresy iCal.</p>
+            </div>
+            <a href="{{ url_for('calendar.calendar_view') }}" class="btn btn-outline-secondary">Wroc do planu dnia</a>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h2 class="h4 mb-3">Dodaj kalendarz</h2>
+                        <form method="post">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Nazwa</label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="name"
+                                    name="name"
+                                    placeholder="Np. Praca, Studia, Prywatny"
+                                    required
+                                >
+                            </div>
+                            <div class="mb-3">
+                                <label for="ical_url" class="form-label">Adres iCal</label>
+                                <textarea
+                                    class="form-control"
+                                    id="ical_url"
+                                    name="ical_url"
+                                    rows="5"
+                                    placeholder="https://..."
+                                    required
+                                ></textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Zapisz kalendarz</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h2 class="h4 mb-3">Zapisane kalendarze</h2>
+                        {% if subscriptions %}
+                            <div class="list-group list-group-flush">
+                                {% for subscription in subscriptions %}
+                                    <div class="list-group-item px-0 py-3">
+                                        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                            <div>
+                                                <h3 class="h5 mb-1">{{ subscription.name }}</h3>
+                                                <p class="mb-1 small text-muted">Dodano: {{ subscription.created_at.strftime("%d.%m.%Y %H:%M") }}</p>
+                                                <code class="small">{{ subscription.ical_url }}</code>
+                                            </div>
+                                            <form
+                                                method="post"
+                                                action="{{ url_for('calendar.delete_subscription', subscription_id=subscription.id) }}"
+                                            >
+                                                <button type="submit" class="btn btn-outline-danger btn-sm">Usun</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <p class="mb-0 text-muted">Nie dodano jeszcze zadnego kalendarza.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

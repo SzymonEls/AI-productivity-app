@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Kalendarz{% endblock %}
+
+{% block content %}
+<section
+    class="calendar-page"
+    data-calendar-page
+    data-events-url="{{ url_for('calendar.calendar_events') }}"
+    data-initial-date="{{ selected_date.isoformat() }}"
+>
+    <div class="calendar-toolbar card shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                <div>
+                    <h1 class="h3 mb-1">Plan dnia</h1>
+                    <p class="text-muted mb-0">Szybki widok wydarzen ze wszystkich zapisanych kalendarzy iCal.</p>
+                </div>
+                <div class="d-flex gap-2 flex-wrap">
+                    <a href="{{ url_for('calendar.settings') }}" class="btn btn-outline-primary btn-sm">Ustawienia kalendarzy</a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-refresh>Odswiez</button>
+                </div>
+            </div>
+
+            <div class="calendar-toolbar-controls mt-3">
+                <div class="calendar-date-pill">
+                    <span class="calendar-date-label">Dzien</span>
+                    <strong data-calendar-date-label>{{ selected_date.strftime("%d.%m.%Y") }}</strong>
+                </div>
+                <form method="get" class="calendar-date-form" data-calendar-form>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="-1">Poprzedni</button>
+                    <input
+                        type="date"
+                        name="date"
+                        value="{{ selected_date.isoformat() }}"
+                        class="form-control form-control-sm"
+                        data-calendar-input
+                    >
+                    <button type="submit" class="btn btn-primary btn-sm">Pokaz</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="1">Nastepny</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {% if not subscriptions %}
+        <div class="card shadow-sm">
+            <div class="card-body py-4">
+                <h2 class="h5 mb-2">Brak kalendarzy</h2>
+                <p class="mb-3 text-muted">Dodaj pierwszy tajny adres iCal, aby zobaczyc plan dnia.</p>
+                <a href="{{ url_for('calendar.settings') }}" class="btn btn-primary btn-sm">Dodaj kalendarz iCal</a>
+            </div>
+        </div>
+    {% else %}
+        <div class="calendar-layout">
+            <aside class="calendar-sidebar card shadow-sm">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h2 class="h6 mb-0">Kalendarze</h2>
+                        <span class="badge rounded-pill text-bg-dark">{{ subscriptions|length }}</span>
+                    </div>
+                    <div class="calendar-subscription-list">
+                        {% for subscription in subscriptions %}
+                            <span class="calendar-subscription-chip">{{ subscription.name }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </aside>
+
+            <section class="calendar-main card shadow-sm">
+                <div class="card-body py-3">
+                    <div class="calendar-events-container" data-calendar-events>
+                        <div class="calendar-loading-state" data-calendar-loading>
+                            <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+                            <span>Ladowanie wydarzen...</span>
+                        </div>
+                    </div>
+                    <noscript>
+                        <p class="mb-0 mt-3 text-muted">Do zaladowania wydarzen potrzebny jest JavaScript.</p>
+                    </noscript>
+                </div>
+            </section>
+        </div>
+    {% endif %}
+</section>
+
+<script>
+(() => {
+    const calendarPage = document.querySelector("[data-calendar-page]");
+    if (!calendarPage) {
+        return;
+    }
+
+    const eventsUrl = calendarPage.dataset.eventsUrl;
+    const eventsContainer = calendarPage.querySelector("[data-calendar-events]");
+    const dateInput = calendarPage.querySelector("[data-calendar-input]");
+    const dateLabel = calendarPage.querySelector("[data-calendar-date-label]");
+    const form = calendarPage.querySelector("[data-calendar-form]");
+    const refreshButton = calendarPage.querySelector("[data-calendar-refresh]");
+    const shiftButtons = calendarPage.querySelectorAll("[data-calendar-shift]");
+    let activeRequestId = 0;
+
+    if (!eventsContainer || !dateInput) {
+        return;
+    }
+
+    function formatDateLabel(dateValue) {
+        const [year, month, day] = dateValue.split("-").map(Number);
+        const localDate = new Date(year, month - 1, day);
+        return new Intl.DateTimeFormat("pl-PL").format(localDate);
+    }
+
+    function setDate(dateValue, pushState = true) {
+        dateInput.value = dateValue;
+        if (dateLabel) {
+            dateLabel.textContent = formatDateLabel(dateValue);
+        }
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("date", dateValue);
+        if (pushState) {
+            window.history.pushState({ date: dateValue }, "", nextUrl);
+        } else {
+            window.history.replaceState({ date: dateValue }, "", nextUrl);
+        }
+    }
+
+    async function loadEvents(dateValue, pushState = true) {
+        activeRequestId += 1;
+        const requestId = activeRequestId;
+
+        setDate(dateValue, pushState);
+        eventsContainer.innerHTML = `
+            <div class="calendar-loading-state">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
+                <span>Ladowanie wydarzen...</span>
+            </div>
+        `;
+
+        try {
+            const url = new URL(eventsUrl, window.location.origin);
+            url.searchParams.set("date", dateValue);
+
+            const response = await fetch(url, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
+            const html = await response.text();
+            if (requestId !== activeRequestId) {
+                return;
+            }
+
+            eventsContainer.innerHTML = html;
+        } catch (error) {
+            if (requestId !== activeRequestId) {
+                return;
+            }
+
+            eventsContainer.innerHTML = `
+                <div class="alert alert-warning py-2 mb-0">
+                    Nie udalo sie zaladowac wydarzen. Sprobuj ponownie za chwile.
+                </div>
+            `;
+        }
+    }
+
+    form?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        loadEvents(dateInput.value);
+    });
+
+    refreshButton?.addEventListener("click", () => {
+        loadEvents(dateInput.value);
+    });
+
+    shiftButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            const baseDate = new Date(`${dateInput.value}T00:00:00`);
+            baseDate.setDate(baseDate.getDate() + Number(button.dataset.calendarShift || 0));
+            const nextValue = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, "0")}-${String(baseDate.getDate()).padStart(2, "0")}`;
+            loadEvents(nextValue);
+        });
+    });
+
+    window.addEventListener("popstate", (event) => {
+        const popDate = event.state?.date || dateInput.value || calendarPage.dataset.initialDate;
+        loadEvents(popDate, false);
+    });
+
+    loadEvents(calendarPage.dataset.initialDate, false);
+})();
+</script>
+{% endblock %}

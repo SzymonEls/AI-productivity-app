@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+            <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h3 mb-4">{{ form_title }}</h1>
+                <form method="post" data-unsaved-warning="true">
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Project Title</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="title"
+                            name="title"
+                            value="{{ project.title if project else '' }}"
+                            required
+                        >
+                    </div>
+                    <div class="mb-3">
+                        <label for="short_goal" class="form-label">Next Mini-Goal</label>
+                        <textarea
+                            class="form-control"
+                            id="short_goal"
+                            name="short_goal"
+                            rows="4"
+                            data-autoresize="true"
+                            required
+                        >{{ project.short_goal if project else '' }}</textarea>
+                        <div class="form-text">
+                            The next concrete thing you can do in a single focused productivity session.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="frequency" class="form-label">Frequency</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="frequency"
+                            name="frequency"
+                            value="{{ project.frequency if project else '' }}"
+                            placeholder="For example: 3 times a week, every weekday, every Saturday morning"
+                            required
+                        >
+                        <div class="form-text">
+                            A short note about how often you want to come back to this project.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="long_goal" class="form-label">Plan</label>
+                        <textarea
+                            class="form-control"
+                            id="long_goal"
+                            name="long_goal"
+                            rows="6"
+                            data-autoresize="true"
+                            required
+                        >{{ project.long_goal if project else '' }}</textarea>
+                        <div class="form-text">
+                            The working project plan. Markdown is supported here.
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
+                        <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (() => {
+        const form = document.querySelector("form[data-unsaved-warning='true']");
+        if (!form) {
+            return;
+        }
+
+        const watchedFields = Array.from(form.querySelectorAll("input, textarea, select"));
+        const initialValues = new Map(watchedFields.map((field) => [field.name, field.value]));
+        let isSubmitting = false;
+
+        const hasUnsavedChanges = () => watchedFields.some((field) => initialValues.get(field.name) !== field.value);
+
+        const autoResize = (textarea) => {
+            textarea.style.height = "auto";
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+
+        form.querySelectorAll("textarea[data-autoresize='true']").forEach((textarea) => {
+            autoResize(textarea);
+            textarea.addEventListener("input", () => autoResize(textarea));
+        });
+
+        form.addEventListener("submit", () => {
+            isSubmitting = true;
+        });
+
+        window.addEventListener("beforeunload", (event) => {
+            if (!isSubmitting && hasUnsavedChanges()) {
+                event.preventDefault();
+                event.returnValue = "";
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            const navigable = event.target.closest("a, button");
+            if (!navigable || isSubmitting || !hasUnsavedChanges()) {
+                return;
+            }
+
+            const isSubmitButton = navigable.tagName === "BUTTON" && navigable.type === "submit";
+            const dismissesModal = navigable.dataset.bsDismiss;
+            if (isSubmitButton || dismissesModal) {
+                return;
+            }
+
+            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+
+        history.pushState({ formGuard: true }, "", window.location.href);
+        window.addEventListener("popstate", () => {
+            if (isSubmitting || !hasUnsavedChanges()) {
+                return;
+            }
+
+            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+                history.pushState({ formGuard: true }, "", window.location.href);
+            }
+        });
+    })();
+</script>
+{% endblock %}

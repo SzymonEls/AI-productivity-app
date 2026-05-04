@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Historia AI{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Historia AI</h1>
+        <p class="text-muted mb-0">Wszystkie zapisane wyniki. Plan przypiety jest widoczny na home.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Powrot na home</a>
+</div>
+
+{% if not is_openai_ready %}
+    <div class="alert alert-warning">
+        AI jest nieaktywne, dopoki nie ustawisz `OPENAI_API_KEY` w `.env`.
+    </div>
+{% endif %}
+
+{% if plans %}
+    <div class="row g-4">
+        {% for plan in plans %}
+            <div class="col-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                    <span class="badge text-bg-dark">{{ plan.plan_type.replace('_', ' ') }}</span>
+                                    {% if plan.is_pinned %}
+                                        <span class="badge text-bg-primary">przypiety</span>
+                                    {% endif %}
+                                    {% if plan.target_date %}
+                                        <span class="badge text-bg-light">date {{ plan.target_date.isoformat() }}</span>
+                                    {% endif %}
+                                    {% if plan.project_title_snapshot %}
+                                        <span class="badge text-bg-light">{{ plan.project_title_snapshot }}</span>
+                                    {% endif %}
+                                </div>
+                                <h2 class="h4 mb-1">{{ plan.title }}</h2>
+                                <p class="text-muted mb-0">{{ plan.created_at | naturaltime }}</p>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap">
+                                {% if plan.plan_type in home_plan_types %}
+                                    <form method="post" action="{{ url_for('ai.pin_history_plan', plan_id=plan.id) }}">
+                                        <input type="hidden" name="next" value="{{ url_for('ai.history') }}">
+                                        <button class="btn btn-outline-primary btn-sm" type="submit" {% if plan.is_pinned %}disabled{% endif %}>
+                                            {% if plan.is_pinned %}Przypiety{% else %}Przypnij{% endif %}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                                <a class="btn btn-outline-primary btn-sm" href="{{ url_for('ai.history_detail', plan_id=plan.id) }}">Szczegoly</a>
+                            </div>
+                        </div>
+                        <div class="markdown-content history-preview">{{ plan.content | without_repeated_title(plan.title) | markdown }}</div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card shadow-sm">
+        <div class="card-body p-4">
+            <h2 class="h4">Brak historii</h2>
+            <p class="text-muted mb-0">Wygeneruj pierwsza odpowiedz markdown albo uporzadkuj projekt przez AI.</p>
+        </div>
+    </div>
+{% endif %}
+{% endblock %}

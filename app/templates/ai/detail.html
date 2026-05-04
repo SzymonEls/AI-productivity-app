@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ plan.title }}{% endblock %}
+
+{% block extra_head %}
+{% if plan.plan_type in home_plan_types %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+            <span class="badge text-bg-dark">{{ plan.plan_type.replace('_', ' ') }}</span>
+            {% if plan.is_pinned %}
+                <span class="badge text-bg-primary">przypiety</span>
+            {% endif %}
+            {% if plan.target_date %}
+                <span class="badge text-bg-light">{{ plan.target_date.isoformat() }}</span>
+            {% endif %}
+            {% if plan.project_title_snapshot %}
+                <span class="badge text-bg-light">{{ plan.project_title_snapshot }}</span>
+            {% endif %}
+        </div>
+        <h1 class="h2 mb-1">{{ plan.title }}</h1>
+        <p class="text-muted mb-0">{{ plan.created_at | naturaltime }}</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if plan.plan_type in home_plan_types %}
+            <form method="post" action="{{ url_for('ai.pin_history_plan', plan_id=plan.id) }}">
+                <input type="hidden" name="next" value="{{ url_for('ai.history_detail', plan_id=plan.id) }}">
+                <button class="btn btn-outline-primary" type="submit" {% if plan.is_pinned %}disabled{% endif %}>
+                    {% if plan.is_pinned %}Przypiety na home{% else %}Przypnij na home{% endif %}
+                </button>
+            </form>
+        {% endif %}
+        <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">Historia</a>
+        <a class="btn btn-outline-primary" href="{{ url_for('main.home') }}">Home</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                {% if plan.plan_type in home_plan_types %}
+                    <h2 class="h4 mb-3">Edytuj plan</h2>
+                    <form method="post" action="{{ url_for('ai.edit_history_plan', plan_id=plan.id) }}" id="plan-editor">
+                        <div class="mb-3">
+                            <label class="form-label" for="plan-title">Tytul</label>
+                            <input class="form-control" id="plan-title" name="title" value="{{ plan.title }}" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="plan-target-date">Data planu</label>
+                            <input
+                                class="form-control"
+                                id="plan-target-date"
+                                name="target_date"
+                                type="date"
+                                value="{% if plan.target_date %}{{ plan.target_date.isoformat() }}{% endif %}"
+                            >
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="plan-content">Tresc markdown</label>
+                            <textarea class="form-control long-goal-markdown-field" id="plan-content" name="content" rows="18" required>{{ plan.content }}</textarea>
+                        </div>
+                        <button class="btn btn-primary" type="submit">Zapisz zmiany</button>
+                    </form>
+
+                    <!-- <hr class="my-4"> -->
+                    <!-- <h2 class="h4 mb-3">Podglad</h2> -->
+                {% else %}
+                    <h2 class="h4 mb-3">Zapisana odpowiedz</h2>
+                    <div class="markdown-content">{{ plan.content | without_repeated_title(plan.title) | markdown }}</div>
+                {% endif %}
+                
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Prompt uzytkownika</h2>
+                <p class="preserve-lines mb-0">{{ plan.user_prompt }}</p>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Wyslane do AI</h2>
+                {% if parsed_request_payload %}
+                    <pre class="history-raw-json mb-0">{{ parsed_request_payload | tojson(indent=2) }}</pre>
+                {% else %}
+                    <p class="text-muted mb-0">Ten wpis nie ma zapisanego pelnego requestu. Nowe wpisy beda go pokazywac tutaj.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if parsed_payload %}
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Surowy wynik AI</h2>
+                    <pre class="history-raw-json mb-0">{{ parsed_payload | tojson(indent=2) }}</pre>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+{% if plan.plan_type in home_plan_types %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+    (() => {
+        const form = document.getElementById("plan-editor");
+        const textarea = document.getElementById("plan-content");
+        if (!form || !textarea || !window.EasyMDE) {
+            return;
+        }
+
+        const updateSelectedLines = (editor, transformLine) => {
+            const cm = editor.codemirror;
+            const selections = cm.listSelections();
+
+            cm.operation(() => {
+                selections.forEach((selection) => {
+                    const startLine = Math.min(selection.anchor.line, selection.head.line);
+                    const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                    for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                        const lineText = cm.getLine(lineNumber);
+                        cm.replaceRange(
+                            transformLine(lineText),
+                            { line: lineNumber, ch: 0 },
+                            { line: lineNumber, ch: lineText.length }
+                        );
+                    }
+                });
+            });
+
+            cm.focus();
+        };
+
+        const toggleTaskList = (editor) => {
+            updateSelectedLines(editor, (line) => {
+                if (/^\s*-\s\[( |x|X)\]\s/.test(line)) {
+                    return line.replace(/^(\s*)-\s\[( |x|X)\]\s/, "$1");
+                }
+
+                return line.replace(/^(\s*)/, "$1- [ ] ");
+            });
+        };
+
+        const editor = new EasyMDE({
+            element: textarea,
+            autoDownloadFontAwesome: false,
+            forceSync: true,
+            minHeight: "360px",
+            spellChecker: false,
+            status: false,
+            toolbar: [
+                "bold",
+                "italic",
+                "heading",
+                "|",
+                "unordered-list",
+                "ordered-list",
+                {
+                    name: "task-list",
+                    action: toggleTaskList,
+                    className: "fa-regular fa-square-check",
+                    title: "Checklist item",
+                },
+                {
+                    name: "indent",
+                    action: (activeEditor) => updateSelectedLines(activeEditor, (line) => `    ${line}`),
+                    className: "fa-solid fa-indent",
+                    title: "Increase indent",
+                },
+                {
+                    name: "outdent",
+                    action: (activeEditor) => updateSelectedLines(
+                        activeEditor,
+                        (line) => line.replace(/^(\t| {1,4})/, "")
+                    ),
+                    className: "fa-solid fa-outdent",
+                    title: "Decrease indent",
+                },
+                "|",
+                "link",
+                "quote",
+                "code",
+                "|",
+                "preview",
+                "side-by-side",
+                "fullscreen",
+            ],
+        });
+
+        editor.codemirror.on("change", () => {
+            editor.codemirror.save();
+        });
+
+        form.addEventListener("submit", () => {
+            editor.codemirror.save();
+        });
+    })();
+</script>
+{% endif %}
+{% endblock %}

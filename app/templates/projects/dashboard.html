@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="h2 mb-1">Your Projects</h1>
+        <p class="text-muted mb-0">Star favorites, sort them alphabetically, and tweak the next step right from the list.</p>
+    </div>
+    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Project</a>
+</div>
+
+{% if projects %}
+    <div class="row g-4" id="project-dashboard-grid">
+        {% for project in projects %}
+            <div class="col-md-6 col-lg-4" data-project-column data-project-key="{{ project.id }}" data-project-title="{{ project.title|lower }}" data-project-starred="{{ 1 if project.is_starred else 0 }}">
+                <div class="card h-100 shadow-sm project-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
+                            <div>
+                                <h2 class="h5 card-title mb-1">
+                                    <a
+                                        href="{{ url_for('projects.project_detail', project_id=project.id) }}"
+                                        class="project-card-title-link"
+                                        data-project-title-text
+                                    >
+                                        {{ project.title }}
+                                    </a>
+                                </h2>
+                                <p class="small text-muted mb-0" data-project-updated-label>
+                                    Last modified {{ project.updated_at | naturaltime }}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                class="btn btn-link project-star-toggle {% if project.is_starred %}is-starred{% endif %}"
+                                aria-label="{% if project.is_starred %}Remove star{% else %}Add star{% endif %}"
+                                aria-pressed="{{ 'true' if project.is_starred else 'false' }}"
+                                data-star-toggle
+                            >
+                                {% if project.is_starred %}★{% else %}☆{% endif %}
+                            </button>
+                        </div>
+
+                        <form
+                            method="post"
+                            action="{{ url_for('projects.edit_project', project_id=project.id) }}"
+                            data-project-inline-form
+                            data-project-key="{{ project.id }}"
+                        >
+                            <input type="hidden" name="title" value="{{ project.title }}">
+                            <input type="hidden" name="long_goal" value="{{ project.long_goal }}">
+                            <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-starred-input>
+
+                            <div class="project-inline-section">
+                                <p class="small text-uppercase text-muted fw-semibold mb-2">Next Mini-Goal</p>
+                                <div data-edit-display="short-goal">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <p class="card-text mb-0" data-display-value="short_goal">
+                                            {{ project.short_goal[:120] }}{% if project.short_goal|length > 120 %}...{% endif %}
+                                        </p>
+                                        <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit next mini-goal">✎</button>
+                                    </div>
+                                </div>
+                                <div class="d-none" data-edit-form="short-goal">
+                                    <textarea
+                                        class="form-control inline-edit-textarea"
+                                        name="short_goal"
+                                        rows="4"
+                                        data-autoresize="true"
+                                        required
+                                    >{{ project.short_goal }}</textarea>
+                                    <div class="inline-section-controls mt-2">
+                                        <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="project-inline-section">
+                                <p class="small text-uppercase text-muted fw-semibold mb-2">Frequency</p>
+                                <div data-edit-display="frequency">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <p class="card-text mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
+                                        <button type="button" class="inline-pencil-button" data-edit-toggle="frequency" aria-label="Edit frequency">✎</button>
+                                    </div>
+                                </div>
+                                <div class="d-none" data-edit-form="frequency">
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        name="frequency"
+                                        value="{{ project.frequency }}"
+                                        required
+                                    >
+                                    <div class="inline-section-controls mt-2">
+                                        <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
+                                        <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-footer bg-white border-0 pt-0 pb-3 px-3">
+                        <button
+                            type="button"
+                            class="btn btn-outline-primary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#projectPreviewModal{{ project.id }}"
+                        >
+                            Preview
+                        </button>
+                        <a href="{{ url_for('projects.project_detail', project_id=project.id) }}" class="btn btn-outline-secondary btn-sm">
+                            Open
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal fade" id="projectPreviewModal{{ project.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <div>
+                                <h3 class="modal-title h5 mb-1">{{ project.title }}</h3>
+                                <p class="small text-muted mb-0">
+                                    <span data-project-modal-updated-label>
+                                    Last modified {{ project.updated_at | naturaltime }}
+                                    </span>
+                                </p>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form
+                                method="post"
+                                action="{{ url_for('projects.edit_project', project_id=project.id) }}"
+                                data-project-preview-form
+                                data-project-key="{{ project.id }}"
+                            >
+                                <input type="hidden" name="title" value="{{ project.title }}">
+                                <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-starred-input>
+
+                                <section class="mb-4">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <h4 class="h6 text-uppercase text-muted mb-0">Next Mini-Goal</h4>
+                                        <div class="inline-section-controls">
+                                            <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit next mini-goal">✎</button>
+                                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div data-edit-display="short-goal">
+                                        <p class="mb-0 preserve-lines" data-display-value="short_goal">{{ project.short_goal }}</p>
+                                    </div>
+                                    <div class="d-none" data-edit-form="short-goal">
+                                        <textarea
+                                            class="form-control inline-edit-textarea"
+                                            name="short_goal"
+                                            rows="4"
+                                            data-autoresize="true"
+                                            required
+                                        >{{ project.short_goal }}</textarea>
+                                    </div>
+                                </section>
+
+                                <section class="mb-4">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <h4 class="h6 text-uppercase text-muted mb-0">Frequency</h4>
+                                        <div class="inline-section-controls">
+                                            <button type="button" class="inline-pencil-button" data-edit-toggle="frequency" aria-label="Edit frequency">✎</button>
+                                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div data-edit-display="frequency">
+                                        <p class="mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
+                                    </div>
+                                    <div class="d-none" data-edit-form="frequency">
+                                        <input
+                                            type="text"
+                                            class="form-control"
+                                            name="frequency"
+                                            value="{{ project.frequency }}"
+                                            required
+                                        >
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                        <h4 class="h6 text-uppercase text-muted mb-0">Plan</h4>
+                                        <div class="inline-section-controls">
+                                            <button type="button" class="inline-pencil-button" data-edit-toggle="long-goal" aria-label="Edit plan">✎</button>
+                                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="long-goal">Save</button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="long-goal">Cancel</button>
+                                        </div>
+                                    </div>
+                                    <div data-edit-display="long-goal">
+                                        <div class="markdown-content" data-display-value="long_goal">{{ project.long_goal | markdown }}</div>
+                                    </div>
+                                    <div class="d-none" data-edit-form="long-goal">
+                                        <textarea
+                                            class="form-control inline-edit-textarea"
+                                            name="long_goal"
+                                            rows="8"
+                                            data-autoresize="true"
+                                            required
+                                        >{{ project.long_goal }}</textarea>
+                                    </div>
+                                </section>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <a href="{{ url_for('projects.project_detail', project_id=project.id) }}" class="btn btn-primary">
+                                Open Project
+                            </a>
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="empty-state text-center p-5 bg-light rounded-3">
+        <h2 class="h4">No projects yet</h2>
+        <p class="text-muted">Create your first project to start organizing your goals.</p>
+        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Your First Project</a>
+    </div>
+{% endif %}
+
+<script>
+    (() => {
+        const grid = document.querySelector("#project-dashboard-grid");
+        if (!grid) {
+            return;
+        }
+
+        const autoResize = (textarea) => {
+            textarea.style.height = "auto";
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+
+        const resortCards = () => {
+            const columns = Array.from(grid.querySelectorAll("[data-project-column]"));
+            columns
+                .sort((a, b) => {
+                    const starDelta = Number(b.dataset.projectStarred) - Number(a.dataset.projectStarred);
+                    if (starDelta !== 0) {
+                        return starDelta;
+                    }
+
+                    return a.dataset.projectTitle.localeCompare(b.dataset.projectTitle);
+                })
+                .forEach((column) => grid.appendChild(column));
+        };
+
+        const renderLongGoalHtml = (value) => {
+            const escaped = value
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;");
+
+            return escaped.replace(/\n/g, "<br>");
+        };
+
+        const readJsonResponse = async (response, fallbackMessage) => {
+            const contentType = response.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                return response.json();
+            }
+
+            throw new Error(response.redirected ? "Sesja wygasla. Zaloguj sie ponownie i sprobuj jeszcze raz." : fallbackMessage);
+        };
+
+        const initializeProjectForm = (form, updateProjectEverywhere) => {
+            const initialValues = new Map(
+                Array.from(form.querySelectorAll("input[name], textarea[name]")).map((field) => [field.name, field.value])
+            );
+
+            const getSectionFieldName = (sectionName) => {
+                if (sectionName === "short-goal") {
+                    return "short_goal";
+                }
+                if (sectionName === "frequency") {
+                    return "frequency";
+                }
+                return "long_goal";
+            };
+
+            const toggleSectionControls = (sectionName, editing) => {
+                form.querySelector(`[data-edit-toggle='${sectionName}']`)?.classList.toggle("d-none", editing);
+                form.querySelector(`[data-save-section='${sectionName}']`)?.classList.toggle("d-none", !editing);
+                form.querySelector(`[data-edit-cancel='${sectionName}']`)?.classList.toggle("d-none", !editing);
+            };
+
+            const toggleSection = (sectionName, editing) => {
+                form.querySelector(`[data-edit-display='${sectionName}']`)?.classList.toggle("d-none", editing);
+                form.querySelector(`[data-edit-form='${sectionName}']`)?.classList.toggle("d-none", !editing);
+                toggleSectionControls(sectionName, editing);
+
+                if (editing) {
+                    const fieldName = getSectionFieldName(sectionName);
+                    const field = form.querySelector(`[name='${fieldName}']`);
+                    if (field) {
+                        field.focus();
+                        if (field.tagName === "TEXTAREA") {
+                            autoResize(field);
+                        }
+                    }
+                }
+            };
+
+            const resetSection = (sectionName) => {
+                const fieldName = getSectionFieldName(sectionName);
+                const field = form.querySelector(`[name='${fieldName}']`);
+                if (field && initialValues.has(fieldName)) {
+                    field.value = initialValues.get(fieldName);
+                    if (field.tagName === "TEXTAREA") {
+                        autoResize(field);
+                    }
+                }
+
+                toggleSection(sectionName, false);
+            };
+
+            const updateCard = (project) => {
+                updateProjectEverywhere(project);
+            };
+
+            const saveSection = async (sectionName, triggerButton = null) => {
+                if (triggerButton) {
+                    triggerButton.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: new FormData(form),
+                    });
+                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || "Could not save changes.");
+                    }
+
+                    updateCard(payload.project);
+                    toggleSection(sectionName, false);
+                } catch (error) {
+                    window.alert(error.message);
+                } finally {
+                    if (triggerButton) {
+                        triggerButton.disabled = false;
+                    }
+                }
+            };
+
+            form.querySelectorAll("textarea[data-autoresize='true']").forEach((textarea) => {
+                autoResize(textarea);
+                textarea.addEventListener("input", () => autoResize(textarea));
+            });
+
+            form.querySelectorAll("[data-edit-toggle]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    toggleSection(button.dataset.editToggle, true);
+                });
+            });
+
+            form.querySelectorAll("[data-edit-cancel]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const sectionName = button.dataset.editCancel;
+                    const fieldName = getSectionFieldName(sectionName);
+                    const field = form.querySelector(`[name='${fieldName}']`);
+                    const currentValue = field?.value ?? "";
+
+                    if (currentValue !== (initialValues.get(fieldName) ?? "") && !window.confirm("Discard inline changes?")) {
+                        return;
+                    }
+
+                    resetSection(sectionName);
+                });
+            });
+
+            form.querySelectorAll("[data-save-section]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    saveSection(button.dataset.saveSection, button);
+                });
+            });
+
+            form.addEventListener("submit", (event) => {
+                event.preventDefault();
+                const activeSaveButton = form.querySelector("[data-save-section]:not(.d-none)");
+                if (activeSaveButton) {
+                    saveSection(activeSaveButton.dataset.saveSection, activeSaveButton);
+                }
+            });
+
+            form.querySelectorAll("input[name='frequency']").forEach((input) => {
+                input.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter") {
+                        event.preventDefault();
+                        form.requestSubmit();
+                    }
+                });
+            });
+
+            form.querySelectorAll("textarea[name='short_goal']").forEach((textarea) => {
+                textarea.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                        event.preventDefault();
+                        form.requestSubmit();
+                    }
+                });
+            });
+
+            form.querySelectorAll("textarea[name='long_goal']").forEach((textarea) => {
+                textarea.addEventListener("keydown", (event) => {
+                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                        event.preventDefault();
+                        form.requestSubmit();
+                    }
+                });
+            });
+        };
+
+        document.querySelectorAll("[data-project-column]").forEach((card) => {
+            const projectKey = card.dataset.projectKey;
+            const relatedForms = Array.from(document.querySelectorAll(`form[data-project-key='${projectKey}']`));
+
+            const updateProjectEverywhere = (project) => {
+                const titleDisplays = document.querySelectorAll(`[data-project-key='${projectKey}'] [data-project-title-text]`);
+                const updatedLabels = document.querySelectorAll(`[data-project-key='${projectKey}'] [data-project-updated-label]`);
+                const modalUpdatedLabels = document.querySelectorAll(`[data-project-modal-updated-label]`);
+
+                relatedForms.forEach((form) => {
+                    const shortGoalDisplay = form.querySelector("[data-display-value='short_goal']");
+                    const frequencyDisplay = form.querySelector("[data-display-value='frequency']");
+                    const longGoalDisplay = form.querySelector("[data-display-value='long_goal']");
+                    const starredInput = form.querySelector("[data-starred-input]");
+
+                    if (shortGoalDisplay) {
+                        shortGoalDisplay.textContent = form.hasAttribute("data-project-inline-form") && project.short_goal.length > 120
+                            ? `${project.short_goal.slice(0, 120)}...`
+                            : project.short_goal;
+                    }
+
+                    if (frequencyDisplay) {
+                        frequencyDisplay.textContent = project.frequency;
+                    }
+
+                    if (longGoalDisplay) {
+                        longGoalDisplay.innerHTML = project.long_goal_html || renderLongGoalHtml(project.long_goal);
+                    }
+
+                    form.querySelector("[name='short_goal']").value = project.short_goal;
+                    form.querySelector("[name='frequency']").value = project.frequency;
+                    form.querySelector("[name='long_goal']").value = project.long_goal;
+                    if (starredInput) {
+                        starredInput.value = project.is_starred ? "true" : "false";
+                    }
+                });
+
+                titleDisplays.forEach((node) => {
+                    node.textContent = project.title;
+                });
+                updatedLabels.forEach((node) => {
+                    node.textContent = `Last modified ${project.updated_label}`;
+                });
+                modalUpdatedLabels.forEach((node) => {
+                    const modal = node.closest(".modal");
+                    if (modal?.id === `projectPreviewModal${projectKey}`) {
+                        node.textContent = `Last modified ${project.updated_label}`;
+                    }
+                });
+
+                card.dataset.projectStarred = project.is_starred ? "1" : "0";
+                card.dataset.projectTitle = project.title.toLowerCase();
+
+                const starToggle = card.querySelector("[data-star-toggle]");
+                if (starToggle) {
+                    starToggle.textContent = project.is_starred ? "★" : "☆";
+                    starToggle.classList.toggle("is-starred", project.is_starred);
+                    starToggle.setAttribute("aria-pressed", project.is_starred ? "true" : "false");
+                    starToggle.setAttribute("aria-label", project.is_starred ? "Remove star" : "Add star");
+                }
+
+                resortCards();
+            };
+
+            relatedForms.forEach((form) => initializeProjectForm(form, updateProjectEverywhere));
+
+            card.querySelector("[data-star-toggle]")?.addEventListener("click", async () => {
+                const starredInputs = relatedForms.map((form) => form.querySelector("[data-starred-input]")).filter(Boolean);
+                const nextStarred = starredInputs[0]?.value !== "true";
+                starredInputs.forEach((input) => {
+                    input.value = nextStarred ? "true" : "false";
+                });
+
+                try {
+                    const response = await fetch(relatedForms[0].action, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: new FormData(relatedForms[0]),
+                    });
+                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || "Could not update star.");
+                    }
+
+                    updateProjectEverywhere(payload.project);
+                } catch (error) {
+                    starredInputs.forEach((input) => {
+                        input.value = nextStarred ? "false" : "true";
+                    });
+                    window.alert(error.message);
+                }
+            });
+        });
+
+        resortCards();
+    })();
+</script>
+{% endblock %}

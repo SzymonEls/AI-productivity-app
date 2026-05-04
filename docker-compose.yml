@@ -1,0 +1,17 @@
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - ./instance/.env
+    environment:
+      FLASK_ENV: production
+      SKIP_DB_BOOTSTRAP: "1"
+      DATABASE_URL: sqlite:////app/instance/app.db
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - instance_data:/app/instance
+
+volumes:
+  instance_data:

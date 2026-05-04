@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-start gap-2 flex-wrap mb-1">
+            <div data-edit-display="title">
+                <h1 class="h2 mb-0" data-project-title-display>{{ project.title }}</h1>
+            </div>
+            <div class="d-none project-title-edit" data-edit-form="title">
+                <input
+                    type="text"
+                    id="project-title"
+                    class="form-control form-control-lg"
+                    value="{{ project.title }}"
+                    data-project-title-input
+                    required
+                >
+            </div>
+            <div class="inline-section-controls">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title">Edit</button>
+                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="title">Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="title">Cancel</button>
+            </div>
+        </div>
+        <p class="text-muted mb-0" data-project-updated-label>Last modified {{ project.updated_at | naturaltime }}</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <button
+            type="button"
+            class="btn btn-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#projectAiModal"
+            {% if not is_openai_ready %}disabled{% endif %}
+        >
+            Uruchom AI
+        </button>
+        <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
+        <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
+            <button
+                type="submit"
+                class="btn btn-outline-danger"
+                onclick="return confirm('Delete this project?');"
+            >
+                Delete
+            </button>
+        </form>
+    </div>
+</div>
+
+<div class="d-none mb-3" data-inline-alert></div>
+
+<form
+    method="post"
+    action="{{ url_for('projects.edit_project', project_id=project.id) }}"
+    id="project-editor"
+    data-unsaved-warning="true"
+>
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 inline-edit-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                        <h2 class="h4 mb-0">Next Mini-Goal</h2>
+                        <div class="inline-section-controls">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="short-goal">Edit</button>
+                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
+                        </div>
+                    </div>
+                    <div data-edit-display="short-goal">
+                        <p class="mb-0 preserve-lines" data-display-value="short_goal">{{ project.short_goal }}</p>
+                    </div>
+                    <div class="d-none" data-edit-form="short-goal">
+                        <textarea
+                            id="short_goal"
+                            name="short_goal"
+                            class="form-control inline-edit-textarea"
+                            rows="4"
+                            data-autoresize="true"
+                            required
+                        >{{ project.short_goal }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-sm h-100 inline-edit-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                        <h2 class="h4 mb-0">Frequency</h2>
+                        <div class="inline-section-controls">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="frequency">Edit</button>
+                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
+                        </div>
+                    </div>
+                    <div data-edit-display="frequency">
+                        <p class="mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
+                    </div>
+                    <div class="d-none" data-edit-form="frequency">
+                        <input
+                            type="text"
+                            id="frequency"
+                            name="frequency"
+                            class="form-control"
+                            value="{{ project.frequency }}"
+                            required
+                        >
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-1">
+        <div class="col-12">
+            <div class="card shadow-sm h-100 inline-edit-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+                        <h2 class="h4 mb-0">Plan</h2>
+                        <div class="inline-section-controls">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="long-goal">Edit</button>
+                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="long-goal">Save</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="long-goal">Cancel</button>
+                        </div>
+                    </div>
+                    <div data-edit-display="long-goal">
+                        <div class="markdown-content long-goal-preview" data-display-value="long_goal">{{ project.long_goal | markdown }}</div>
+                    </div>
+                    <div class="d-none" data-edit-form="long-goal">
+                        <textarea
+                            id="long_goal"
+                            name="long_goal"
+                            class="form-control inline-edit-textarea long-goal-markdown-field"
+                            rows="8"
+                            required
+                        >{{ project.long_goal }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="hidden" name="title" value="{{ project.title }}" data-project-title-hidden>
+</form>
+
+<div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
+                <input type="hidden" name="project_id" value="{{ project.id }}">
+                <div class="modal-header">
+                    <h2 class="modal-title h5" id="projectAiModalLabel">AI: Uporzadkuj plan projektu</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    {% if not is_openai_ready %}
+                        <div class="alert alert-warning">
+                            AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten formularz.
+                        </div>
+                    {% endif %}
+                    <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
+                    <label class="form-label" for="ai-project-prompt">Prompt</label>
+                    <textarea
+                        class="form-control"
+                        id="ai-project-prompt"
+                        name="prompt"
+                        rows="7"
+                        placeholder="Np. Uporzadkuj ten projekt w konkretny plan markdown z krokami, checklistami i najblizszym rytmem pracy."
+                        {% if not is_openai_ready %}disabled{% endif %}
+                        required
+                    ></textarea>
+                </div>
+                <div class="modal-footer">
+                    <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">Historia AI</a>
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zamknij</button>
+                    <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
+                        <span class="submit-label">Uruchom AI</span>
+                        <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script>
+    (() => {
+        const form = document.querySelector("#project-editor");
+        if (!form) {
+            return;
+        }
+
+        const fieldNames = {
+            "title": "title",
+            "short-goal": "short_goal",
+            "frequency": "frequency",
+            "long-goal": "long_goal",
+        };
+
+        const longGoalTextarea = form.querySelector("#long_goal");
+        const alertBox = document.querySelector("[data-inline-alert]");
+        const updatedLabel = document.querySelector("[data-project-updated-label]");
+        const titleDisplay = document.querySelector("[data-project-title-display]");
+        const titleInput = document.querySelector("[data-project-title-input]");
+        const titleHiddenInput = form.querySelector("[data-project-title-hidden]");
+        const longGoalPreview = form.querySelector("[data-display-value='long_goal']");
+        let isSaving = false;
+        let longGoalEditor = null;
+
+        const getTrackedFields = () => Array.from(form.querySelectorAll("input[name], textarea[name], select[name]"));
+        const initialValues = new Map(getTrackedFields().map((field) => [field.name, field.value]));
+
+        const hasUnsavedChanges = () => {
+            const formHasChanges = getTrackedFields().some((field) => initialValues.get(field.name) !== field.value);
+            const titleHasChanges = Boolean(titleInput && titleInput.value !== (initialValues.get("title") ?? ""));
+            return formHasChanges || titleHasChanges;
+        };
+
+        const autoResize = (textarea) => {
+            textarea.style.height = "auto";
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+
+        form.querySelectorAll("textarea[data-autoresize='true']").forEach((textarea) => {
+            autoResize(textarea);
+            textarea.addEventListener("input", () => autoResize(textarea));
+        });
+
+        const ensureLongGoalEditor = () => {
+            if (longGoalEditor || !longGoalTextarea || !window.EasyMDE) {
+                return longGoalEditor;
+            }
+
+            const updateSelectedLines = (editor, transformLine) => {
+                const cm = editor.codemirror;
+                const selections = cm.listSelections();
+
+                cm.operation(() => {
+                    selections.forEach((selection) => {
+                        const startLine = Math.min(selection.anchor.line, selection.head.line);
+                        const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                        for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                            const lineText = cm.getLine(lineNumber);
+                            cm.replaceRange(
+                                transformLine(lineText),
+                                { line: lineNumber, ch: 0 },
+                                { line: lineNumber, ch: lineText.length }
+                            );
+                        }
+                    });
+                });
+
+                cm.focus();
+            };
+
+            const toggleTaskList = (editor) => {
+                updateSelectedLines(editor, (line) => {
+                    if (/^\s*-\s\[( |x|X)\]\s/.test(line)) {
+                        return line.replace(/^(\s*)-\s\[( |x|X)\]\s/, "$1");
+                    }
+
+                    return line.replace(/^(\s*)/, "$1- [ ] ");
+                });
+            };
+
+            longGoalEditor = new EasyMDE({
+                element: longGoalTextarea,
+                autoDownloadFontAwesome: false,
+                forceSync: true,
+                minHeight: "220px",
+                previewRender: (plainText) => {
+                    const container = document.createElement("div");
+                    container.innerHTML = renderLongGoalMarkdown(plainText);
+                    return container.innerHTML;
+                },
+                spellChecker: false,
+                status: false,
+                toolbar: [
+                    "bold",
+                    "italic",
+                    "heading",
+                    "|",
+                    "unordered-list",
+                    "ordered-list",
+                    {
+                        name: "task-list",
+                        action: toggleTaskList,
+                        className: "fa-regular fa-square-check",
+                        title: "Checklist item",
+                    },
+                    {
+                        name: "indent",
+                        action: (editor) => updateSelectedLines(editor, (line) => `    ${line}`),
+                        className: "fa-solid fa-indent",
+                        title: "Increase indent",
+                    },
+                    {
+                        name: "outdent",
+                        action: (editor) => updateSelectedLines(
+                            editor,
+                            (line) => line.replace(/^(\t| {1,4})/, "")
+                        ),
+                        className: "fa-solid fa-outdent",
+                        title: "Decrease indent",
+                    },
+                    "|",
+                    "link",
+                    "quote",
+                    "code",
+                    "|",
+                    "preview",
+                    "side-by-side",
+                    "fullscreen",
+                ],
+            });
+            longGoalEditor.codemirror.on("change", () => {
+                longGoalEditor.codemirror.save();
+            });
+
+            return longGoalEditor;
+        };
+
+        const showAlert = (message, category) => {
+            if (!alertBox) {
+                return;
+            }
+
+            alertBox.className = `alert alert-${category} mb-3`;
+            alertBox.textContent = message;
+        };
+
+        const hideAlert = () => {
+            if (!alertBox) {
+                return;
+            }
+
+            alertBox.className = "d-none mb-3";
+            alertBox.textContent = "";
+        };
+
+        const readJsonResponse = async (response, fallbackMessage) => {
+            const contentType = response.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                return response.json();
+            }
+
+            throw new Error(response.redirected ? "Sesja wygasla. Zaloguj sie ponownie i sprobuj jeszcze raz." : fallbackMessage);
+        };
+
+        const getSectionCurrentValue = (sectionName) => {
+            const fieldName = fieldNames[sectionName];
+            if (sectionName === "title") {
+                return titleInput?.value ?? "";
+            }
+
+            if (sectionName === "long-goal" && ensureLongGoalEditor()) {
+                return longGoalEditor.value();
+            }
+
+            return form.querySelector(`[name='${fieldName}']`)?.value ?? "";
+        };
+
+        const sectionHasUnsavedChanges = (sectionName) => {
+            const fieldName = fieldNames[sectionName];
+            return getSectionCurrentValue(sectionName) !== (initialValues.get(fieldName) ?? "");
+        };
+
+        const toggleSectionControls = (sectionName, editing) => {
+            document.querySelector(`[data-edit-toggle='${sectionName}']`)?.classList.toggle("d-none", editing);
+            document.querySelector(`[data-save-section='${sectionName}']`)?.classList.toggle("d-none", !editing);
+            document.querySelector(`[data-edit-cancel='${sectionName}']`)?.classList.toggle("d-none", !editing);
+        };
+
+        const toggleSection = (sectionName, editing) => {
+            const display = document.querySelector(`[data-edit-display='${sectionName}']`);
+            const editor = document.querySelector(`[data-edit-form='${sectionName}']`);
+            if (!display || !editor) {
+                return;
+            }
+
+            display.classList.toggle("d-none", editing);
+            editor.classList.toggle("d-none", !editing);
+            toggleSectionControls(sectionName, editing);
+
+            if (editing) {
+                if (sectionName === "long-goal") {
+                    const editorInstance = ensureLongGoalEditor();
+                    if (editorInstance) {
+                        requestAnimationFrame(() => {
+                            editorInstance.codemirror.refresh();
+                            editorInstance.codemirror.focus();
+                        });
+                    }
+                    return;
+                }
+
+                const field = editor.querySelector("input, textarea");
+                if (field) {
+                    field.focus();
+                    if (field.tagName === "TEXTAREA") {
+                        autoResize(field);
+                    }
+                }
+            }
+        };
+
+        const resetSection = (sectionName) => {
+            const fieldName = fieldNames[sectionName];
+            if (sectionName === "title") {
+                if (titleInput && initialValues.has(fieldName)) {
+                    titleInput.value = initialValues.get(fieldName);
+                }
+                if (titleHiddenInput && initialValues.has(fieldName)) {
+                    titleHiddenInput.value = initialValues.get(fieldName);
+                }
+                toggleSection(sectionName, false);
+                return;
+            }
+
+            const field = form.querySelector(`[name='${fieldName}']`);
+            if (field && initialValues.has(fieldName)) {
+                if (sectionName === "long-goal" && ensureLongGoalEditor()) {
+                    longGoalEditor.value(initialValues.get(fieldName));
+                } else {
+                    field.value = initialValues.get(fieldName);
+                }
+
+                if (field.tagName === "TEXTAREA" && !longGoalEditor) {
+                    autoResize(field);
+                }
+            }
+            toggleSection(sectionName, false);
+        };
+
+        const updateDisplayValues = (project) => {
+            if (titleDisplay) {
+                titleDisplay.textContent = project.title;
+            }
+            if (titleInput) {
+                titleInput.value = project.title;
+            }
+            if (titleHiddenInput) {
+                titleHiddenInput.value = project.title;
+            }
+            document.title = project.title;
+            form.querySelector("[data-display-value='short_goal']").textContent = project.short_goal;
+            form.querySelector("[data-display-value='frequency']").textContent = project.frequency;
+            if (longGoalPreview) {
+                longGoalPreview.innerHTML = project.long_goal_html;
+            }
+
+            form.querySelector("[name='short_goal']").value = project.short_goal;
+            form.querySelector("[name='frequency']").value = project.frequency;
+            if (ensureLongGoalEditor()) {
+                longGoalEditor.value(project.long_goal);
+            } else {
+                form.querySelector("[name='long_goal']").value = project.long_goal;
+            }
+
+            getTrackedFields().forEach((field) => {
+                initialValues.set(field.name, field.value);
+                if (field.tagName === "TEXTAREA" && field !== longGoalTextarea) {
+                    autoResize(field);
+                }
+            });
+
+            if (longGoalTextarea) {
+                initialValues.set("long_goal", longGoalEditor ? longGoalEditor.value() : longGoalTextarea.value);
+            }
+            if (titleInput) {
+                initialValues.set("title", titleInput.value);
+            }
+
+            if (updatedLabel) {
+                updatedLabel.textContent = `Last modified ${project.updated_label}`;
+            }
+        };
+
+        const saveSection = async (sectionName, triggerButton = null) => {
+            hideAlert();
+            isSaving = true;
+            if (triggerButton) {
+                triggerButton.disabled = true;
+            }
+
+            if (sectionName === "long-goal" && ensureLongGoalEditor()) {
+                longGoalEditor.codemirror.save();
+            }
+            if (sectionName === "title" && titleHiddenInput && titleInput) {
+                titleHiddenInput.value = titleInput.value.trim();
+            } else if (titleHiddenInput && initialValues.has("title")) {
+                titleHiddenInput.value = initialValues.get("title");
+            }
+
+            try {
+                const response = await fetch(form.action, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: new FormData(form),
+                });
+
+                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Could not save changes.");
+                }
+
+                updateDisplayValues(payload.project);
+                toggleSection(sectionName, false);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            } finally {
+                isSaving = false;
+                if (triggerButton) {
+                    triggerButton.disabled = false;
+                }
+            }
+        };
+
+        window.addEventListener("beforeunload", (event) => {
+            if (!isSaving && hasUnsavedChanges()) {
+                event.preventDefault();
+                event.returnValue = "";
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            const navigable = event.target.closest("a, button");
+            if (!navigable || isSaving || !hasUnsavedChanges()) {
+                return;
+            }
+
+            const isSubmitButton = navigable.tagName === "BUTTON" && navigable.type === "submit";
+            const isInlineEditorControl = [
+                "data-edit-toggle",
+                "data-edit-cancel",
+                "data-save-section",
+            ].some((attribute) => navigable.hasAttribute(attribute));
+            const isEditorToolbarControl = Boolean(
+                navigable.closest(".editor-toolbar")
+                || navigable.closest(".EasyMDEContainer")
+                || navigable.closest(".CodeMirror")
+            );
+            const dismissesModal = navigable.dataset.bsDismiss;
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || dismissesModal) {
+                return;
+            }
+
+            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        });
+
+        history.pushState({ formGuard: true }, "", window.location.href);
+        window.addEventListener("popstate", () => {
+            if (isSaving || !hasUnsavedChanges()) {
+                return;
+            }
+
+            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+                history.pushState({ formGuard: true }, "", window.location.href);
+            }
+        });
+
+        document.querySelectorAll("[data-edit-toggle]").forEach((button) => {
+            button.addEventListener("click", () => {
+                hideAlert();
+                toggleSection(button.dataset.editToggle, true);
+            });
+        });
+
+        document.querySelectorAll("[data-edit-cancel]").forEach((button) => {
+            button.addEventListener("click", () => {
+                hideAlert();
+                if (
+                    sectionHasUnsavedChanges(button.dataset.editCancel)
+                    && !window.confirm("You have unsaved changes in this section. Discard them?")
+                ) {
+                    return;
+                }
+                resetSection(button.dataset.editCancel);
+            });
+        });
+
+        document.querySelectorAll("[data-save-section]").forEach((button) => {
+            button.addEventListener("click", () => {
+                saveSection(button.dataset.saveSection, button);
+            });
+        });
+
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const activeSaveButton = form.querySelector("[data-save-section]:not(.d-none)");
+            if (activeSaveButton) {
+                saveSection(activeSaveButton.dataset.saveSection, activeSaveButton);
+            }
+        });
+
+        form.querySelectorAll("input[name='frequency']").forEach((input) => {
+            input.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    form.requestSubmit();
+                }
+            });
+        });
+
+        if (titleInput) {
+            titleInput.addEventListener("keydown", (event) => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    saveSection("title", document.querySelector("[data-save-section='title']"));
+                }
+            });
+        }
+
+        form.querySelectorAll("textarea[name='short_goal']").forEach((textarea) => {
+            textarea.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    form.requestSubmit();
+                }
+            });
+        });
+
+        if (longGoalTextarea) {
+            longGoalTextarea.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    form.requestSubmit();
+                }
+            });
+        }
+
+        const projectAiForm = document.getElementById("project-ai-form");
+        if (projectAiForm) {
+            const projectAiSubmit = document.getElementById("project-ai-submit");
+            const projectAiLabel = projectAiSubmit.querySelector(".submit-label");
+            const projectAiSpinner = projectAiSubmit.querySelector(".spinner-border");
+            const projectAiError = document.getElementById("project-ai-error");
+            const projectAiModalElement = document.getElementById("projectAiModal");
+            const projectAiModal = bootstrap.Modal.getOrCreateInstance(projectAiModalElement);
+
+            projectAiForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                projectAiError.classList.add("d-none");
+                projectAiSubmit.disabled = true;
+                projectAiLabel.textContent = "Pracuje...";
+                projectAiSpinner.classList.remove("d-none");
+
+                try {
+                    const response = await fetch(projectAiForm.action, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Requested-With": "fetch",
+                        },
+                        body: new FormData(projectAiForm),
+                    });
+                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.error || "Nie udalo sie uruchomic AI dla projektu.");
+                    }
+
+                    updateDisplayValues(payload.project);
+                    Object.keys(fieldNames).forEach((sectionName) => toggleSection(sectionName, false));
+                    showAlert(payload.message, "success");
+                    projectAiForm.reset();
+                    projectAiModal.hide();
+                } catch (error) {
+                    projectAiError.textContent = error.message;
+                    projectAiError.classList.remove("d-none");
+                } finally {
+                    projectAiSubmit.disabled = false;
+                    projectAiLabel.textContent = "Uruchom AI";
+                    projectAiSpinner.classList.add("d-none");
+                }
+            });
+        }
+    })();
+</script>
+{% endblock %}
