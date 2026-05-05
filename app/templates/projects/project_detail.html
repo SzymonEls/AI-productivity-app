@@ -33,6 +33,9 @@
         <p class="text-muted mb-0" data-project-updated-label>Last modified {{ project.updated_at | naturaltime }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
+            Pobierz markdown
+        </button>
         <button
             type="button"
             class="btn btn-primary"
@@ -216,6 +219,7 @@
         const titleInput = document.querySelector("[data-project-title-input]");
         const titleHiddenInput = form.querySelector("[data-project-title-hidden]");
         const longGoalPreview = form.querySelector("[data-display-value='long_goal']");
+        const markdownDownloadButton = document.querySelector("[data-download-project-markdown]");
         let isSaving = false;
         let longGoalEditor = null;
 
@@ -376,6 +380,53 @@
         const sectionHasUnsavedChanges = (sectionName) => {
             const fieldName = fieldNames[sectionName];
             return getSectionCurrentValue(sectionName) !== (initialValues.get(fieldName) ?? "");
+        };
+
+        const sanitizeMarkdownFilename = (title) => {
+            const normalizedTitle = title
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+
+            return `${normalizedTitle || "projekt"}.md`;
+        };
+
+        const buildProjectMarkdown = () => {
+            const title = getSectionCurrentValue("title").trim() || "Projekt";
+            const shortGoal = getSectionCurrentValue("short-goal").trim();
+            const frequency = getSectionCurrentValue("frequency").trim();
+            const longGoal = getSectionCurrentValue("long-goal").trim();
+            const sections = [`# ${title}`];
+
+            if (shortGoal) {
+                sections.push(`## Next Mini-Goal\n\n${shortGoal}`);
+            }
+
+            if (frequency) {
+                sections.push(`## Frequency\n\n${frequency}`);
+            }
+
+            if (longGoal) {
+                sections.push(`## Plan\n\n${longGoal}`);
+            }
+
+            return `${sections.join("\n\n")}\n`;
+        };
+
+        const downloadProjectMarkdown = () => {
+            const title = getSectionCurrentValue("title").trim();
+            const blob = new Blob([buildProjectMarkdown()], { type: "text/markdown;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            link.href = url;
+            link.download = sanitizeMarkdownFilename(title);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
         };
 
         const toggleSectionControls = (sectionName, editing) => {
@@ -557,8 +608,9 @@
                 || navigable.closest(".EasyMDEContainer")
                 || navigable.closest(".CodeMirror")
             );
+            const isMarkdownDownload = Boolean(navigable.closest("[data-download-project-markdown]"));
             const dismissesModal = navigable.dataset.bsDismiss;
-            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || dismissesModal) {
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal) {
                 return;
             }
 
@@ -604,6 +656,10 @@
                 saveSection(button.dataset.saveSection, button);
             });
         });
+
+        if (markdownDownloadButton) {
+            markdownDownloadButton.addEventListener("click", downloadProjectMarkdown);
+        }
 
         form.addEventListener("submit", (event) => {
             event.preventDefault();

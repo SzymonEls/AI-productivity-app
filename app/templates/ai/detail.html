@@ -28,6 +28,9 @@
         <p class="text-muted mb-0">{{ plan.created_at | naturaltime }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-primary" data-download-plan-markdown>
+            Pobierz markdown
+        </button>
         {% if plan.plan_type in home_plan_types %}
             <form method="post" action="{{ url_for('ai.pin_history_plan', plan_id=plan.id) }}">
                 <input type="hidden" name="next" value="{{ url_for('ai.history_detail', plan_id=plan.id) }}">
@@ -40,6 +43,10 @@
         <a class="btn btn-outline-primary" href="{{ url_for('main.home') }}">Home</a>
     </div>
 </div>
+
+<script type="application/json" id="plan-markdown-download-data">
+    {{ {"title": plan.title, "content": plan.content} | tojson }}
+</script>
 
 <div class="row g-4">
     <div class="col-lg-8">
@@ -210,4 +217,44 @@
     })();
 </script>
 {% endif %}
+<script>
+    (() => {
+        const downloadButton = document.querySelector("[data-download-plan-markdown]");
+        const downloadData = document.getElementById("plan-markdown-download-data");
+        if (!downloadButton || !downloadData) {
+            return;
+        }
+
+        const textarea = document.getElementById("plan-content");
+        const initialData = JSON.parse(downloadData.textContent);
+
+        const sanitizeMarkdownFilename = (title) => {
+            const normalizedTitle = title
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+
+            return `${normalizedTitle || "opis-projektu"}.md`;
+        };
+
+        const downloadMarkdown = () => {
+            const title = document.getElementById("plan-title")?.value.trim() || initialData.title || "Opis projektu";
+            const content = textarea?.value ?? initialData.content ?? "";
+            const blob = new Blob([`${content.trim()}\n`], { type: "text/markdown;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            link.href = url;
+            link.download = sanitizeMarkdownFilename(title);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        };
+
+        downloadButton.addEventListener("click", downloadMarkdown);
+    })();
+</script>
 {% endblock %}
