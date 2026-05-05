@@ -364,14 +364,30 @@
             throw new Error(response.redirected ? "Sesja wygasla. Zaloguj sie ponownie i sprobuj jeszcze raz." : fallbackMessage);
         };
 
+        const getLongGoalMarkdown = () => {
+            if (longGoalEditor) {
+                return longGoalEditor.value();
+            }
+
+            return longGoalTextarea?.value ?? "";
+        };
+
+        const setLongGoalMarkdown = (value) => {
+            if (longGoalEditor) {
+                longGoalEditor.value(value);
+            } else if (longGoalTextarea) {
+                longGoalTextarea.value = value;
+            }
+        };
+
         const getSectionCurrentValue = (sectionName) => {
             const fieldName = fieldNames[sectionName];
             if (sectionName === "title") {
                 return titleInput?.value ?? "";
             }
 
-            if (sectionName === "long-goal" && ensureLongGoalEditor()) {
-                return longGoalEditor.value();
+            if (sectionName === "long-goal") {
+                return getLongGoalMarkdown();
             }
 
             return form.querySelector(`[name='${fieldName}']`)?.value ?? "";
@@ -427,6 +443,56 @@
             link.click();
             link.remove();
             URL.revokeObjectURL(url);
+        };
+
+        const updateTaskMarkerAtIndex = (markdown, taskIndex, checked) => {
+            let currentTaskIndex = -1;
+
+            return markdown
+                .split("\n")
+                .map((line) => {
+                    if (!/^(\s*[-*+]\s+\[)( |x|X)(\]\s+)/.test(line)) {
+                        return line;
+                    }
+
+                    currentTaskIndex += 1;
+                    if (currentTaskIndex !== taskIndex) {
+                        return line;
+                    }
+
+                    return line.replace(
+                        /^(\s*[-*+]\s+\[)( |x|X)(\]\s+)/,
+                        `$1${checked ? "x" : " "}$3`
+                    );
+                })
+                .join("\n");
+        };
+
+        const enablePreviewTaskCheckboxes = () => {
+            if (!longGoalPreview) {
+                return;
+            }
+
+            longGoalPreview.querySelectorAll(".task-list-checkbox").forEach((checkbox, index) => {
+                checkbox.disabled = false;
+                checkbox.dataset.taskIndex = String(index);
+            });
+        };
+
+        const savePreviewTaskCheckbox = async (checkbox) => {
+            const previousChecked = !checkbox.checked;
+            checkbox.disabled = true;
+
+            const taskIndex = Number(checkbox.dataset.taskIndex);
+            setLongGoalMarkdown(updateTaskMarkerAtIndex(getLongGoalMarkdown(), taskIndex, checkbox.checked));
+            const saved = await saveSection("long-goal", null, { silentSuccess: true });
+
+            if (!saved) {
+                checkbox.checked = previousChecked;
+                setLongGoalMarkdown(updateTaskMarkerAtIndex(getLongGoalMarkdown(), taskIndex, previousChecked));
+            }
+
+            checkbox.disabled = false;
         };
 
         const toggleSectionControls = (sectionName, editing) => {
@@ -511,11 +577,12 @@
             form.querySelector("[data-display-value='frequency']").textContent = project.frequency;
             if (longGoalPreview) {
                 longGoalPreview.innerHTML = project.long_goal_html;
+                enablePreviewTaskCheckboxes();
             }
 
             form.querySelector("[name='short_goal']").value = project.short_goal;
             form.querySelector("[name='frequency']").value = project.frequency;
-            if (ensureLongGoalEditor()) {
+            if (longGoalEditor) {
                 longGoalEditor.value(project.long_goal);
             } else {
                 form.querySelector("[name='long_goal']").value = project.long_goal;
@@ -540,14 +607,14 @@
             }
         };
 
-        const saveSection = async (sectionName, triggerButton = null) => {
+        const saveSection = async (sectionName, triggerButton = null, options = {}) => {
             hideAlert();
             isSaving = true;
             if (triggerButton) {
                 triggerButton.disabled = true;
             }
 
-            if (sectionName === "long-goal" && ensureLongGoalEditor()) {
+            if (sectionName === "long-goal" && longGoalEditor) {
                 longGoalEditor.codemirror.save();
             }
             if (sectionName === "title" && titleHiddenInput && titleInput) {
@@ -573,9 +640,13 @@
 
                 updateDisplayValues(payload.project);
                 toggleSection(sectionName, false);
-                showAlert(payload.message, "success");
+                if (!options.silentSuccess) {
+                    showAlert(payload.message, "success");
+                }
+                return true;
             } catch (error) {
                 showAlert(error.message, "danger");
+                return false;
             } finally {
                 isSaving = false;
                 if (triggerButton) {
@@ -659,6 +730,19 @@
 
         if (markdownDownloadButton) {
             markdownDownloadButton.addEventListener("click", downloadProjectMarkdown);
+        }
+
+        enablePreviewTaskCheckboxes();
+
+        if (longGoalPreview) {
+            longGoalPreview.addEventListener("change", (event) => {
+                const checkbox = event.target.closest(".task-list-checkbox");
+                if (!checkbox || checkbox.disabled) {
+                    return;
+                }
+
+                savePreviewTaskCheckbox(checkbox);
+            });
         }
 
         form.addEventListener("submit", (event) => {
