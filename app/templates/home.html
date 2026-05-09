@@ -48,7 +48,9 @@
 
                     <div class="d-flex flex-wrap gap-2 mt-4">
                         <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Login</a>
-                        <a class="btn btn-outline-secondary" href="{{ url_for('auth.register') }}">Register</a>
+                        {% if registration_enabled %}
+                            <a class="btn btn-outline-secondary" href="{{ url_for('auth.register') }}">Register</a>
+                        {% endif %}
                     </div>
                 {% endif %}
             </div>

@@ -11,6 +11,20 @@ load_dotenv(INSTANCE_ENV_PATH)
 load_dotenv(ROOT_ENV_PATH)
 
 
+def parse_bool(value, default=False):
+    """Parse common environment-style boolean values."""
+    if value is None:
+        return default
+
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+
+    return default
+
+
 def normalize_database_url(database_url):
     """Resolve local SQLite database paths relative to the project root."""
     url = make_url(database_url)
@@ -36,6 +50,7 @@ class Config:
         os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
     OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini").strip()

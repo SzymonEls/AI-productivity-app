@@ -34,6 +34,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(projects_bp)
+    register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)
     register_login_handlers(login_manager)
@@ -41,6 +42,16 @@ def create_app(config_class=Config):
         initialize_database(app)
 
     return app
+
+
+def register_template_context(app):
+    """Expose shared feature flags to templates."""
+
+    @app.context_processor
+    def inject_feature_flags():
+        return {
+            "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
+        }
 
 
 def register_json_error_handlers(app):
