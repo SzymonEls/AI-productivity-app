@@ -66,21 +66,18 @@ def generate_markdown_response(user_prompt, target_date, projects):
     content, request_payload = _request_markdown_output(
         system_prompt=(
             "You are a productivity assistant. Return only clean Markdown, without JSON "
-            "and without wrapping the answer in a code fence. Follow the user's prompt "
-            "for the output shape: it may be a daily plan, top priorities, reflection, "
-            "checklist, project advice, or any other productivity note. Use the selected "
-            "date and project list as context when they are useful, but do not force them "
-            "into the answer."
+            "and without wrapping the answer in a code fence. The user is planning a day. "
+            "Use the selected date, the user's prompt, and the list of starred project names "
+            "as context. Keep the user's language and make the output practical."
         ),
         user_payload={
             "task": current_app.config.get("OPENAI_MARKDOWN_TASK"),
             "selected_date": target_date.isoformat(),
             "user_prompt": user_prompt,
-            "projects": [
+            "starred_projects": [
                 {
+                    "id": project.id,
                     "title": project.title,
-                    "short_goal": project.short_goal,
-                    "frequency": project.frequency,
                 }
                 for project in projects
             ],

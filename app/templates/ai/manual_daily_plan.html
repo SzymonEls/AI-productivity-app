@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+
+{% block title %}Reczne planowanie dnia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Reczne planowanie dnia</h1>
+        <p class="text-muted mb-0">Wybierz projekty, przejdz przez nie po kolei i wpisz zadanie dla kazdego.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-outline-secondary" href="{{ url_for('ai.daily_planning') }}">Tryby planowania</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Home</a>
+    </div>
+</div>
+
+{% if projects %}
+    <form method="post" action="{{ url_for('ai.manual_daily_plan') }}" id="manual-daily-plan-form">
+        <div class="card shadow-sm manual-plan-step" data-step="select">
+            <div class="card-body p-4">
+                <div class="row g-4">
+                    <div class="col-lg-4">
+                        <label class="form-label" for="target_date">Data planu</label>
+                        <input
+                            type="date"
+                            class="form-control"
+                            id="target_date"
+                            name="target_date"
+                            value="{{ today.isoformat() }}"
+                            required
+                        >
+                    </div>
+                    <div class="col-lg-8">
+                        <p class="form-label mb-2">Projekty w planie</p>
+                        <div class="manual-project-select-list">
+                            {% for project in projects %}
+                                <label class="manual-project-choice">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        name="project_ids"
+                                        value="{{ project.id }}"
+                                        data-project-choice
+                                    >
+                                    <span>
+                                        <span class="d-flex align-items-center gap-2 flex-wrap">
+                                            <strong>{{ project.title }}</strong>
+                                            {% if project.is_starred %}
+                                                <span class="badge text-bg-warning">gwiazdka</span>
+                                            {% endif %}
+                                        </span>
+                                        <span class="small text-muted">{{ project.frequency }}</span>
+                                    </span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-end mt-4">
+                    <button class="btn btn-primary" type="button" data-manual-next-from-select>Dalej</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="manual-plan-projects d-none" data-step="projects">
+            {% for project in projects %}
+                <section class="card shadow-sm manual-project-step d-none" data-project-step="{{ project.id }}">
+                    <div class="card-body p-4">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                    <span class="badge text-bg-dark" data-manual-counter></span>
+                                    {% if project.is_starred %}
+                                        <span class="badge text-bg-warning">gwiazdka</span>
+                                    {% endif %}
+                                </div>
+                                <h2 class="h3 mb-1">{{ project.title }}</h2>
+                                <p class="text-muted mb-0">{{ project.frequency }}</p>
+                            </div>
+                            <button class="btn btn-outline-secondary" type="button" data-manual-back-to-select>
+                                Zmien projekty
+                            </button>
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-lg-5">
+                                <section class="mb-4">
+                                    <h3 class="h6 text-uppercase text-muted">Krotki cel</h3>
+                                    <p class="preserve-lines mb-0">{{ project.short_goal }}</p>
+                                </section>
+                                <section>
+                                    <h3 class="h6 text-uppercase text-muted">Czestotliwosc</h3>
+                                    <p class="preserve-lines mb-0">{{ project.frequency }}</p>
+                                </section>
+                            </div>
+                            <div class="col-lg-7">
+                                <h3 class="h6 text-uppercase text-muted">Pelny opis projektu</h3>
+                                <div class="markdown-content manual-project-description">{{ project.long_goal | markdown }}</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <label class="form-label" for="task_{{ project.id }}">Zadanie do planu dnia</label>
+                            <textarea
+                                class="form-control"
+                                id="task_{{ project.id }}"
+                                name="task_{{ project.id }}"
+                                rows="4"
+                                placeholder="Wpisz jedno konkretne zadanie dla tego projektu."
+                                data-project-task
+                            ></textarea>
+                        </div>
+
+                        <div class="d-flex justify-content-between gap-2 flex-wrap mt-4">
+                            <button class="btn btn-outline-secondary" type="button" data-manual-prev>Wstecz</button>
+                            <button class="btn btn-primary" type="button" data-manual-next>Dalej</button>
+                        </div>
+                    </div>
+                </section>
+            {% endfor %}
+        </div>
+
+        <div class="card shadow-sm manual-plan-step d-none" data-step="summary">
+            <div class="card-body p-4">
+                <h2 class="h4 mb-3">Podsumowanie</h2>
+                <div class="markdown-content manual-plan-preview mb-4" data-manual-preview></div>
+                <div class="d-flex justify-content-between gap-2 flex-wrap">
+                    <button class="btn btn-outline-secondary" type="button" data-manual-summary-back>Wstecz</button>
+                    <button class="btn btn-primary" type="submit">Zapisz plan dnia</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% else %}
+    <div class="empty-state text-center p-5 bg-light rounded-3">
+        <h2 class="h4">Brak projektow</h2>
+        <p class="text-muted">Utworz pierwszy projekt, zanim zbudujesz reczny plan dnia.</p>
+        <a class="btn btn-primary" href="{{ url_for('projects.create_project') }}">Create Project</a>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    (() => {
+        const form = document.getElementById("manual-daily-plan-form");
+        if (!form) {
+            return;
+        }
+
+        const selectStep = form.querySelector("[data-step='select']");
+        const projectsStep = form.querySelector("[data-step='projects']");
+        const summaryStep = form.querySelector("[data-step='summary']");
+        const projectPanels = Array.from(form.querySelectorAll("[data-project-step]"));
+        const preview = form.querySelector("[data-manual-preview]");
+        let selectedIds = [];
+        let currentIndex = 0;
+
+        const getSelectedIds = () => Array.from(form.querySelectorAll("[data-project-choice]:checked")).map((input) => input.value);
+
+        const showSelection = () => {
+            selectStep.classList.remove("d-none");
+            projectsStep.classList.add("d-none");
+            summaryStep.classList.add("d-none");
+            projectPanels.forEach((panel) => panel.classList.add("d-none"));
+        };
+
+        const showProject = (index) => {
+            currentIndex = index;
+            selectStep.classList.add("d-none");
+            projectsStep.classList.remove("d-none");
+            summaryStep.classList.add("d-none");
+
+            projectPanels.forEach((panel) => {
+                const visible = panel.dataset.projectStep === selectedIds[currentIndex];
+                panel.classList.toggle("d-none", !visible);
+                if (visible) {
+                    const counter = panel.querySelector("[data-manual-counter]");
+                    const nextButton = panel.querySelector("[data-manual-next]");
+                    const prevButton = panel.querySelector("[data-manual-prev]");
+                    counter.textContent = `${currentIndex + 1} / ${selectedIds.length}`;
+                    nextButton.textContent = currentIndex === selectedIds.length - 1 ? "Podsumowanie" : "Dalej";
+                    prevButton.textContent = currentIndex === 0 ? "Wybierz projekty" : "Wstecz";
+                    panel.querySelector("[data-project-task]")?.focus();
+                }
+            });
+        };
+
+        const escapeHtml = (value) => value
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;");
+
+        const getPanelTitle = (panel) => panel.querySelector("h2")?.textContent.trim() || "Projekt";
+
+        const validateCurrentTask = () => {
+            const panel = projectPanels.find((item) => item.dataset.projectStep === selectedIds[currentIndex]);
+            const task = panel?.querySelector("[data-project-task]");
+            if (!task || task.value.trim()) {
+                return true;
+            }
+
+            task.focus();
+            task.classList.add("is-invalid");
+            return false;
+        };
+
+        const showSummary = () => {
+            const targetDate = form.querySelector("#target_date").value;
+            const items = selectedIds.map((projectId) => {
+                const panel = projectPanels.find((item) => item.dataset.projectStep === projectId);
+                const title = getPanelTitle(panel);
+                const task = panel.querySelector("[data-project-task]").value.trim();
+                return `<li><strong>${escapeHtml(title)}:</strong> ${escapeHtml(task)}</li>`;
+            });
+
+            preview.innerHTML = `<h1>Plan dnia - ${escapeHtml(targetDate)}</h1><ul>${items.join("")}</ul>`;
+            selectStep.classList.add("d-none");
+            projectsStep.classList.add("d-none");
+            summaryStep.classList.remove("d-none");
+        };
+
+        form.querySelector("[data-manual-next-from-select]").addEventListener("click", () => {
+            selectedIds = getSelectedIds();
+            if (selectedIds.length === 0) {
+                window.alert("Wybierz przynajmniej jeden projekt.");
+                return;
+            }
+
+            showProject(0);
+        });
+
+        form.querySelectorAll("[data-manual-back-to-select]").forEach((button) => {
+            button.addEventListener("click", showSelection);
+        });
+
+        form.querySelectorAll("[data-manual-prev]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (currentIndex === 0) {
+                    showSelection();
+                    return;
+                }
+
+                showProject(currentIndex - 1);
+            });
+        });
+
+        form.querySelectorAll("[data-manual-next]").forEach((button) => {
+            button.addEventListener("click", () => {
+                if (!validateCurrentTask()) {
+                    return;
+                }
+
+                if (currentIndex === selectedIds.length - 1) {
+                    showSummary();
+                    return;
+                }
+
+                showProject(currentIndex + 1);
+            });
+        });
+
+        form.querySelectorAll("[data-project-task]").forEach((textarea) => {
+            textarea.addEventListener("input", () => textarea.classList.remove("is-invalid"));
+        });
+
+        form.querySelector("[data-manual-summary-back]").addEventListener("click", () => {
+            showProject(selectedIds.length - 1);
+        });
+
+        form.addEventListener("submit", (event) => {
+            selectedIds = getSelectedIds();
+            if (!selectedIds.length) {
+                event.preventDefault();
+                showSelection();
+                window.alert("Wybierz przynajmniej jeden projekt.");
+                return;
+            }
+
+            for (let index = 0; index < selectedIds.length; index += 1) {
+                currentIndex = index;
+                if (!validateCurrentTask()) {
+                    event.preventDefault();
+                    showProject(index);
+                    return;
+                }
+            }
+        });
+    })();
+</script>
+{% endblock %}

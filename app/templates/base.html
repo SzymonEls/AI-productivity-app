@@ -41,6 +41,9 @@
                         <a class="nav-link {% if request.endpoint in ['ai.history', 'ai.history_detail'] %}active{% endif %}" href="{{ url_for('ai.history') }}">
                             Historia AI
                         </a>
+                        <a class="nav-link {% if request.endpoint in ['ai.daily_planning', 'ai.manual_daily_plan'] %}active{% endif %}" href="{{ url_for('ai.daily_planning') }}">
+                            Plan dnia
+                        </a>
                     {% endif %}
                 </div>
                 <div class="navbar-nav ms-auto align-items-center">

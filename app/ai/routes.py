@@ -20,7 +20,24 @@ from .service import (
 
 
 ai_bp = Blueprint("ai", __name__, url_prefix="/ai")
-HOME_PLAN_TYPES = [MARKDOWN_RESPONSE, "daily_plan"]
+MANUAL_DAILY_PLAN = "manual_daily_plan"
+HOME_PLAN_TYPES = [MARKDOWN_RESPONSE, "daily_plan", MANUAL_DAILY_PLAN]
+
+
+@ai_bp.route("/daily-planning")
+@login_required
+def daily_planning():
+    starred_projects = (
+        Project.query.filter_by(user_id=current_user.id, is_starred=True)
+        .order_by(Project.updated_at.desc())
+        .all()
+    )
+    return render_template(
+        "ai/daily_planning.html",
+        today=date.today(),
+        starred_projects=starred_projects,
+        is_openai_ready=is_openai_configured(),
+    )
 
 
 @ai_bp.route("/project-plan", methods=["POST"])
@@ -98,7 +115,7 @@ def create_daily_plan():
         if _wants_json_response():
             return jsonify({"ok": False, "error": "Wpisz prompt dla AI."}), 400
         flash("Wpisz prompt dla AI, aby wygenerowac odpowiedz markdown.", "danger")
-        return redirect(url_for("main.home"))
+        return redirect(url_for("ai.daily_planning"))
 
     try:
         target_date = date.fromisoformat(raw_date)
@@ -106,11 +123,11 @@ def create_daily_plan():
         if _wants_json_response():
             return jsonify({"ok": False, "error": "Wybierz poprawna date."}), 400
         flash("Wybierz poprawna date planu dnia.", "danger")
-        return redirect(url_for("main.home"))
+        return redirect(url_for("ai.daily_planning"))
 
     projects = (
-        Project.query.filter_by(user_id=current_user.id)
-        .order_by(Project.is_starred.desc(), Project.updated_at.desc())
+        Project.query.filter_by(user_id=current_user.id, is_starred=True)
+        .order_by(Project.updated_at.desc())
         .all()
     )
 
@@ -120,7 +137,7 @@ def create_daily_plan():
         if _wants_json_response():
             return jsonify({"ok": False, "error": str(exc)}), 400
         flash(str(exc), "danger")
-        return redirect(url_for("main.home"))
+        return redirect(url_for("ai.daily_planning"))
 
     history_entry = AIPlan(
         owner=current_user,
@@ -142,7 +159,7 @@ def create_daily_plan():
         if _wants_json_response():
             return jsonify({"ok": False, "error": "Nie udalo sie zapisac odpowiedzi AI w historii."}), 500
         flash("Nie udalo sie zapisac odpowiedzi AI w historii.", "danger")
-        return redirect(url_for("main.home"))
+        return redirect(url_for("ai.daily_planning"))
     if _wants_json_response():
         visible_content = strip_repeated_title(history_entry.content, history_entry.title)
         return jsonify(
@@ -158,7 +175,100 @@ def create_daily_plan():
             }
         )
     flash("AI przygotowalo odpowiedz markdown i zapisalo ja w historii.", "success")
-    return redirect(url_for("main.home"))
+    return redirect(url_for("ai.history_detail", plan_id=history_entry.id))
+
+
+@ai_bp.route("/daily-plan/manual", methods=["GET", "POST"])
+@login_required
+def manual_daily_plan():
+    projects = (
+        Project.query.filter_by(user_id=current_user.id)
+        .order_by(Project.is_starred.desc(), Project.title.asc())
+        .all()
+    )
+
+    if request.method == "GET":
+        return render_template(
+            "ai/manual_daily_plan.html",
+            today=date.today(),
+            projects=projects,
+        )
+
+    raw_date = request.form.get("target_date", "").strip()
+    try:
+        target_date = date.fromisoformat(raw_date)
+    except ValueError:
+        flash("Wybierz poprawna date planu dnia.", "danger")
+        return render_template("ai/manual_daily_plan.html", today=date.today(), projects=projects), 400
+
+    selected_project_ids = _parse_project_ids(request.form.getlist("project_ids"))
+    if not selected_project_ids:
+        flash("Wybierz przynajmniej jeden projekt do planu recznego.", "danger")
+        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+
+    selected_projects = (
+        Project.query.filter(Project.user_id == current_user.id, Project.id.in_(selected_project_ids))
+        .all()
+    )
+    project_by_id = {project.id: project for project in selected_projects}
+    ordered_projects = [project_by_id[project_id] for project_id in selected_project_ids if project_id in project_by_id]
+
+    if len(ordered_projects) != len(selected_project_ids):
+        flash("Nie udalo sie znalezc wszystkich wybranych projektow.", "danger")
+        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+
+    tasks = []
+    for project in ordered_projects:
+        task = request.form.get(f"task_{project.id}", "").strip()
+        if not task:
+            flash(f"Wpisz zadanie dla projektu: {project.title}.", "danger")
+            return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+        tasks.append({"project": project, "task": task})
+
+    title = f"Plan dnia - {target_date.isoformat()}"
+    content = _render_manual_daily_plan(target_date, tasks)
+    request_payload = {
+        "mode": "manual_daily_plan",
+        "selected_date": target_date.isoformat(),
+        "projects": [
+            {
+                "id": item["project"].id,
+                "title": item["project"].title,
+                "short_goal": item["project"].short_goal,
+                "frequency": item["project"].frequency,
+                "long_goal": item["project"].long_goal,
+                "task": item["task"],
+            }
+            for item in tasks
+        ],
+    }
+
+    history_entry = AIPlan(
+        owner=current_user,
+        plan_type=MANUAL_DAILY_PLAN,
+        title=title,
+        user_prompt="Plan reczny",
+        target_date=target_date,
+        content=content,
+        request_payload=json.dumps(request_payload, ensure_ascii=False, indent=2),
+        response_payload=json.dumps(
+            {"format": "markdown", "content": content, "source": "manual"},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        is_pinned=True,
+    )
+    _unpin_home_plans()
+    db.session.add(history_entry)
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Nie udalo sie zapisac recznego planu dnia.", "danger")
+        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 500
+
+    flash("Reczny plan dnia zostal zapisany i przypiety na home.", "success")
+    return redirect(url_for("ai.history_detail", plan_id=history_entry.id))
 
 
 @ai_bp.route("/history")
@@ -268,11 +378,32 @@ def _wants_json_response():
 
 
 def _unpin_home_plans():
-    AIPlan.query.filter_by(user_id=current_user.id, is_pinned=True).filter(
-        AIPlan.plan_type.in_(HOME_PLAN_TYPES)
-    ).update({"is_pinned": False}, synchronize_session=False)
+    with db.session.no_autoflush:
+        AIPlan.query.filter_by(user_id=current_user.id, is_pinned=True).filter(
+            AIPlan.plan_type.in_(HOME_PLAN_TYPES)
+        ).update({"is_pinned": False}, synchronize_session=False)
 
 
 def _pin_plan(plan):
     _unpin_home_plans()
     plan.is_pinned = True
+
+
+def _parse_project_ids(raw_project_ids):
+    project_ids = []
+    for raw_project_id in raw_project_ids:
+        try:
+            project_id = int(raw_project_id)
+        except (TypeError, ValueError):
+            continue
+        if project_id not in project_ids:
+            project_ids.append(project_id)
+    return project_ids
+
+
+def _render_manual_daily_plan(target_date, tasks):
+    lines = [f"# Plan dnia - {target_date.isoformat()}", ""]
+    for item in tasks:
+        project = item["project"]
+        lines.append(f"- **{project.title}:** {item['task']}")
+    return "\n".join(lines).strip() + "\n"
