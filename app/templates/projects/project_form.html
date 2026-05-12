@@ -63,6 +63,17 @@
                             The working project plan. Markdown is supported here.
                         </div>
                     </div>
+                    <div class="form-check mb-3">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="is_private"
+                            name="is_private"
+                            value="true"
+                            {% if project and project.is_private %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="is_private">Projekt prywatny</label>
+                    </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">{{ submit_label }}</button>
                         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Cancel</a>

@@ -224,9 +224,27 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+            if "is_private" not in project_columns:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE projects ADD COLUMN is_private BOOLEAN "
+                        "DEFAULT 0 NOT NULL"
+                    )
+                )
+                db.session.commit()
 
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
 
         if "project_timeline_items" not in table_names:
             ProjectTimelineItem.__table__.create(bind=db.engine)
+        else:
+            timeline_item_columns = {column["name"] for column in inspector.get_columns("project_timeline_items")}
+            if "is_private" not in timeline_item_columns:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE project_timeline_items ADD COLUMN is_private BOOLEAN "
+                        "DEFAULT 0 NOT NULL"
+                    )
+                )
+                db.session.commit()

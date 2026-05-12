@@ -18,6 +18,10 @@
             <button type="button" class="btn btn-outline-primary" data-project-view-button="timeline">Timeline</button>
         </div>
         <div class="timeline-edit-actions d-none" data-timeline-edit-actions>
+            <div class="form-check form-switch timeline-private-toggle">
+                <input class="form-check-input" type="checkbox" id="hidePrivateTimelineItems" data-hide-private-timeline>
+                <label class="form-check-label small" for="hidePrivateTimelineItems">Ukryj prywatne projekty</label>
+            </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>Add group</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>Edit timeline</button>
             <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>Save timeline</button>
@@ -43,21 +47,25 @@
                         <div class="timeline-items" data-timeline-items>
                             {% for item in group.items %}
                                 {% if item.item_type == "project" and item.project %}
-                                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}">
+                                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}" data-is-private="{{ 1 if item.project.is_private else 0 }}">
                                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                                         <div class="timeline-item-main">
-                                            <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}">{{ item.project.title }}</a>
+                                            <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}" data-private-mask-title>{{ item.project.title }}</a>
                                         </div>
                                     </article>
                                 {% elif item.item_type == "note" %}
-                                    <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="note">
+                                    <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="note" data-is-private="{{ 1 if item.is_private else 0 }}">
                                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                                         <div class="timeline-item-main">
-                                            <strong class="timeline-item-title" data-note-title-display>{{ item.title or "Notatka" }}</strong>
-                                            <p class="timeline-item-text preserve-lines" data-note-body-display>{{ item.body }}</p>
+                                            <strong class="timeline-item-title" data-note-title-display data-private-mask-title>{{ item.title or "Notatka" }}</strong>
+                                            <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>{{ item.body }}</p>
                                             <div class="timeline-note-fields d-none">
                                                 <input class="form-control form-control-sm" value="{{ item.title or "" }}" data-note-title aria-label="Tytul notatki">
                                                 <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">{{ item.body or "" }}</textarea>
+                                                <div class="form-check timeline-note-privacy">
+                                                    <input class="form-check-input" type="checkbox" data-note-private aria-label="Oznacz blok jako prywatny" {% if item.is_private %}checked{% endif %}>
+                                                    <label class="form-check-label small">Prywatne</label>
+                                                </div>
                                             </div>
                                         </div>
                                         <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
@@ -74,7 +82,7 @@
 
     <div class="row g-4" id="project-dashboard-grid">
         {% for project in projects %}
-            <div class="col-md-6 col-lg-4" data-project-column data-project-key="{{ project.id }}" data-project-title="{{ project.title|lower }}" data-project-starred="{{ 1 if project.is_starred else 0 }}">
+            <div class="col-md-6 col-lg-4" data-project-column data-project-key="{{ project.id }}" data-project-title="{{ project.title|lower }}" data-project-starred="{{ 1 if project.is_starred else 0 }}" data-project-private="{{ 1 if project.is_private else 0 }}">
                 <div class="card h-100 shadow-sm project-card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
@@ -112,6 +120,7 @@
                             <input type="hidden" name="title" value="{{ project.title }}">
                             <input type="hidden" name="long_goal" value="{{ project.long_goal }}">
                             <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-starred-input>
+                            <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-private-input>
 
                             <div class="project-inline-section">
                                 <p class="small text-uppercase text-muted fw-semibold mb-2">Next Mini-Goal</p>
@@ -171,6 +180,14 @@
                         >
                             Preview
                         </button>
+                        <button
+                            type="button"
+                            class="btn btn-outline-secondary btn-sm"
+                            data-bs-toggle="modal"
+                            data-bs-target="#projectSettingsModal{{ project.id }}"
+                        >
+                            Settings
+                        </button>
                         <a href="{{ url_for('projects.project_detail', project_id=project.id) }}" class="btn btn-outline-secondary btn-sm">
                             Open
                         </a>
@@ -201,6 +218,7 @@
                             >
                                 <input type="hidden" name="title" value="{{ project.title }}">
                                 <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-starred-input>
+                                <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-private-input>
 
                                 <section class="mb-4">
                                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
@@ -281,6 +299,47 @@
                     </div>
                 </div>
             </div>
+
+            <div class="modal fade" id="projectSettingsModal{{ project.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <form
+                            method="post"
+                            action="{{ url_for('projects.edit_project', project_id=project.id) }}"
+                            data-project-settings-form
+                            data-project-key="{{ project.id }}"
+                        >
+                            <div class="modal-header">
+                                <h3 class="modal-title h5">Project settings</h3>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" name="title" value="{{ project.title }}">
+                                <input type="hidden" name="short_goal" value="{{ project.short_goal }}">
+                                <input type="hidden" name="frequency" value="{{ project.frequency }}">
+                                <input type="hidden" name="long_goal" value="{{ project.long_goal }}">
+                                <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-starred-input>
+                                <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-private-input>
+
+                                <div class="form-check form-switch">
+                                    <input
+                                        class="form-check-input"
+                                        type="checkbox"
+                                        id="projectPrivate{{ project.id }}"
+                                        data-private-toggle
+                                        {% if project.is_private %}checked{% endif %}
+                                    >
+                                    <label class="form-check-label" for="projectPrivate{{ project.id }}">Projekt prywatny</label>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save settings</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         {% endfor %}
     </div>
 {% else %}
@@ -303,6 +362,7 @@
         const saveButton = document.querySelector("[data-timeline-save]");
         const cancelButton = document.querySelector("[data-timeline-cancel]");
         const addGroupButton = document.querySelector("[data-timeline-add-group]");
+        const hidePrivateToggle = document.querySelector("[data-hide-private-timeline]");
 
         if (!grid || !timelinePanel || !timelineRoot || !timelineDataNode) {
             return;
@@ -317,6 +377,8 @@
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;")
             .replaceAll('"', "&quot;");
+
+        const privateLabel = "(prywatne)";
 
         const setView = (view) => {
             const showTimeline = view === "timeline";
@@ -353,34 +415,63 @@
                 </section>
             `).join("");
             setEditMode(editMode);
+            updatePrivacyMask();
         };
 
         const renderTimelineItem = (item) => {
             if (item.type === "project") {
                 return `
-                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="project" data-project-id="${escapeHtml(item.project_id ?? "")}">
+                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="project" data-project-id="${escapeHtml(item.project_id ?? "")}" data-is-private="${item.is_private ? "1" : "0"}">
                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                         <div class="timeline-item-main">
-                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}">${escapeHtml(item.title || "Projekt")}</a>
+                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}" data-private-mask-title>${escapeHtml(item.title || "Projekt")}</a>
                         </div>
                     </article>
                 `;
             }
 
             return `
-                <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="note">
+                <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="note" data-is-private="${item.is_private ? "1" : "0"}">
                     <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                     <div class="timeline-item-main">
-                        <strong class="timeline-item-title" data-note-title-display>${escapeHtml(item.title || "Notatka")}</strong>
-                        <p class="timeline-item-text preserve-lines" data-note-body-display>${escapeHtml(item.body || "")}</p>
+                        <strong class="timeline-item-title" data-note-title-display data-private-mask-title>${escapeHtml(item.title || "Notatka")}</strong>
+                        <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>${escapeHtml(item.body || "")}</p>
                         <div class="timeline-note-fields d-none">
                             <input class="form-control form-control-sm" value="${escapeHtml(item.title || "")}" data-note-title aria-label="Tytul notatki">
                             <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">${escapeHtml(item.body || "")}</textarea>
+                            <div class="form-check timeline-note-privacy">
+                                <input class="form-check-input" type="checkbox" data-note-private aria-label="Oznacz blok jako prywatny" ${item.is_private ? "checked" : ""}>
+                                <label class="form-check-label small">Prywatne</label>
+                            </div>
                         </div>
                     </div>
                     <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
                 </article>
             `;
+        };
+
+        const updatePrivacyMask = () => {
+            const shouldMask = Boolean(hidePrivateToggle?.checked);
+            timelineRoot.querySelectorAll("[data-timeline-item]").forEach((item) => {
+                const isPrivate = item.dataset.isPrivate === "1";
+                item.classList.toggle("is-private-masked", shouldMask && isPrivate);
+
+                const titleNode = item.querySelector("[data-private-mask-title]");
+                if (titleNode) {
+                    if (!titleNode.dataset.originalText) {
+                        titleNode.dataset.originalText = titleNode.textContent;
+                    }
+                    titleNode.textContent = shouldMask && isPrivate ? privateLabel : titleNode.dataset.originalText;
+                }
+
+                const bodyNode = item.querySelector("[data-private-mask-body]");
+                if (bodyNode) {
+                    if (!bodyNode.dataset.originalText) {
+                        bodyNode.dataset.originalText = bodyNode.textContent;
+                    }
+                    bodyNode.textContent = shouldMask && isPrivate ? "" : bodyNode.dataset.originalText;
+                }
+            });
         };
 
         const setEditMode = (enabled) => {
@@ -410,6 +501,7 @@
             timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
             timelineRoot.querySelectorAll(".timeline-note-fields").forEach((fields) => fields.classList.toggle("d-none", !enabled));
+            updatePrivacyMask();
         };
 
         const createNoteElement = () => {
@@ -501,6 +593,19 @@
                 }
             });
 
+            timelineRoot.addEventListener("change", (event) => {
+                const privacyCheckbox = event.target.closest("[data-note-private]");
+                if (!privacyCheckbox) {
+                    return;
+                }
+
+                const item = privacyCheckbox.closest("[data-timeline-item]");
+                if (item) {
+                    item.dataset.isPrivate = privacyCheckbox.checked ? "1" : "0";
+                    updatePrivacyMask();
+                }
+            });
+
             timelineRoot.addEventListener("click", (event) => {
                 if (editMode && event.target.closest(".timeline-item-title[href]")) {
                     event.preventDefault();
@@ -556,6 +661,7 @@
                         type: "note",
                         title: item.querySelector("[data-note-title]")?.value.trim() || "",
                         body: item.querySelector("[data-note-body]")?.value.trim() || "",
+                        is_private: Boolean(item.querySelector("[data-note-private]")?.checked),
                     };
                 }),
             })),
@@ -564,6 +670,7 @@
         viewButtons.forEach((button) => {
             button.addEventListener("click", () => setView(button.dataset.projectViewButton));
         });
+        hidePrivateToggle?.addEventListener("change", updatePrivacyMask);
 
         const initialView = new URLSearchParams(window.location.search).get("view") === "timeline" ? "timeline" : "cards";
         setView(initialView);
@@ -607,6 +714,7 @@
         });
 
         setupTimelineControls();
+        renderTimeline(savedTimeline);
         addGroupButton?.classList.add("d-none");
     })();
 </script>
@@ -659,6 +767,53 @@
             const initialValues = new Map(
                 Array.from(form.querySelectorAll("input[name], textarea[name]")).map((field) => [field.name, field.value])
             );
+
+            if (form.hasAttribute("data-project-settings-form")) {
+                const privateToggle = form.querySelector("[data-private-toggle]");
+                const privateInput = form.querySelector("[data-private-input]");
+
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const submitButton = form.querySelector("button[type='submit']");
+                    const previousPrivate = privateInput?.value === "true";
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+                    if (privateInput) {
+                        privateInput.value = privateToggle?.checked ? "true" : "false";
+                    }
+
+                    try {
+                        const response = await fetch(form.action, {
+                            method: "POST",
+                            headers: {
+                                "Accept": "application/json",
+                                "X-Requested-With": "XMLHttpRequest",
+                            },
+                            body: new FormData(form),
+                        });
+                        const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                        if (!response.ok || !payload.ok) {
+                            throw new Error(payload.message || "Could not save settings.");
+                        }
+
+                        updateProjectEverywhere(payload.project);
+                        bootstrap.Modal.getInstance(form.closest(".modal"))?.hide();
+                    } catch (error) {
+                        if (privateToggle && privateInput) {
+                            privateToggle.checked = previousPrivate;
+                            privateInput.value = previousPrivate ? "true" : "false";
+                        }
+                        window.alert(error.message);
+                    } finally {
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                        }
+                    }
+                });
+
+                return;
+            }
 
             const getSectionFieldName = (sectionName) => {
                 if (sectionName === "short-goal") {
@@ -822,6 +977,8 @@
                     const frequencyDisplay = form.querySelector("[data-display-value='frequency']");
                     const longGoalDisplay = form.querySelector("[data-display-value='long_goal']");
                     const starredInput = form.querySelector("[data-starred-input]");
+                    const privateInput = form.querySelector("[data-private-input]");
+                    const privateToggle = form.querySelector("[data-private-toggle]");
 
                     if (shortGoalDisplay) {
                         shortGoalDisplay.textContent = form.hasAttribute("data-project-inline-form") && project.short_goal.length > 120
@@ -843,6 +1000,12 @@
                     if (starredInput) {
                         starredInput.value = project.is_starred ? "true" : "false";
                     }
+                    if (privateInput) {
+                        privateInput.value = project.is_private ? "true" : "false";
+                    }
+                    if (privateToggle) {
+                        privateToggle.checked = project.is_private;
+                    }
                 });
 
                 titleDisplays.forEach((node) => {
@@ -859,6 +1022,7 @@
                 });
 
                 card.dataset.projectStarred = project.is_starred ? "1" : "0";
+                card.dataset.projectPrivate = project.is_private ? "1" : "0";
                 card.dataset.projectTitle = project.title.toLowerCase();
 
                 const starToggle = card.querySelector("[data-star-toggle]");
@@ -868,6 +1032,29 @@
                     starToggle.setAttribute("aria-pressed", project.is_starred ? "true" : "false");
                     starToggle.setAttribute("aria-label", project.is_starred ? "Remove star" : "Add star");
                 }
+
+                savedTimeline = savedTimeline.map((group) => ({
+                    ...group,
+                    items: (group.items || []).map((item) => {
+                        if (item.type !== "project" || String(item.project_id) !== String(projectKey)) {
+                            return item;
+                        }
+
+                        return {
+                            ...item,
+                            title: project.title,
+                            is_private: project.is_private,
+                        };
+                    }),
+                }));
+                timelineRoot.querySelectorAll(`[data-timeline-item][data-item-type='project'][data-project-id='${projectKey}']`).forEach((item) => {
+                    item.dataset.isPrivate = project.is_private ? "1" : "0";
+                    const titleNode = item.querySelector("[data-private-mask-title]");
+                    if (titleNode) {
+                        titleNode.dataset.originalText = project.title;
+                    }
+                });
+                updatePrivacyMask();
 
                 resortCards();
             };

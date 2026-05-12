@@ -96,6 +96,7 @@ def generate_project_plan():
                     "frequency": project.frequency,
                     "long_goal": project.long_goal,
                     "long_goal_html": str(render_markdown(project.long_goal)),
+                    "is_private": project.is_private,
                     "updated_label": "just now",
                 },
                 "history_url": url_for("ai.history_detail", plan_id=history_entry.id),

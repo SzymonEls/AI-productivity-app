@@ -44,6 +44,7 @@ def create_project():
         short_goal = request.form.get("short_goal", "").strip()
         frequency = request.form.get("frequency", "").strip()
         long_goal = request.form.get("long_goal", "").strip()
+        is_private = _form_bool("is_private", default=False)
 
         if not title or not short_goal or not frequency or not long_goal:
             flash("Please complete all project fields.", "danger")
@@ -53,6 +54,7 @@ def create_project():
                 short_goal=short_goal,
                 frequency=frequency,
                 long_goal=long_goal,
+                is_private=is_private,
                 owner=current_user,
             )
             db.session.add(project)
@@ -105,6 +107,7 @@ def edit_project(project_id):
     long_goal = request.form.get("long_goal", "").strip()
     starred_value = request.form.get("is_starred")
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
+    is_private = _form_bool("is_private", default=project.is_private)
 
     if not title or not short_goal or not frequency or not long_goal:
         error_message = "Please complete all project fields."
@@ -117,6 +120,7 @@ def edit_project(project_id):
         project.frequency = frequency
         project.long_goal = long_goal
         project.is_starred = is_starred
+        project.is_private = is_private
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -140,6 +144,7 @@ def edit_project(project_id):
                         "long_goal": project.long_goal,
                         "long_goal_html": str(render_markdown(project.long_goal)),
                         "is_starred": project.is_starred,
+                        "is_private": project.is_private,
                         "updated_label": "just now",
                     },
                 }
@@ -223,6 +228,7 @@ def save_timeline():
                     item.project_id = project_id
                     item.title = None
                     item.body = None
+                    item.is_private = False
                 elif item_type == "note":
                     title = (item_payload.get("title") or "").strip()[:180]
                     body = (item_payload.get("body") or "").strip()
@@ -236,6 +242,7 @@ def save_timeline():
                     item.project_id = None
                     item.title = title or "Notatka"
                     item.body = body
+                    item.is_private = bool(item_payload.get("is_private"))
                 else:
                     continue
 
@@ -334,6 +341,7 @@ def _serialize_timeline_item(item):
             "project_id": item.project_id,
             "title": item.project.title if item.project else "Projekt",
             "url": url_for("projects.project_detail", project_id=item.project_id) if item.project_id else "#",
+            "is_private": bool(item.project.is_private) if item.project else False,
         }
 
     return {
@@ -341,6 +349,7 @@ def _serialize_timeline_item(item):
         "type": "note",
         "title": item.title or "Notatka",
         "body": item.body or "",
+        "is_private": bool(item.is_private),
     }
 
 
@@ -349,3 +358,10 @@ def _coerce_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _form_bool(name, default=False):
+    value = request.form.get(name)
+    if value is None:
+        return default
+    return value.lower() in {"1", "true", "on", "yes"}

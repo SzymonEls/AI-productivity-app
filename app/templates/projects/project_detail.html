@@ -33,6 +33,14 @@
         <p class="text-muted mb-0" data-project-updated-label>Last modified {{ project.updated_at | naturaltime }}</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+        <button
+            type="button"
+            class="btn btn-outline-secondary"
+            data-bs-toggle="modal"
+            data-bs-target="#projectSettingsModal"
+        >
+            Settings
+        </button>
         <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
             Pobierz markdown
         </button>
@@ -155,6 +163,41 @@
     <input type="hidden" name="title" value="{{ project.title }}" data-project-title-hidden>
 </form>
 
+<div class="modal fade" id="projectSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('projects.edit_project', project_id=project.id) }}" data-project-settings-form>
+                <div class="modal-header">
+                    <h2 class="modal-title h5">Project settings</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="title" value="{{ project.title }}" data-settings-title>
+                    <input type="hidden" name="short_goal" value="{{ project.short_goal }}" data-settings-short-goal>
+                    <input type="hidden" name="frequency" value="{{ project.frequency }}" data-settings-frequency>
+                    <input type="hidden" name="long_goal" value="{{ project.long_goal }}" data-settings-long-goal>
+                    <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-settings-private-input>
+
+                    <div class="form-check form-switch">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="projectPrivate"
+                            data-settings-private-toggle
+                            {% if project.is_private %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="projectPrivate">Projekt prywatny</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-centered">
         <div class="modal-content">
@@ -220,6 +263,7 @@
         const titleHiddenInput = form.querySelector("[data-project-title-hidden]");
         const longGoalPreview = form.querySelector("[data-display-value='long_goal']");
         const markdownDownloadButton = document.querySelector("[data-download-project-markdown]");
+        const settingsForm = document.querySelector("[data-project-settings-form]");
         let isSaving = false;
         let longGoalEditor = null;
 
@@ -605,6 +649,21 @@
             if (updatedLabel) {
                 updatedLabel.textContent = `Last modified ${project.updated_label}`;
             }
+
+            if (settingsForm) {
+                settingsForm.querySelector("[data-settings-title]").value = project.title;
+                settingsForm.querySelector("[data-settings-short-goal]").value = project.short_goal;
+                settingsForm.querySelector("[data-settings-frequency]").value = project.frequency;
+                settingsForm.querySelector("[data-settings-long-goal]").value = project.long_goal;
+                const settingsPrivateInput = settingsForm.querySelector("[data-settings-private-input]");
+                const settingsPrivateToggle = settingsForm.querySelector("[data-settings-private-toggle]");
+                if (settingsPrivateInput) {
+                    settingsPrivateInput.value = project.is_private ? "true" : "false";
+                }
+                if (settingsPrivateToggle) {
+                    settingsPrivateToggle.checked = project.is_private;
+                }
+            }
         };
 
         const saveSection = async (sectionName, triggerButton = null, options = {}) => {
@@ -730,6 +789,55 @@
 
         if (markdownDownloadButton) {
             markdownDownloadButton.addEventListener("click", downloadProjectMarkdown);
+        }
+
+        if (settingsForm) {
+            settingsForm.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                hideAlert();
+                const submitButton = settingsForm.querySelector("button[type='submit']");
+                const privateInput = settingsForm.querySelector("[data-settings-private-input]");
+                const privateToggle = settingsForm.querySelector("[data-settings-private-toggle]");
+                const previousPrivate = privateInput?.value === "true";
+
+                if (privateInput) {
+                    privateInput.value = privateToggle?.checked ? "true" : "false";
+                }
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(settingsForm.action, {
+                        method: "POST",
+                        headers: {
+                            "Accept": "application/json",
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                        body: new FormData(settingsForm),
+                    });
+                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    if (!response.ok || !payload.ok) {
+                        throw new Error(payload.message || "Could not save settings.");
+                    }
+
+                    updateDisplayValues(payload.project);
+                    bootstrap.Modal.getInstance(settingsForm.closest(".modal"))?.hide();
+                    showAlert(payload.message, "success");
+                } catch (error) {
+                    if (privateInput) {
+                        privateInput.value = previousPrivate ? "true" : "false";
+                    }
+                    if (privateToggle) {
+                        privateToggle.checked = previousPrivate;
+                    }
+                    showAlert(error.message, "danger");
+                } finally {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                }
+            });
         }
 
         enablePreviewTaskCheckboxes();

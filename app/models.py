@@ -70,6 +70,7 @@ class Project(db.Model):
     frequency = db.Column(db.String(255), nullable=False)
     long_goal = db.Column(db.Text, nullable=False)
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
+    is_private = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -132,6 +133,7 @@ class ProjectTimelineItem(db.Model):
     item_type = db.Column(db.String(20), nullable=False)
     title = db.Column(db.String(180), nullable=True)
     body = db.Column(db.Text, nullable=True)
+    is_private = db.Column(db.Boolean, default=False, nullable=False)
     position = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(

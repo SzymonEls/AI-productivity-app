@@ -267,6 +267,13 @@ body {
     flex-wrap: wrap;
 }
 
+.timeline-private-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.95rem;
+    margin: 0 0.25rem 0 0;
+}
+
 .project-timeline-panel {
     max-width: 980px;
 }
@@ -380,6 +387,11 @@ body {
     background: #fbfcfd;
 }
 
+.timeline-item.is-private-masked {
+    border-left-color: #495057;
+    background: #f8f9fa;
+}
+
 .project-timeline.is-editing .timeline-note-item {
     align-items: stretch;
     max-width: min(100%, 28rem);
@@ -435,6 +447,10 @@ body {
     gap: 0.35rem;
     min-width: 0;
     width: 100%;
+}
+
+.timeline-note-privacy {
+    margin-top: 0.1rem;
 }
 
 .timeline-add-note {
