@@ -37,6 +37,19 @@ class User(UserMixin, db.Model):
         lazy=True,
         order_by=lambda: AIPlan.created_at.desc(),
     )
+    timeline_groups = db.relationship(
+        "ProjectTimelineGroup",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: ProjectTimelineGroup.position,
+    )
+    timeline_items = db.relationship(
+        "ProjectTimelineItem",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -72,6 +85,65 @@ class Project(db.Model):
         lazy=True,
         order_by=lambda: AIPlan.created_at.desc(),
     )
+    timeline_items = db.relationship(
+        "ProjectTimelineItem",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        lazy=True,
+    )
+
+
+class ProjectTimelineGroup(db.Model):
+    """User-owned group on the project timeline."""
+
+    __tablename__ = "project_timeline_groups"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(150), nullable=True)
+    position = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="timeline_groups")
+    items = db.relationship(
+        "ProjectTimelineItem",
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: ProjectTimelineItem.position,
+    )
+
+
+class ProjectTimelineItem(db.Model):
+    """Project or custom note placed inside a project timeline group."""
+
+    __tablename__ = "project_timeline_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    group_id = db.Column(db.Integer, db.ForeignKey("project_timeline_groups.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
+    item_type = db.Column(db.String(20), nullable=False)
+    title = db.Column(db.String(180), nullable=True)
+    body = db.Column(db.Text, nullable=True)
+    position = db.Column(db.Integer, default=0, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="timeline_items")
+    group = db.relationship("ProjectTimelineGroup", back_populates="items")
+    project = db.relationship("Project", back_populates="timeline_items")
 
 
 class AIPlan(db.Model):

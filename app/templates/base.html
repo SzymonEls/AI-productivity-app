@@ -32,8 +32,11 @@
                         Home
                     </a>
                     {% if current_user.is_authenticated %}
-                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
+                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' and request.args.get('view') != 'timeline' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
                             Lista projektow
+                        </a>
+                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' and request.args.get('view') == 'timeline' %}active{% endif %}" href="{{ url_for('projects.dashboard', view='timeline') }}">
+                            Timeline
                         </a>
                         <a class="nav-link {% if request.endpoint in ['calendar.calendar_view', 'calendar.settings'] %}active{% endif %}" href="{{ url_for('calendar.calendar_view') }}">
                             Kalendarz

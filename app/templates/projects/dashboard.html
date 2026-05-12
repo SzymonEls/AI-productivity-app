@@ -12,6 +12,66 @@
 </div>
 
 {% if projects %}
+    <div class="project-view-toolbar mb-3">
+        <div class="btn-group btn-group-sm" role="group" aria-label="Project view">
+            <button type="button" class="btn btn-primary" data-project-view-button="cards">Cards</button>
+            <button type="button" class="btn btn-outline-primary" data-project-view-button="timeline">Timeline</button>
+        </div>
+        <div class="timeline-edit-actions d-none" data-timeline-edit-actions>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>Add group</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>Edit timeline</button>
+            <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>Save timeline</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-timeline-cancel>Cancel</button>
+        </div>
+    </div>
+
+    <script type="application/json" id="project-timeline-data">
+        {{ timeline_data | tojson }}
+    </script>
+
+    <section class="project-timeline-panel d-none" data-project-view="timeline" data-save-url="{{ url_for('projects.save_timeline') }}">
+        <div class="project-timeline" data-timeline-groups>
+            {% for group in timeline_groups %}
+                <section class="timeline-group" data-timeline-group data-group-id="{{ group.id }}">
+                    <div class="timeline-group-marker"></div>
+                    <div class="timeline-group-content">
+                        <div class="timeline-group-header {% if not group.name %}d-none{% endif %}" data-group-header>
+                            <h2 class="timeline-group-title {% if not group.name %}d-none{% endif %}" data-group-title>{{ group.name or "" }}</h2>
+                            <input class="form-control form-control-sm timeline-group-name d-none" value="{{ group.name or "" }}" data-group-name aria-label="Nazwa grupy">
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
+                        </div>
+                        <div class="timeline-items" data-timeline-items>
+                            {% for item in group.items %}
+                                {% if item.item_type == "project" and item.project %}
+                                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}">
+                                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
+                                        <div class="timeline-item-main">
+                                            <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}">{{ item.project.title }}</a>
+                                        </div>
+                                    </article>
+                                {% elif item.item_type == "note" %}
+                                    <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="note">
+                                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
+                                        <div class="timeline-item-main">
+                                            <strong class="timeline-item-title" data-note-title-display>{{ item.title or "Notatka" }}</strong>
+                                            <p class="timeline-item-text preserve-lines" data-note-body-display>{{ item.body }}</p>
+                                            <div class="timeline-note-fields d-none">
+                                                <input class="form-control form-control-sm" value="{{ item.title or "" }}" data-note-title aria-label="Tytul notatki">
+                                                <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">{{ item.body or "" }}</textarea>
+                                            </div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
+                                    </article>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                    </div>
+                </section>
+            {% endfor %}
+        </div>
+    </section>
+
     <div class="row g-4" id="project-dashboard-grid">
         {% for project in projects %}
             <div class="col-md-6 col-lg-4" data-project-column data-project-key="{{ project.id }}" data-project-title="{{ project.title|lower }}" data-project-starred="{{ 1 if project.is_starred else 0 }}">
@@ -230,6 +290,326 @@
         <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Your First Project</a>
     </div>
 {% endif %}
+
+<script>
+    (() => {
+        const grid = document.querySelector("#project-dashboard-grid");
+        const timelinePanel = document.querySelector("[data-project-view='timeline']");
+        const timelineRoot = document.querySelector("[data-timeline-groups]");
+        const timelineDataNode = document.getElementById("project-timeline-data");
+        const viewButtons = document.querySelectorAll("[data-project-view-button]");
+        const editActions = document.querySelector("[data-timeline-edit-actions]");
+        const editToggle = document.querySelector("[data-timeline-edit-toggle]");
+        const saveButton = document.querySelector("[data-timeline-save]");
+        const cancelButton = document.querySelector("[data-timeline-cancel]");
+        const addGroupButton = document.querySelector("[data-timeline-add-group]");
+
+        if (!grid || !timelinePanel || !timelineRoot || !timelineDataNode) {
+            return;
+        }
+
+        let savedTimeline = JSON.parse(timelineDataNode.textContent);
+        let editMode = false;
+        let draggedItem = null;
+
+        const escapeHtml = (value) => String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;");
+
+        const setView = (view) => {
+            const showTimeline = view === "timeline";
+            timelinePanel.classList.toggle("d-none", !showTimeline);
+            grid.classList.toggle("d-none", showTimeline);
+            editActions?.classList.toggle("d-none", !showTimeline);
+
+            viewButtons.forEach((button) => {
+                const isActive = button.dataset.projectViewButton === view;
+                button.classList.toggle("btn-primary", isActive);
+                button.classList.toggle("btn-outline-primary", !isActive);
+            });
+
+            if (!showTimeline) {
+                setEditMode(false);
+            }
+        };
+
+        const renderTimeline = (groups) => {
+            timelineRoot.innerHTML = groups.map((group) => `
+                <section class="timeline-group" data-timeline-group data-group-id="${escapeHtml(group.id ?? "")}">
+                    <div class="timeline-group-marker"></div>
+                    <div class="timeline-group-content">
+                        <div class="timeline-group-header ${group.name ? "" : "d-none"}" data-group-header>
+                            <h2 class="timeline-group-title ${group.name ? "" : "d-none"}" data-group-title>${escapeHtml(group.name || "")}</h2>
+                            <input class="form-control form-control-sm timeline-group-name d-none" value="${escapeHtml(group.name || "")}" data-group-name aria-label="Nazwa grupy">
+                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
+                        </div>
+                        <div class="timeline-items" data-timeline-items>
+                            ${(group.items || []).map(renderTimelineItem).join("")}
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                    </div>
+                </section>
+            `).join("");
+            setEditMode(editMode);
+        };
+
+        const renderTimelineItem = (item) => {
+            if (item.type === "project") {
+                return `
+                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="project" data-project-id="${escapeHtml(item.project_id ?? "")}">
+                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
+                        <div class="timeline-item-main">
+                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}">${escapeHtml(item.title || "Projekt")}</a>
+                        </div>
+                    </article>
+                `;
+            }
+
+            return `
+                <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="note">
+                    <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
+                    <div class="timeline-item-main">
+                        <strong class="timeline-item-title" data-note-title-display>${escapeHtml(item.title || "Notatka")}</strong>
+                        <p class="timeline-item-text preserve-lines" data-note-body-display>${escapeHtml(item.body || "")}</p>
+                        <div class="timeline-note-fields d-none">
+                            <input class="form-control form-control-sm" value="${escapeHtml(item.title || "")}" data-note-title aria-label="Tytul notatki">
+                            <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">${escapeHtml(item.body || "")}</textarea>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
+                </article>
+            `;
+        };
+
+        const setEditMode = (enabled) => {
+            editMode = enabled;
+            editToggle?.classList.toggle("d-none", enabled);
+            saveButton?.classList.toggle("d-none", !enabled);
+            cancelButton?.classList.toggle("d-none", !enabled);
+            addGroupButton?.classList.toggle("d-none", !enabled);
+            timelineRoot.classList.toggle("is-editing", enabled);
+
+            timelineRoot.querySelectorAll("[data-timeline-item]").forEach((item) => {
+                item.draggable = enabled;
+                item.querySelector("[data-drag-handle]")?.classList.toggle("d-none", !enabled);
+            });
+            timelineRoot.querySelectorAll("[data-group-header]").forEach((header) => {
+                const title = header.querySelector("[data-group-title]");
+                const hasTitle = Boolean(title?.textContent.trim());
+                header.classList.toggle("d-none", !enabled && !hasTitle);
+            });
+            timelineRoot.querySelectorAll("[data-group-title]").forEach((title) => {
+                const hasTitle = Boolean(title.textContent.trim());
+                title.classList.toggle("d-none", enabled || !hasTitle);
+            });
+            timelineRoot.querySelectorAll("[data-group-name]").forEach((input) => input.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-delete-group]").forEach((button) => button.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-add-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
+            timelineRoot.querySelectorAll(".timeline-note-fields").forEach((fields) => fields.classList.toggle("d-none", !enabled));
+        };
+
+        const createNoteElement = () => {
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Notatka", body: "" }).trim();
+            return wrapper.firstElementChild;
+        };
+
+        const createGroupElement = () => {
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = `
+                <section class="timeline-group" data-timeline-group data-group-id="">
+                    <div class="timeline-group-marker"></div>
+                    <div class="timeline-group-content">
+                        <div class="timeline-group-header">
+                            <h2 class="timeline-group-title d-none" data-group-title>Grupa</h2>
+                            <input class="form-control form-control-sm timeline-group-name" value="" data-group-name aria-label="Nazwa grupy" placeholder="Nazwa grupy">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-delete-group>Remove</button>
+                        </div>
+                        <div class="timeline-items" data-timeline-items></div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note" data-add-note>Add text block</button>
+                    </div>
+                </section>
+            `.trim();
+            return wrapper.firstElementChild;
+        };
+
+        const getDropTarget = (container, x, y) => {
+            let closestItem = null;
+            let closestDistance = Number.POSITIVE_INFINITY;
+
+            container.querySelectorAll("[data-timeline-item]:not(.is-dragging)").forEach((item) => {
+                const rect = item.getBoundingClientRect();
+                const distance = Math.hypot((rect.left + rect.width / 2) - x, (rect.top + rect.height / 2) - y);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestItem = item;
+                }
+            });
+
+            return closestItem;
+        };
+
+        const setupTimelineControls = () => {
+            timelineRoot.addEventListener("dragstart", (event) => {
+                const item = event.target.closest("[data-timeline-item]");
+                if (!editMode || !item) {
+                    event.preventDefault();
+                    return;
+                }
+                draggedItem = item;
+                item.classList.add("is-dragging");
+                event.dataTransfer.effectAllowed = "move";
+            });
+
+            timelineRoot.addEventListener("dragend", () => {
+                draggedItem?.classList.remove("is-dragging");
+                draggedItem = null;
+                timelineRoot.querySelectorAll(".is-drag-over").forEach((node) => node.classList.remove("is-drag-over"));
+            });
+
+            timelineRoot.addEventListener("dragover", (event) => {
+                const container = event.target.closest("[data-timeline-items]");
+                if (!editMode || !draggedItem || !container) {
+                    return;
+                }
+                event.preventDefault();
+                container.classList.add("is-drag-over");
+                const dropTarget = getDropTarget(container, event.clientX, event.clientY);
+                if (dropTarget) {
+                    container.insertBefore(draggedItem, dropTarget);
+                } else {
+                    container.appendChild(draggedItem);
+                }
+            });
+
+            timelineRoot.addEventListener("dragleave", (event) => {
+                const container = event.target.closest("[data-timeline-items]");
+                if (container && !container.contains(event.relatedTarget)) {
+                    container.classList.remove("is-drag-over");
+                }
+            });
+
+            timelineRoot.addEventListener("drop", (event) => {
+                const container = event.target.closest("[data-timeline-items]");
+                if (container) {
+                    event.preventDefault();
+                    container.classList.remove("is-drag-over");
+                }
+            });
+
+            timelineRoot.addEventListener("click", (event) => {
+                if (editMode && event.target.closest(".timeline-item-title[href]")) {
+                    event.preventDefault();
+                    return;
+                }
+
+                const addNoteButton = event.target.closest("[data-add-note]");
+                if (addNoteButton) {
+                    const item = createNoteElement();
+                    addNoteButton.closest("[data-timeline-group]").querySelector("[data-timeline-items]").appendChild(item);
+                    setEditMode(true);
+                    item.querySelector("[data-note-title]")?.focus();
+                    return;
+                }
+
+                const deleteNoteButton = event.target.closest("[data-delete-note]");
+                if (deleteNoteButton) {
+                    deleteNoteButton.closest("[data-timeline-item]")?.remove();
+                    return;
+                }
+
+                const deleteGroupButton = event.target.closest("[data-delete-group]");
+                if (deleteGroupButton) {
+                    const group = deleteGroupButton.closest("[data-timeline-group]");
+                    const groups = Array.from(timelineRoot.querySelectorAll("[data-timeline-group]"));
+                    if (groups.length === 1) {
+                        group.querySelector("[data-group-name]").value = "";
+                        return;
+                    }
+                    const target = groups[groups.indexOf(group) - 1] || groups[groups.indexOf(group) + 1];
+                    const targetItems = target.querySelector("[data-timeline-items]");
+                    group.querySelectorAll("[data-timeline-item]").forEach((item) => targetItems.appendChild(item));
+                    group.remove();
+                }
+            });
+        };
+
+        const collectTimeline = () => ({
+            groups: Array.from(timelineRoot.querySelectorAll("[data-timeline-group]")).map((group) => ({
+                id: group.dataset.groupId || null,
+                name: group.querySelector("[data-group-name]")?.value.trim() || "",
+                items: Array.from(group.querySelectorAll("[data-timeline-item]")).map((item) => {
+                    if (item.dataset.itemType === "project") {
+                        return {
+                            id: item.dataset.itemId || null,
+                            type: "project",
+                            project_id: item.dataset.projectId,
+                        };
+                    }
+
+                    return {
+                        id: item.dataset.itemId || null,
+                        type: "note",
+                        title: item.querySelector("[data-note-title]")?.value.trim() || "",
+                        body: item.querySelector("[data-note-body]")?.value.trim() || "",
+                    };
+                }),
+            })),
+        });
+
+        viewButtons.forEach((button) => {
+            button.addEventListener("click", () => setView(button.dataset.projectViewButton));
+        });
+
+        const initialView = new URLSearchParams(window.location.search).get("view") === "timeline" ? "timeline" : "cards";
+        setView(initialView);
+
+        editToggle?.addEventListener("click", () => setEditMode(true));
+        cancelButton?.addEventListener("click", () => {
+            renderTimeline(savedTimeline);
+            setEditMode(false);
+        });
+        addGroupButton?.addEventListener("click", () => {
+            const group = createGroupElement();
+            timelineRoot.appendChild(group);
+            setEditMode(true);
+            group.querySelector("[data-group-name]")?.focus();
+        });
+        saveButton?.addEventListener("click", async () => {
+            saveButton.disabled = true;
+            try {
+                const response = await fetch(timelinePanel.dataset.saveUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: JSON.stringify(collectTimeline()),
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Nie udalo sie zapisac timeline.");
+                }
+
+                savedTimeline = payload.groups;
+                renderTimeline(savedTimeline);
+                setEditMode(false);
+            } catch (error) {
+                window.alert(error.message);
+            } finally {
+                saveButton.disabled = false;
+            }
+        });
+
+        setupTimelineControls();
+        addGroupButton?.classList.add("d-none");
+    })();
+</script>
 
 <script>
     (() => {

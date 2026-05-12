@@ -22,7 +22,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import AIPlan, CalendarSubscription, Project, User  # noqa: F401
+    from .models import AIPlan, CalendarSubscription, Project, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
     from .calendar.routes import calendar_bp
@@ -167,7 +167,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import AIPlan, CalendarSubscription
+    from .models import AIPlan, CalendarSubscription, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -224,3 +224,9 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+
+        if "project_timeline_groups" not in table_names:
+            ProjectTimelineGroup.__table__.create(bind=db.engine)
+
+        if "project_timeline_items" not in table_names:
+            ProjectTimelineItem.__table__.create(bind=db.engine)
