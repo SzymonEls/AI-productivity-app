@@ -7,6 +7,10 @@ ENV_FILE="$INSTANCE_PATH/.env"
 
 mkdir -p "$INSTANCE_PATH"
 
+if [ "$(id -u)" = "0" ]; then
+    chown -R appuser:appuser "$INSTANCE_PATH"
+fi
+
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY="${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(48))')}"
     DATABASE_URL="${DATABASE_URL:-sqlite:///$INSTANCE_PATH/app.db}"
@@ -31,8 +35,15 @@ OPENAI_PROJECT_TIMEOUT=${OPENAI_PROJECT_TIMEOUT}
 OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE}
 OPENAI_PROJECT_TEMPERATURE=${OPENAI_PROJECT_TEMPERATURE}
 EOF
+    if [ "$(id -u)" = "0" ]; then
+        chown appuser:appuser "$ENV_FILE"
+    fi
+fi
+
+if [ "$(id -u)" = "0" ]; then
+    gosu appuser flask --app run.py db upgrade
+    exec gosu appuser "$@"
 fi
 
 flask --app run.py db upgrade
-
 exec "$@"

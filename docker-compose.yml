@@ -2,6 +2,9 @@ services:
   web:
     build:
       context: https://github.com/SzymonEls/AI-productivity-app.git#main
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
     restart: unless-stopped
     environment:
       FLASK_ENV: production
