@@ -1,7 +1,7 @@
 services:
   web:
     build:
-      context: https://github.com/SzymonEls/AI-productivity-app.git
+      context: https://github.com/SzymonEls/AI-productivity-app.git#main
     restart: unless-stopped
     environment:
       FLASK_ENV: production
