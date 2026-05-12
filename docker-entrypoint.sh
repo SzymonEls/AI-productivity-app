@@ -2,13 +2,14 @@
 set -eu
 
 export SKIP_DB_BOOTSTRAP="${SKIP_DB_BOOTSTRAP:-1}"
-ENV_FILE="/app/instance/.env"
+INSTANCE_PATH="${INSTANCE_PATH:-/instance}"
+ENV_FILE="$INSTANCE_PATH/.env"
 
-mkdir -p /app/instance
+mkdir -p "$INSTANCE_PATH"
 
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY="${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(48))')}"
-    DATABASE_URL="${DATABASE_URL:-sqlite:////app/instance/app.db}"
+    DATABASE_URL="${DATABASE_URL:-sqlite:///$INSTANCE_PATH/app.db}"
     REGISTRATION_ENABLED="${REGISTRATION_ENABLED:-true}"
     CALENDAR_TIMEZONE="${CALENDAR_TIMEZONE:-Europe/Warsaw}"
     OPENAI_API_KEY="${OPENAI_API_KEY:-}"

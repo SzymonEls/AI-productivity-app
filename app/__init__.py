@@ -13,7 +13,11 @@ from .markdown_utils import render_markdown, render_project_markdown, strip_repe
 def create_app(config_class=Config):
     """Application factory used by Flask commands and local development."""
 
-    app = Flask(__name__, instance_relative_config=True)
+    app = Flask(
+        __name__,
+        instance_path=getattr(config_class, "INSTANCE_PATH", None),
+        instance_relative_config=True,
+    )
     app.config.from_object(config_class)
 
     os.makedirs(app.instance_path, exist_ok=True)

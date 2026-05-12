@@ -12,9 +12,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN chmod +x /app/docker-entrypoint.sh \
-    && mkdir -p /app/instance \
+    && mkdir -p /instance \
     && useradd --create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app /instance
 
 USER appuser
 
