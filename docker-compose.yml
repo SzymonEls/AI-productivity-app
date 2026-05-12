@@ -2,7 +2,11 @@ services:
   web:
     build:
       context: https://github.com/SzymonEls/AI-productivity-app.git#main
+      args:
+        APP_UID: "${APP_UID:-1000}"
+        APP_GID: "${APP_GID:-1000}"
     restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
     environment:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
@@ -10,7 +14,11 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
-      - ./instance:/app/instance
+      - type: bind
+        source: ./app/instance
+        target: /app/instance
+        bind:
+          create_host_path: false
     networks:
       - reverse_proxy
 

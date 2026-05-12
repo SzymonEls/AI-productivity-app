@@ -15,5 +15,9 @@ instance/.env
 !instance/.env.example
 instance/*.db
 instance/*.sqlite3
+app/instance/.env
+!app/instance/.env.example
+app/instance/*.db
+app/instance/*.sqlite3
 Thumbs.db
 .DS_Store

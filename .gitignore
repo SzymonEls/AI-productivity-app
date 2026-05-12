@@ -13,6 +13,11 @@ instance/*
 !instance/secrets/
 !instance/secrets/.gitkeep
 !instance/secrets/README.md
+app/instance/*
+!app/instance/.env.example
+!app/instance/secrets/
+!app/instance/secrets/.gitkeep
+!app/instance/secrets/README.md
 *.db
 *.sqlite3
 
@@ -24,6 +29,10 @@ instance/.env
 instance/secrets/*
 !instance/secrets/.gitkeep
 !instance/secrets/README.md
+app/instance/.env
+app/instance/secrets/*
+!app/instance/secrets/.gitkeep
+!app/instance/secrets/README.md
 
 # Test and tooling caches
 .pytest_cache/
