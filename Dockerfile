@@ -16,8 +16,6 @@ RUN chmod +x /app/docker-entrypoint.sh \
     && useradd --create-home --shell /usr/sbin/nologin appuser \
     && chown -R appuser:appuser /app
 
-USER appuser
-
 EXPOSE 8000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -7,8 +7,6 @@ services:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
       DATABASE_URL: sqlite:////app/instance/app.db
-      OPENAI_API_KEY: "" # wpisz tutaj swoj klucz API
-      OPENAI_MODEL: gpt-4.1-mini
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
