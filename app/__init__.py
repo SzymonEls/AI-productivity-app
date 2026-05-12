@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 from config import Config
 
 from .extensions import db, login_manager, migrate
-from .markdown_utils import render_markdown, strip_repeated_title
+from .markdown_utils import render_markdown, render_project_markdown, strip_repeated_title
 
 
 def create_app(config_class=Config):
@@ -113,6 +113,10 @@ def register_template_filters(app):
     @app.template_filter("markdown")
     def markdown_filter(value):
         return render_markdown(value)
+
+    @app.template_filter("project_markdown")
+    def project_markdown_filter(value):
+        return render_project_markdown(value)
 
     @app.template_filter("without_repeated_title")
     def without_repeated_title_filter(value, title):

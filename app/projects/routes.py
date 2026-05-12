@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..ai.service import is_openai_configured
 from ..extensions import db
-from ..markdown_utils import render_markdown
+from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
 
 
@@ -142,7 +142,7 @@ def edit_project(project_id):
                         "short_goal": project.short_goal,
                         "frequency": project.frequency,
                         "long_goal": project.long_goal,
-                        "long_goal_html": str(render_markdown(project.long_goal)),
+                        "long_goal_html": str(render_project_markdown(project.long_goal)),
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
                         "updated_label": "just now",

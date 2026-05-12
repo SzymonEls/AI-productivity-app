@@ -144,6 +144,96 @@ body {
     border-radius: 0.25rem;
 }
 
+.project-section-markdown {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    padding-left: 1.3rem;
+}
+
+.project-section-markdown::before {
+    content: "";
+    position: absolute;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    left: 0.28rem;
+    width: 1px;
+    background: #d1d5db;
+}
+
+.project-section-preface {
+    color: #495057;
+}
+
+.project-markdown-section {
+    position: relative;
+}
+
+.project-markdown-step {
+    position: absolute;
+    top: 0.72rem;
+    left: -1.36rem;
+    z-index: 1;
+    width: 0.72rem;
+    height: 0.72rem;
+    border: 2px solid var(--project-section-accent, #5b5ff5);
+    border-radius: 999px;
+    background: #fff;
+}
+
+.project-markdown-section-card {
+    padding: 0.85rem 1rem;
+    background: var(--project-section-bg, #f0f1ff);
+}
+
+.project-markdown-section-card > h1,
+.project-markdown-section-card > h2,
+.project-markdown-section-card > h3,
+.project-markdown-section-card > h4,
+.project-markdown-section-card > h5,
+.project-markdown-section-card > h6 {
+    margin-top: 0;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0;
+    border-bottom: 0;
+    font-size: 1rem;
+    color: #111827;
+}
+
+.project-markdown-section-card > *:last-child {
+    margin-bottom: 0;
+}
+
+.project-markdown-section-tone-1 {
+    --project-section-accent: #6366f1;
+    --project-section-bg: #f0f1ff;
+}
+
+.project-markdown-section-tone-2 {
+    --project-section-accent: #db2fb1;
+    --project-section-bg: #fff0fa;
+}
+
+.project-markdown-section-tone-3 {
+    --project-section-accent: #1f7ae0;
+    --project-section-bg: #eef6ff;
+}
+
+.project-markdown-section-tone-4 {
+    --project-section-accent: #0f9488;
+    --project-section-bg: #e7fbf6;
+}
+
+.project-markdown-section-tone-5 {
+    --project-section-accent: #6d5df5;
+    --project-section-bg: #f1f0ff;
+}
+
+.project-markdown-section-tone-6 {
+    --project-section-accent: #d82fb8;
+    --project-section-bg: #fff2fb;
+}
+
 .editor-preview h1,
 .editor-preview h2,
 .editor-preview h3,

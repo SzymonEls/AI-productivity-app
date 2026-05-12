@@ -144,7 +144,7 @@
                         </div>
                     </div>
                     <div data-edit-display="long-goal">
-                        <div class="markdown-content long-goal-preview" data-display-value="long_goal">{{ project.long_goal | markdown }}</div>
+                        <div class="markdown-content long-goal-preview" data-display-value="long_goal">{{ project.long_goal | project_markdown }}</div>
                     </div>
                     <div class="d-none" data-edit-form="long-goal">
                         <textarea
@@ -281,6 +281,74 @@
             textarea.style.height = `${textarea.scrollHeight}px`;
         };
 
+        const groupProjectMarkdownSections = (html) => {
+            const source = document.createElement("template");
+            source.innerHTML = html;
+
+            const wrapper = document.createElement("div");
+            wrapper.className = "project-section-markdown";
+            let currentSection = null;
+            let sectionIndex = 0;
+
+            Array.from(source.content.childNodes).forEach((node) => {
+                const isHeading = node.nodeType === Node.ELEMENT_NODE && /^H[1-6]$/.test(node.tagName);
+                if (isHeading) {
+                    sectionIndex += 1;
+                    currentSection = document.createElement("section");
+                    currentSection.className = `project-markdown-section project-markdown-section-tone-${((sectionIndex - 1) % 6) + 1}`;
+
+                    const step = document.createElement("div");
+                    step.className = "project-markdown-step";
+                    step.setAttribute("aria-hidden", "true");
+
+                    const card = document.createElement("div");
+                    card.className = "project-markdown-section-card";
+                    card.appendChild(node);
+
+                    currentSection.append(step, card);
+                    wrapper.appendChild(currentSection);
+                    return;
+                }
+
+                if (!currentSection) {
+                    const preface = wrapper.querySelector(".project-section-preface") || document.createElement("div");
+                    preface.className = "project-section-preface";
+                    preface.appendChild(node);
+                    if (!preface.parentElement) {
+                        wrapper.appendChild(preface);
+                    }
+                    return;
+                }
+
+                currentSection.querySelector(".project-markdown-section-card").appendChild(node);
+            });
+
+            return wrapper.innerHTML.trim() ? wrapper.outerHTML : html;
+        };
+
+        const escapeHtml = (value) => value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+        const renderBasicMarkdown = (plainText) => escapeHtml(plainText)
+            .split(/\n{2,}/)
+            .map((block) => {
+                const heading = block.match(/^(#{1,6})\s+(.+)$/);
+                if (heading) {
+                    return `<h${heading[1].length}>${heading[2]}</h${heading[1].length}>`;
+                }
+                return `<p>${block.replace(/\n/g, "<br>")}</p>`;
+            })
+            .join("");
+
+        const renderLongGoalMarkdown = (plainText, editor) => {
+            const markdownHtml = editor?.markdown ? editor.markdown(plainText) : renderBasicMarkdown(plainText);
+            return groupProjectMarkdownSections(markdownHtml);
+        };
+
         form.querySelectorAll("textarea[data-autoresize='true']").forEach((textarea) => {
             autoResize(textarea);
             textarea.addEventListener("input", () => autoResize(textarea));
@@ -329,9 +397,9 @@
                 autoDownloadFontAwesome: false,
                 forceSync: true,
                 minHeight: "220px",
-                previewRender: (plainText) => {
+                previewRender: function (plainText) {
                     const container = document.createElement("div");
-                    container.innerHTML = renderLongGoalMarkdown(plainText);
+                    container.innerHTML = renderLongGoalMarkdown(plainText, this);
                     return container.innerHTML;
                 },
                 spellChecker: false,
