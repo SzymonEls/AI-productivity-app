@@ -12,7 +12,11 @@ services:
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
-      - instance_data:/app/instance
+      - ./instance:/instance
+    networks:
+      - reverse_proxy
 
-volumes:
-  instance_data:
+networks:
+  reverse_proxy:
+    driver: bridge
+    external: true
