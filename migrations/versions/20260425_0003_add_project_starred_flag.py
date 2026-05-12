@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade():
+    if _has_column("projects", "is_starred"):
+        return
+
     op.add_column(
         "projects",
         sa.Column(
@@ -26,8 +29,13 @@ def upgrade():
             server_default=sa.false(),
         ),
     )
-    op.alter_column("projects", "is_starred", server_default=None)
 
 
 def downgrade():
-    op.drop_column("projects", "is_starred")
+    if _has_column("projects", "is_starred"):
+        op.drop_column("projects", "is_starred")
+
+
+def _has_column(table_name, column_name):
+    inspector = sa.inspect(op.get_bind())
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}

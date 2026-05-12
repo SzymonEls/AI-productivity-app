@@ -17,15 +17,21 @@ depends_on = None
 
 
 def upgrade():
+    if _has_column("ai_plans", "is_pinned"):
+        return
+
     with op.batch_alter_table("ai_plans") as batch_op:
         batch_op.add_column(
             sa.Column("is_pinned", sa.Boolean(), server_default=sa.false(), nullable=False)
         )
 
-    with op.batch_alter_table("ai_plans") as batch_op:
-        batch_op.alter_column("is_pinned", server_default=None)
-
 
 def downgrade():
-    with op.batch_alter_table("ai_plans") as batch_op:
-        batch_op.drop_column("is_pinned")
+    if _has_column("ai_plans", "is_pinned"):
+        with op.batch_alter_table("ai_plans") as batch_op:
+            batch_op.drop_column("is_pinned")
+
+
+def _has_column(table_name, column_name):
+    inspector = sa.inspect(op.get_bind())
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}

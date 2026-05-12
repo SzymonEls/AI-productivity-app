@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade():
+    if sa.inspect(op.get_bind()).has_table("calendar_subscriptions"):
+        return
+
     op.create_table(
         "calendar_subscriptions",
         sa.Column("id", sa.Integer(), nullable=False),

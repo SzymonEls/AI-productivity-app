@@ -17,6 +17,9 @@ depends_on = None
 
 
 def upgrade():
+    if sa.inspect(op.get_bind()).has_table("ai_plans"):
+        return
+
     op.create_table(
         "ai_plans",
         sa.Column("id", sa.Integer(), nullable=False),

@@ -232,7 +232,6 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
-
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
 
