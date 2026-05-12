@@ -2,21 +2,17 @@ services:
   web:
     build:
       context: https://github.com/SzymonEls/AI-productivity-app.git#main
-      args:
-        APP_UID: "${APP_UID:-1000}"
-        APP_GID: "${APP_GID:-1000}"
     restart: unless-stopped
     environment:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
-      INSTANCE_PATH: /instance
-      DATABASE_URL: sqlite:////instance/app.db
+      DATABASE_URL: sqlite:////app/instance/app.db
       OPENAI_API_KEY: "" # wpisz tutaj swoj klucz API
       OPENAI_MODEL: gpt-4.1-mini
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
-      - ./instance:/instance
+      - ./instance:/app/instance
     networks:
       - reverse_proxy
 

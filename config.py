@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_PATH = os.environ.get("INSTANCE_PATH", os.path.join(BASE_DIR, "instance"))
-INSTANCE_ENV_PATH = os.path.join(INSTANCE_PATH, ".env")
+INSTANCE_ENV_PATH = os.path.join(BASE_DIR, "instance", ".env")
 ROOT_ENV_PATH = os.path.join(BASE_DIR, ".env")
 
 load_dotenv(INSTANCE_ENV_PATH)
@@ -40,13 +39,12 @@ def normalize_database_url(database_url):
     return database_url
 
 
-DEFAULT_DATABASE_URL = f"sqlite:///{os.path.join(INSTANCE_PATH, 'app.db')}"
+DEFAULT_DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'instance', 'app.db')}"
 
 
 class Config:
     """Base configuration shared across environments."""
 
-    INSTANCE_PATH = INSTANCE_PATH
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
     SQLALCHEMY_DATABASE_URI = normalize_database_url(
         os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)

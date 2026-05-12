@@ -1,8 +1,5 @@
 FROM python:3.13-slim
 
-ARG APP_UID=1000
-ARG APP_GID=1000
-
 ENV FLASK_APP=run.py \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
@@ -10,18 +7,16 @@ ENV FLASK_APP=run.py \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gosu \
-    && rm -rf /var/lib/apt/lists/* \
-    && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
 RUN chmod +x /app/docker-entrypoint.sh \
-    && mkdir -p /instance \
-    && groupadd --gid "$APP_GID" appuser \
-    && useradd --uid "$APP_UID" --gid "$APP_GID" --create-home --shell /usr/sbin/nologin appuser \
-    && chown -R appuser:appuser /app /instance
+    && mkdir -p /app/instance \
+    && useradd --create-home --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8000
 

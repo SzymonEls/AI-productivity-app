@@ -2,18 +2,13 @@
 set -eu
 
 export SKIP_DB_BOOTSTRAP="${SKIP_DB_BOOTSTRAP:-1}"
-INSTANCE_PATH="${INSTANCE_PATH:-/instance}"
-ENV_FILE="$INSTANCE_PATH/.env"
+ENV_FILE="/app/instance/.env"
 
-mkdir -p "$INSTANCE_PATH"
-
-if [ "$(id -u)" = "0" ]; then
-    chown -R appuser:appuser "$INSTANCE_PATH"
-fi
+mkdir -p /app/instance
 
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY="${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(48))')}"
-    DATABASE_URL="${DATABASE_URL:-sqlite:///$INSTANCE_PATH/app.db}"
+    DATABASE_URL="${DATABASE_URL:-sqlite:////app/instance/app.db}"
     REGISTRATION_ENABLED="${REGISTRATION_ENABLED:-true}"
     CALENDAR_TIMEZONE="${CALENDAR_TIMEZONE:-Europe/Warsaw}"
     OPENAI_API_KEY="${OPENAI_API_KEY:-}"
@@ -35,14 +30,6 @@ OPENAI_PROJECT_TIMEOUT=${OPENAI_PROJECT_TIMEOUT}
 OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE}
 OPENAI_PROJECT_TEMPERATURE=${OPENAI_PROJECT_TEMPERATURE}
 EOF
-    if [ "$(id -u)" = "0" ]; then
-        chown appuser:appuser "$ENV_FILE"
-    fi
-fi
-
-if [ "$(id -u)" = "0" ]; then
-    gosu appuser flask --app run.py db upgrade
-    exec gosu appuser "$@"
 fi
 
 flask --app run.py db upgrade
