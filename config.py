@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
@@ -52,6 +53,9 @@ class Config:
         os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    REMEMBER_COOKIE_DURATION = timedelta(
+        days=int(os.environ.get("REMEMBER_COOKIE_DAYS", "30"))
+    )
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()

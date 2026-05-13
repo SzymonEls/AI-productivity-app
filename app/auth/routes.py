@@ -49,10 +49,11 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
+        remember_me = request.form.get("remember_me") == "on"
 
         user = User.query.filter_by(email=email).first()
         if user and user.check_password(password):
-            login_user(user)
+            login_user(user, remember=remember_me)
             flash("Welcome back.", "success")
 
             next_page = request.args.get("next")
