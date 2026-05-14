@@ -14,7 +14,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('main.home') }}">Productivity App</a>
+            <a class="navbar-brand" href="{{ url_for('projects.dashboard', view='timeline') }}">Productivity App</a>
             <button
                 class="navbar-toggler"
                 type="button"
@@ -28,24 +28,12 @@
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <div class="navbar-nav me-auto">
-                    <a class="nav-link {% if request.endpoint == 'main.home' %}active{% endif %}" href="{{ url_for('main.home') }}">
+                    <a class="nav-link" href="{{ url_for('main.home') }}">
                         Home
                     </a>
                     {% if current_user.is_authenticated %}
-                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' and request.args.get('view') != 'timeline' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
-                            Lista projektow
-                        </a>
                         <a class="nav-link {% if request.endpoint == 'projects.dashboard' and request.args.get('view') == 'timeline' %}active{% endif %}" href="{{ url_for('projects.dashboard', view='timeline') }}">
-                            Timeline
-                        </a>
-                        <a class="nav-link {% if request.endpoint in ['calendar.calendar_view', 'calendar.settings'] %}active{% endif %}" href="{{ url_for('calendar.calendar_view') }}">
-                            Kalendarz
-                        </a>
-                        <a class="nav-link {% if request.endpoint in ['ai.history', 'ai.history_detail'] %}active{% endif %}" href="{{ url_for('ai.history') }}">
-                            Historia AI
-                        </a>
-                        <a class="nav-link {% if request.endpoint in ['ai.daily_planning', 'ai.manual_daily_plan'] %}active{% endif %}" href="{{ url_for('ai.daily_planning') }}">
-                            Plan dnia
+                            Projekty
                         </a>
                     {% endif %}
                 </div>
