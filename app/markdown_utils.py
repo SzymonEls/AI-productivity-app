@@ -8,7 +8,7 @@ TASK_ITEM_PATTERN = re.compile(
     r"<li>\s*\[(?P<checked>[xX ])\]\s*(?P<content>.*?)</li>",
     re.DOTALL,
 )
-HEADING_PATTERN = re.compile(r"<h(?P<level>[1-6])(?P<attrs>[^>]*)>.*?</h(?P=level)>", re.DOTALL)
+TOP_LEVEL_HEADING_PATTERN = re.compile(r"<h1(?P<attrs>[^>]*)>.*?</h1>", re.DOTALL)
 
 
 def render_markdown(value):
@@ -23,7 +23,7 @@ def render_project_markdown(value):
         return ""
 
     html = _render_markdown_html(value)
-    sections = list(HEADING_PATTERN.finditer(html))
+    sections = list(TOP_LEVEL_HEADING_PATTERN.finditer(html))
     if not sections:
         return Markup(html)
 

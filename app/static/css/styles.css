@@ -854,6 +854,18 @@ body {
     gap: 0.65rem;
 }
 
+.manual-project-timeline {
+    gap: 0.75rem;
+}
+
+.manual-project-timeline .timeline-items {
+    gap: 0.5rem;
+}
+
+.manual-project-timeline .timeline-item {
+    max-width: min(100%, 24rem);
+}
+
 .manual-project-choice {
     display: flex;
     align-items: flex-start;
@@ -870,15 +882,44 @@ body {
     border-color: #0d6efd;
 }
 
+.manual-project-choice:has(.form-check-input:checked) {
+    border-color: #0d6efd;
+    background: #eef5ff;
+}
+
 .manual-project-choice .form-check-input {
     margin-top: 0.2rem;
 }
 
+.manual-project-choice .timeline-item-title {
+    display: inline;
+}
+
+.manual-star-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: #f59f00;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.manual-timeline-note {
+    pointer-events: none;
+}
+
 .manual-project-description {
-    padding: 0.85rem;
-    border: 1px solid #e9ecef;
-    border-radius: 0.5rem;
-    background: #fff;
+    padding: 0.2rem 0 0;
+}
+
+.manual-project-description .project-section-markdown {
+    gap: 0.7rem;
+}
+
+.manual-project-description .project-markdown-section-card {
+    padding: 0.7rem 0.8rem;
 }
 
 .manual-plan-preview {

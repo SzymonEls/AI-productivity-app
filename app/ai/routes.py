@@ -7,7 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
 from ..markdown_utils import render_markdown, strip_repeated_title
-from ..models import AIPlan, Project
+from ..models import AIPlan, Project, ProjectTimelineGroup, ProjectTimelineItem
 from .service import (
     AIConfigurationError,
     AIServiceError,
@@ -187,12 +187,14 @@ def manual_daily_plan():
         .order_by(Project.is_starred.desc(), Project.title.asc())
         .all()
     )
+    timeline_groups = _get_or_create_timeline(projects)
 
     if request.method == "GET":
         return render_template(
             "ai/manual_daily_plan.html",
             today=date.today(),
             projects=projects,
+            timeline_groups=timeline_groups,
         )
 
     raw_date = request.form.get("target_date", "").strip()
@@ -200,12 +202,12 @@ def manual_daily_plan():
         target_date = date.fromisoformat(raw_date)
     except ValueError:
         flash("Wybierz poprawna date planu dnia.", "danger")
-        return render_template("ai/manual_daily_plan.html", today=date.today(), projects=projects), 400
+        return _render_manual_plan_template(date.today(), projects, timeline_groups), 400
 
     selected_project_ids = _parse_project_ids(request.form.getlist("project_ids"))
     if not selected_project_ids:
         flash("Wybierz przynajmniej jeden projekt do planu recznego.", "danger")
-        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+        return _render_manual_plan_template(target_date, projects, timeline_groups), 400
 
     selected_projects = (
         Project.query.filter(Project.user_id == current_user.id, Project.id.in_(selected_project_ids))
@@ -216,14 +218,14 @@ def manual_daily_plan():
 
     if len(ordered_projects) != len(selected_project_ids):
         flash("Nie udalo sie znalezc wszystkich wybranych projektow.", "danger")
-        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+        return _render_manual_plan_template(target_date, projects, timeline_groups), 400
 
     tasks = []
     for project in ordered_projects:
         task = request.form.get(f"task_{project.id}", "").strip()
         if not task:
             flash(f"Wpisz zadanie dla projektu: {project.title}.", "danger")
-            return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 400
+            return _render_manual_plan_template(target_date, projects, timeline_groups), 400
         tasks.append({"project": project, "task": task})
 
     title = f"Plan dnia - {target_date.isoformat()}"
@@ -266,10 +268,19 @@ def manual_daily_plan():
     except SQLAlchemyError:
         db.session.rollback()
         flash("Nie udalo sie zapisac recznego planu dnia.", "danger")
-        return render_template("ai/manual_daily_plan.html", today=target_date, projects=projects), 500
+        return _render_manual_plan_template(target_date, projects, timeline_groups), 500
 
     flash("Reczny plan dnia zostal zapisany i przypiety na home.", "success")
     return redirect(url_for("ai.history_detail", plan_id=history_entry.id))
+
+
+def _render_manual_plan_template(target_date, projects, timeline_groups):
+    return render_template(
+        "ai/manual_daily_plan.html",
+        today=target_date,
+        projects=projects,
+        timeline_groups=timeline_groups,
+    )
 
 
 @ai_bp.route("/history")
@@ -388,6 +399,56 @@ def _unpin_home_plans():
 def _pin_plan(plan):
     _unpin_home_plans()
     plan.is_pinned = True
+
+
+def _get_or_create_timeline(projects):
+    groups = (
+        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
+        .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
+        .all()
+    )
+    changed = False
+
+    if not groups:
+        groups = [ProjectTimelineGroup(owner=current_user, name="Projekty", position=0)]
+        db.session.add(groups[0])
+        db.session.flush()
+        changed = True
+
+    project_ids_on_timeline = {
+        item.project_id
+        for item in ProjectTimelineItem.query.filter_by(user_id=current_user.id, item_type="project").all()
+        if item.project_id
+    }
+    default_group = groups[-1]
+    next_position = len(default_group.items)
+
+    for project in projects:
+        if project.id in project_ids_on_timeline:
+            continue
+        db.session.add(
+            ProjectTimelineItem(
+                owner=current_user,
+                group=default_group,
+                project=project,
+                item_type="project",
+                position=next_position,
+            )
+        )
+        next_position += 1
+        changed = True
+
+    if changed:
+        try:
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+
+    return (
+        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
+        .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
+        .all()
+    )
 
 
 def _parse_project_ids(raw_project_ids):
