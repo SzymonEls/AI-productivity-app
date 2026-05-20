@@ -1,6 +1,8 @@
 import re
 
 from markdown import markdown
+from markdown.extensions import Extension
+from markdown.inlinepatterns import SimpleTagInlineProcessor
 from markupsafe import Markup
 
 
@@ -52,7 +54,7 @@ def render_project_markdown(value):
 def _render_markdown_html(value):
     html = markdown(
         value,
-        extensions=["extra", "sane_lists", "nl2br"],
+        extensions=["extra", "sane_lists", "nl2br", StrikethroughExtension()],
     )
     html = TASK_ITEM_PATTERN.sub(_render_task_item, html)
     html = html.replace("<ul>\n<li><input", '<ul class="task-list">\n<li class="task-list-item"><input')
@@ -84,3 +86,12 @@ def _render_task_item(match):
         f'<input class="task-list-checkbox" type="checkbox" disabled {checked}> '
         f"{content}</li>"
     )
+
+
+class StrikethroughExtension(Extension):
+    def extendMarkdown(self, md):
+        md.inlinePatterns.register(
+            SimpleTagInlineProcessor(r"(?<!~)(~~)(.+?)(~~)(?!~)", "del"),
+            "strikethrough",
+            175,
+        )
