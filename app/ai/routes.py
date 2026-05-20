@@ -222,11 +222,11 @@ def manual_daily_plan():
 
     tasks = []
     for project in ordered_projects:
-        task = request.form.get(f"task_{project.id}", "").strip()
-        if not task:
+        project_tasks = _split_manual_project_tasks(request.form.get(f"task_{project.id}", ""))
+        if not project_tasks:
             flash(f"Wpisz zadanie dla projektu: {project.title}.", "danger")
             return _render_manual_plan_template(target_date, projects, timeline_groups), 400
-        tasks.append({"project": project, "task": task})
+        tasks.append({"project": project, "tasks": project_tasks})
 
     title = f"Plan dnia - {target_date.isoformat()}"
     content = _render_manual_daily_plan(target_date, tasks)
@@ -240,7 +240,8 @@ def manual_daily_plan():
                 "short_goal": item["project"].short_goal,
                 "frequency": item["project"].frequency,
                 "long_goal": item["project"].long_goal,
-                "task": item["task"],
+                "task": "\n".join(item["tasks"]),
+                "tasks": item["tasks"],
             }
             for item in tasks
         ],
@@ -463,9 +464,20 @@ def _parse_project_ids(raw_project_ids):
     return project_ids
 
 
+def _split_manual_project_tasks(raw_tasks):
+    return [line.strip() for line in raw_tasks.splitlines() if line.strip()]
+
+
 def _render_manual_daily_plan(target_date, tasks):
     lines = [f"# Plan dnia - {target_date.isoformat()}", ""]
     for item in tasks:
         project = item["project"]
-        lines.append(f"- **{project.title}:** {item['task']}")
+        project_tasks = item["tasks"]
+        if len(project_tasks) == 1:
+            lines.append(f"- **{project.title}:** {project_tasks[0]}")
+            continue
+
+        lines.append(f"- **{project.title}:**")
+        for task in project_tasks:
+            lines.append(f"    - {task}")
     return "\n".join(lines).strip() + "\n"

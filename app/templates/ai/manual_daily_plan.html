@@ -125,13 +125,13 @@
                         </div>
 
                         <div class="mt-4">
-                            <label class="form-label" for="task_{{ project.id }}">Zadanie do planu dnia</label>
+                            <label class="form-label" for="task_{{ project.id }}">Zadania do planu dnia</label>
                             <textarea
                                 class="form-control"
                                 id="task_{{ project.id }}"
                                 name="task_{{ project.id }}"
-                                rows="4"
-                                placeholder="Wpisz jedno konkretne zadanie dla tego projektu."
+                                rows="5"
+                                placeholder="Wpisz zadania dla tego projektu, kazde w osobnej linii."
                                 data-project-task
                             ></textarea>
                         </div>
@@ -218,10 +218,15 @@
 
         const getPanelTitle = (panel) => panel.querySelector("h2")?.textContent.trim() || "Projekt";
 
+        const getTaskLines = (textarea) => textarea.value
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter(Boolean);
+
         const validateCurrentTask = () => {
             const panel = projectPanels.find((item) => item.dataset.projectStep === selectedIds[currentIndex]);
             const task = panel?.querySelector("[data-project-task]");
-            if (!task || task.value.trim()) {
+            if (!task || getTaskLines(task).length > 0) {
                 return true;
             }
 
@@ -235,8 +240,9 @@
             const items = selectedIds.map((projectId) => {
                 const panel = projectPanels.find((item) => item.dataset.projectStep === projectId);
                 const title = getPanelTitle(panel);
-                const task = panel.querySelector("[data-project-task]").value.trim();
-                return `<li><strong>${escapeHtml(title)}:</strong> ${escapeHtml(task)}</li>`;
+                const taskLines = getTaskLines(panel.querySelector("[data-project-task]"));
+                const nestedTasks = taskLines.map((task) => `<li>${escapeHtml(task)}</li>`).join("");
+                return `<li><strong>${escapeHtml(title)}:</strong><ul>${nestedTasks}</ul></li>`;
             });
 
             preview.innerHTML = `<h1>Plan dnia - ${escapeHtml(targetDate)}</h1><ul>${items.join("")}</ul>`;

@@ -861,6 +861,20 @@
             });
         });
 
+        document.addEventListener("keydown", (event) => {
+            if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") {
+                return;
+            }
+
+            const activeSaveButton = form.querySelector("[data-save-section]:not(.d-none)");
+            if (!activeSaveButton) {
+                return;
+            }
+
+            event.preventDefault();
+            saveSection(activeSaveButton.dataset.saveSection, activeSaveButton);
+        });
+
         if (markdownDownloadButton) {
             markdownDownloadButton.addEventListener("click", downloadProjectMarkdown);
         }

@@ -11,6 +11,8 @@ TASK_ITEM_PATTERN = re.compile(
     re.DOTALL,
 )
 TOP_LEVEL_HEADING_PATTERN = re.compile(r"<h1(?P<attrs>[^>]*)>.*?</h1>", re.DOTALL)
+LIST_ITEM_PATTERN = re.compile(r"^(?P<indent>\s*)(?:[-*+]\s|\d+\.\s)")
+TWO_SPACE_NESTED_ITEM_PATTERN = re.compile(r"^  (?:[-*+]\s|\d+\.\s)")
 
 
 def render_markdown(value):
@@ -52,6 +54,7 @@ def render_project_markdown(value):
 
 
 def _render_markdown_html(value):
+    value = _normalize_two_space_nested_lists(value)
     html = markdown(
         value,
         extensions=["extra", "sane_lists", "nl2br", StrikethroughExtension()],
@@ -60,6 +63,35 @@ def _render_markdown_html(value):
     html = html.replace("<ul>\n<li><input", '<ul class="task-list">\n<li class="task-list-item"><input')
     html = html.replace("<li><input", '<li class="task-list-item"><input')
     return html
+
+
+def _normalize_two_space_nested_lists(value):
+    lines = value.splitlines()
+    normalized_lines = []
+    in_two_space_nested_list = False
+
+    for line in lines:
+        list_match = LIST_ITEM_PATTERN.match(line)
+        list_indent = len(list_match.group("indent").replace("\t", "    ")) if list_match else None
+
+        if TWO_SPACE_NESTED_ITEM_PATTERN.match(line) and in_two_space_nested_list:
+            line = f"  {line}"
+            list_match = LIST_ITEM_PATTERN.match(line)
+            list_indent = len(list_match.group("indent").replace("\t", "    "))
+
+        normalized_lines.append(line)
+
+        if list_match and list_indent == 0:
+            in_two_space_nested_list = True
+        elif list_match and list_indent >= 4:
+            in_two_space_nested_list = True
+        elif list_match:
+            in_two_space_nested_list = False
+        elif line.strip():
+            in_two_space_nested_list = False
+
+    trailing_newline = "\n" if value.endswith("\n") else ""
+    return "\n".join(normalized_lines) + trailing_newline
 
 
 def strip_repeated_title(content, title):
