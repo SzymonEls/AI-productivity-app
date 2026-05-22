@@ -6,6 +6,50 @@ body {
     border-radius: 0.75rem;
 }
 
+.active-timer-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0 0.6rem;
+    border: 1px solid rgba(255, 255, 255, 0.36);
+    border-radius: 999px;
+    color: #fff;
+    text-decoration: none;
+}
+
+.active-timer-link:hover,
+.active-timer-link:focus {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.active-timer-dot {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: #22c55e;
+    box-shadow: 0 0 0 0.16rem rgba(34, 197, 94, 0.22);
+}
+
+.active-timer-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.active-timer-label {
+    font-size: 0.78rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    white-space: nowrap;
+}
+
 .project-card {
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -570,6 +614,66 @@ body {
     cursor: pointer;
 }
 
+.project-timer-panel {
+    border: 1px solid #d9e2ef;
+    border-left: 4px solid #0f9488;
+    background: #fbfdff;
+}
+
+.project-timer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.project-timer-clock {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+}
+
+.timer-description-field {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.time-chart {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.time-chart-row {
+    display: grid;
+    grid-template-columns: minmax(7rem, 13rem) minmax(0, 1fr) 6rem;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.time-chart-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.time-chart-track {
+    height: 0.85rem;
+    border-radius: 999px;
+    background: #e9ecef;
+    overflow: hidden;
+}
+
+.time-chart-bar {
+    min-width: 0.2rem;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0f9488, #1f7ae0);
+}
+
+.time-entry-description {
+    min-width: 14rem;
+}
+
 .EasyMDEContainer {
     width: 100%;
 }
@@ -965,5 +1069,10 @@ body {
 
     .calendar-event-time {
         align-items: center;
+    }
+
+    .time-chart-row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
     }
 }

@@ -2,6 +2,7 @@ import os
 from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, url_for
+from flask_login import current_user
 from sqlalchemy import inspect, text
 
 from config import Config
@@ -26,18 +27,20 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import AIPlan, CalendarSubscription, Project, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import AIPlan, CalendarSubscription, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
     from .calendar.routes import calendar_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
+    from .time_tracking.routes import time_tracking_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(projects_bp)
+    app.register_blueprint(time_tracking_bp)
     register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)
@@ -53,8 +56,31 @@ def register_template_context(app):
 
     @app.context_processor
     def inject_feature_flags():
+        active_time_entry = None
+        active_time_elapsed_seconds = 0
+        active_time_elapsed_label = ""
+        if current_user.is_authenticated:
+            from .time_tracking.service import active_entry_for_user, today_project_summary
+
+            active_time_entry = active_entry_for_user(current_user.id)
+            if active_time_entry:
+                active_time_elapsed_seconds = today_project_summary(
+                    current_user.id,
+                    active_time_entry.project_id,
+                )["total_seconds"]
+                elapsed_minutes = active_time_elapsed_seconds // 60
+                elapsed_hours = elapsed_minutes // 60
+                remaining_minutes = elapsed_minutes % 60
+                if elapsed_hours:
+                    active_time_elapsed_label = f"{elapsed_hours}h {remaining_minutes:02d}m"
+                else:
+                    active_time_elapsed_label = f"{elapsed_minutes}m"
+
         return {
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
+            "active_time_entry": active_time_entry,
+            "active_time_elapsed_seconds": active_time_elapsed_seconds,
+            "active_time_elapsed_label": active_time_elapsed_label,
         }
 
 
@@ -175,7 +201,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import AIPlan, CalendarSubscription, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import AIPlan, CalendarSubscription, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -255,3 +281,6 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+
+        if "project_time_entries" not in table_names:
+            ProjectTimeEntry.__table__.create(bind=db.engine)

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Śledzenie czasu{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+    <div>
+        <h1 class="h2 mb-1">Śledzenie czasu</h1>
+        <p class="text-muted mb-0">Statystyki pracy, aktywny timer oraz edycja historycznych sesji.</p>
+    </div>
+    {% if active_entry %}
+        <a class="btn btn-outline-success" href="{{ url_for('projects.project_detail', project_id=active_entry.project_id) }}">
+            Aktywny timer: {{ active_entry.project.title }}
+        </a>
+    {% endif %}
+</div>
+
+<form class="card shadow-sm mb-4" method="get" action="{{ url_for('time_tracking.index') }}">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label" for="trackingDate">Dzień</label>
+                <input class="form-control" type="date" id="trackingDate" name="date" value="{{ selected_day.isoformat() }}">
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="trackingProject">Projekt</label>
+                <select class="form-select" id="trackingProject" name="project_id">
+                    <option value="">Wszystkie projekty</option>
+                    {% for project in projects %}
+                        <option value="{{ project.id }}" {% if selected_project and selected_project.id == project.id %}selected{% endif %}>
+                            {{ project.title }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" type="submit">Pokaż</button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-6">
+        <section class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+                    <h2 class="h5 mb-0">Wybrany dzień</h2>
+                    <strong>{{ format_duration(day_total_seconds) }}</strong>
+                </div>
+                {% if chart_projects %}
+                    <div class="time-chart">
+                        {% for item in chart_projects %}
+                            <div class="time-chart-row">
+                                <div class="time-chart-label" title="{{ item.title }}">{{ item.title }}</div>
+                                <div class="time-chart-track" aria-label="{{ item.title }}: {{ item.label }}">
+                                    <div class="time-chart-bar" style="width: {{ (item.seconds * 100 / day_total_seconds) | round(1) }}%"></div>
+                                </div>
+                                <div class="text-end small text-muted">{{ item.label }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Brak zapisanych sesji dla wybranego dnia.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-6">
+        <section class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+                    <h2 class="h5 mb-0">Projekt w czasie</h2>
+                    {% if selected_project %}
+                        <span class="small text-muted">{{ selected_project.title }}</span>
+                    {% endif %}
+                </div>
+                {% if selected_project and project_daily_chart %}
+                    {% set max_project_seconds = project_daily_chart | map(attribute='seconds') | max %}
+                    <div class="time-chart">
+                        {% for item in project_daily_chart %}
+                            <div class="time-chart-row">
+                                <div class="time-chart-label">{{ item.label }}</div>
+                                <div class="time-chart-track" aria-label="{{ item.date }}: {{ item.duration }}">
+                                    <div class="time-chart-bar" style="width: {% if max_project_seconds %}{{ (item.seconds * 100 / max_project_seconds) | round(1) }}{% else %}0{% endif %}%"></div>
+                                </div>
+                                <div class="text-end small text-muted">{{ item.duration }}</div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted mb-0">Wybierz projekt, aby zobaczyć podział na poszczególne dni.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<section class="card shadow-sm">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+            <div>
+                <h2 class="h5 mb-1">Sesje</h2>
+                <p class="text-muted mb-0">Możesz ręcznie poprawić projekt, zakres czasu i opis albo usunąć wpis.</p>
+            </div>
+        </div>
+
+        {% if entries %}
+            <div class="table-responsive">
+                <table class="table align-middle">
+                    <thead>
+                        <tr>
+                            <th>Projekt</th>
+                            <th>Start</th>
+                            <th>Koniec</th>
+                            <th>Czas</th>
+                            <th>Opis</th>
+                            <th class="text-end">Akcje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in entries %}
+                            <tr>
+                                <form method="post" action="{{ url_for('time_tracking.edit_entry', entry_id=entry.id) }}">
+                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() }}">
+                                    <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
+                                    <td>
+                                        <select class="form-select form-select-sm" name="project_id" aria-label="Projekt">
+                                            {% for project in projects %}
+                                                <option value="{{ project.id }}" {% if project.id == entry.project_id %}selected{% endif %}>
+                                                    {{ project.title }}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" type="datetime-local" name="started_at" value="{{ local_datetime_value(entry.started_at) }}" required>
+                                    </td>
+                                    <td>
+                                        <input class="form-control form-control-sm" type="datetime-local" name="ended_at" value="{{ local_datetime_value(entry.ended_at) }}" {% if not entry.ended_at %}disabled{% endif %} required>
+                                        {% if not entry.ended_at %}
+                                            <span class="badge text-bg-success mt-1">trwa</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-nowrap">{{ format_duration(entry_elapsed_seconds(entry)) }}</td>
+                                    <td>
+                                        <textarea class="form-control form-control-sm time-entry-description" name="description" rows="2">{{ entry.description or "" }}</textarea>
+                                    </td>
+                                    <td class="text-end">
+                                        <button class="btn btn-primary btn-sm" type="submit" {% if not entry.ended_at %}disabled title="Zatrzymaj aktywna sesje przed edycja"{% endif %}>Zapisz</button>
+                                </form>
+                                <form class="d-inline" method="post" action="{{ url_for('time_tracking.delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Usunąć tę sesję?');">
+                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() }}">
+                                    <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">Usuń</button>
+                                </form>
+                                    </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <p class="text-muted mb-0">Nie ma sesji pasujących do wybranych filtrów.</p>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

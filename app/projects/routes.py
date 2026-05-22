@@ -7,6 +7,7 @@ from ..ai.service import is_openai_configured
 from ..extensions import db
 from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
+from ..time_tracking.service import today_project_summary
 
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
@@ -90,6 +91,7 @@ def project_detail(project_id):
         "projects/project_detail.html",
         project=project,
         is_openai_ready=is_openai_configured(),
+        timer_summary=today_project_summary(current_user.id, project.id),
     )
 
 

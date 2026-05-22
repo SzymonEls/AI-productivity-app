@@ -50,6 +50,13 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
+    time_entries = db.relationship(
+        "ProjectTimeEntry",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: ProjectTimeEntry.started_at.desc(),
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -92,6 +99,36 @@ class Project(db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
+    time_entries = db.relationship(
+        "ProjectTimeEntry",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: ProjectTimeEntry.started_at.desc(),
+    )
+
+
+class ProjectTimeEntry(db.Model):
+    """A server-side work timer session for a project."""
+
+    __tablename__ = "project_time_entries"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    ended_at = db.Column(db.DateTime, nullable=True)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="time_entries")
+    project = db.relationship("Project", back_populates="time_entries")
 
 
 class ProjectTimelineGroup(db.Model):
