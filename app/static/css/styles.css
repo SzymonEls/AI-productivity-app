@@ -2,6 +2,10 @@ body {
     background-color: #f8f9fa;
 }
 
+.min-w-0 {
+    min-width: 0;
+}
+
 .card {
     border-radius: 0.75rem;
 }
@@ -614,10 +618,15 @@ body {
     cursor: pointer;
 }
 
-.project-timer-panel {
+.project-timer-modal {
     border: 1px solid #d9e2ef;
     border-left: 4px solid #0f9488;
     background: #fbfdff;
+}
+
+.project-timer-modal-header {
+    align-items: center;
+    gap: 0.75rem;
 }
 
 .project-timer-toggle {
@@ -629,11 +638,62 @@ body {
 .project-timer-clock {
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
+    font-size: 1.25rem;
+}
+
+.project-timer-button-clock {
+    padding-left: 0.15rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.project-timer-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .timer-description-field {
-    min-height: 5rem;
+    min-height: 4rem;
     resize: vertical;
+}
+
+.project-timer-sessions {
+    border-top: 1px solid #e5e7eb;
+    padding-top: 0.85rem;
+}
+
+.project-timer-session-list {
+    display: grid;
+    gap: 0.45rem;
+    max-height: 12rem;
+    overflow: auto;
+}
+
+.project-timer-session {
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    padding: 0.55rem 0.65rem;
+    background: #fff;
+}
+
+.project-timer-session.is-running {
+    border-color: #8fd8cf;
+    background: #f4fffd;
+}
+
+.project-timer-session-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: #6c757d;
+}
+
+.project-timer-session-description {
+    margin: 0.25rem 0 0;
+    white-space: pre-wrap;
 }
 
 .time-chart {

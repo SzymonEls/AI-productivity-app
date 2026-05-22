@@ -36,13 +36,14 @@
         <button
             type="button"
             class="btn btn-outline-primary project-timer-toggle"
-            data-bs-toggle="collapse"
-            data-bs-target="#projectTimerCollapse"
+            data-bs-toggle="modal"
+            data-bs-target="#projectTimerModal"
             aria-expanded="false"
-            aria-controls="projectTimerCollapse"
+            aria-controls="projectTimerModal"
         >
             <i class="fa-regular fa-clock" aria-hidden="true"></i>
             <span>Dzisiejszy czas pracy</span>
+            <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
         <button
             type="button"
@@ -142,35 +143,6 @@
         </div>
     </div>
 
-    <section class="collapse card shadow-sm project-timer-panel mt-4" id="projectTimerCollapse" data-project-timer data-status-url="{{ url_for('time_tracking.project_status', project_id=project.id) }}" data-start-url="{{ url_for('time_tracking.start_project_timer', project_id=project.id) }}" data-pause-url="{{ url_for('time_tracking.pause_project_timer', project_id=project.id) }}" data-description-url="{{ url_for('time_tracking.save_today_description', project_id=project.id) }}" data-initial-seconds="{{ timer_summary.total_seconds }}" data-initial-running="{{ 1 if timer_summary.active_entry else 0 }}">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
-                <h2 class="h4 mb-0">Dzisiejszy czas pracy</h2>
-                <strong class="h4 mb-0 project-timer-clock" data-timer-clock>00:00:00</strong>
-            </div>
-            <div class="mt-3">
-                <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
-                    <button type="button" class="btn btn-success" data-timer-start>Start</button>
-                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>Pauza</button>
-                    <span class="small text-muted" data-timer-state>
-                        {% if timer_summary.active_entry %}Timer jest uruchomiony{% else %}Timer jest zatrzymany{% endif %}
-                    </span>
-                </div>
-                <label class="form-label" for="projectTimerDescription">Co dzisiaj zostalo zrobione</label>
-                <textarea
-                    id="projectTimerDescription"
-                    class="form-control timer-description-field"
-                    data-timer-description
-                    placeholder="Krotka notatka z dzisiejszej pracy..."
-                >{{ timer_summary.description }}</textarea>
-                <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
-                    <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Zapisz opis</button>
-                    <span class="small text-muted" data-timer-description-status></span>
-                </div>
-            </div>
-        </div>
-    </section>
-
     <div class="row g-4 mt-0">
         <div class="col-12">
             <div class="card shadow-sm h-100 inline-edit-card">
@@ -202,6 +174,56 @@
 
     <input type="hidden" name="title" value="{{ project.title }}" data-project-title-hidden>
 </form>
+
+<div
+    class="modal fade"
+    id="projectTimerModal"
+    tabindex="-1"
+    aria-hidden="true"
+    data-project-timer
+    data-status-url="{{ url_for('time_tracking.project_status', project_id=project.id) }}"
+    data-start-url="{{ url_for('time_tracking.start_project_timer', project_id=project.id) }}"
+    data-pause-url="{{ url_for('time_tracking.pause_project_timer', project_id=project.id) }}"
+    data-description-url="{{ url_for('time_tracking.save_today_description', project_id=project.id) }}"
+    data-initial-seconds="{{ timer_summary.total_seconds }}"
+    data-initial-running="{{ 1 if timer_summary.active_entry else 0 }}"
+>
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content project-timer-modal">
+            <div class="modal-header project-timer-modal-header">
+                <div class="min-w-0">
+                    <h2 class="modal-title h5">Dzisiejszy czas pracy</h2>
+                    <span class="small text-muted" data-timer-state>
+                        {% if timer_summary.active_entry %}Timer jest uruchomiony{% else %}Timer jest zatrzymany{% endif %}
+                    </span>
+                </div>
+                <strong class="project-timer-clock ms-auto" data-timer-clock>00:00:00</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="project-timer-actions mb-3">
+                    <button type="button" class="btn btn-success" data-timer-start>Rozpocznij sesję</button>
+                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>Zakończ sesję</button>
+                </div>
+                <label class="form-label" for="projectTimerDescription">Opis bieżącej sesji</label>
+                <textarea
+                    id="projectTimerDescription"
+                    class="form-control timer-description-field"
+                    data-timer-description
+                    placeholder="Co zostało zrobione w tej sesji..."
+                >{{ timer_summary.active_description }}</textarea>
+                <div class="project-timer-sessions mt-3">
+                    <h3 class="h6 mb-2">Dzisiejsze sesje</h3>
+                    <div class="project-timer-session-list" data-timer-sessions></div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <span class="small text-muted" data-timer-description-status></span>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Zapisz opis</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="modal fade" id="projectSettingsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -984,12 +1006,15 @@
         const timerPanel = document.querySelector("[data-project-timer]");
         if (timerPanel) {
             const clock = timerPanel.querySelector("[data-timer-clock]");
+            const buttonClock = document.querySelector("[data-timer-button-clock]");
             const stateLabel = timerPanel.querySelector("[data-timer-state]");
             const startButton = timerPanel.querySelector("[data-timer-start]");
             const pauseButton = timerPanel.querySelector("[data-timer-pause]");
             const descriptionField = timerPanel.querySelector("[data-timer-description]");
             const saveDescriptionButton = timerPanel.querySelector("[data-timer-save-description]");
             const descriptionStatus = timerPanel.querySelector("[data-timer-description-status]");
+            const sessionsList = timerPanel.querySelector("[data-timer-sessions]");
+            const activeTimerLink = document.querySelector("[data-active-timer]");
             const shouldOpenTimer = new URLSearchParams(window.location.search).get("open_timer") === "1";
             let elapsedSeconds = Number(timerPanel.dataset.initialSeconds || 0);
             let isRunning = timerPanel.dataset.initialRunning === "1";
@@ -1009,15 +1034,49 @@
                 if (clock) {
                     clock.textContent = formatTimerDuration(elapsedSeconds);
                 }
+                if (buttonClock) {
+                    buttonClock.textContent = formatTimerDuration(elapsedSeconds);
+                    buttonClock.classList.toggle("d-none", !isRunning);
+                }
                 if (stateLabel) {
                     stateLabel.textContent = isRunning ? "Timer jest uruchomiony" : "Timer jest zatrzymany";
                 }
                 if (startButton) {
                     startButton.disabled = isRunning;
+                    startButton.textContent = isRunning ? "Sesja trwa" : "Rozpocznij nową sesję";
                 }
                 if (pauseButton) {
                     pauseButton.disabled = !isRunning;
                 }
+                if (descriptionField) {
+                    descriptionField.disabled = !isRunning;
+                    descriptionField.placeholder = isRunning
+                        ? "Co zostało zrobione w tej sesji..."
+                        : "Rozpocznij nową sesję, żeby dodać jej opis.";
+                }
+                if (saveDescriptionButton) {
+                    saveDescriptionButton.disabled = !isRunning;
+                }
+            };
+
+            const renderSessions = (sessions) => {
+                if (!sessionsList) {
+                    return;
+                }
+                if (!Array.isArray(sessions) || sessions.length === 0) {
+                    sessionsList.innerHTML = `<p class="text-muted small mb-0">Brak zapisanych sesji dzisiaj.</p>`;
+                    return;
+                }
+                sessionsList.innerHTML = sessions.map((session) => `
+                    <article class="project-timer-session ${session.is_running ? "is-running" : ""}">
+                        <div class="project-timer-session-meta">
+                            <span>${escapeHtml(session.started_label)}-${escapeHtml(session.ended_label)}</span>
+                            <strong>${escapeHtml(session.duration_label)}</strong>
+                            ${session.is_running ? `<span class="badge text-bg-success">teraz</span>` : ""}
+                        </div>
+                        <p class="project-timer-session-description">${escapeHtml(session.description || "Bez opisu")}</p>
+                    </article>
+                `).join("");
             };
 
             const applyTimerPayload = (payload) => {
@@ -1027,16 +1086,21 @@
                 if (descriptionField && typeof payload.description === "string") {
                     descriptionField.value = payload.description;
                 }
+                if (activeTimerLink && Number(payload.project_id) === Number("{{ project.id }}") && !isRunning) {
+                    activeTimerLink.remove();
+                }
+                renderSessions(payload.sessions);
                 renderTimer();
             };
 
-            const postTimerAction = async (url) => {
+            const postTimerAction = async (url, formData = null) => {
                 const response = await fetch(url, {
                     method: "POST",
                     headers: {
                         "Accept": "application/json",
                         "X-Requested-With": "XMLHttpRequest",
                     },
+                    body: formData,
                 });
                 const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
                 if (!response.ok || !payload.ok) {
@@ -1080,7 +1144,9 @@
                 hideAlert();
                 pauseButton.disabled = true;
                 try {
-                    await postTimerAction(timerPanel.dataset.pauseUrl);
+                    const formData = new FormData();
+                    formData.append("description", descriptionField?.value || "");
+                    await postTimerAction(timerPanel.dataset.pauseUrl, formData);
                 } catch (error) {
                     showAlert(error.message, "danger");
                     renderTimer();
@@ -1110,12 +1176,12 @@
                 } catch (error) {
                     descriptionStatus.textContent = error.message;
                 } finally {
-                    saveDescriptionButton.disabled = false;
+                    renderTimer();
                 }
             });
 
             if (shouldOpenTimer) {
-                bootstrap.Collapse.getOrCreateInstance(timerPanel, { toggle: false }).show();
+                bootstrap.Modal.getOrCreateInstance(timerPanel).show();
             }
 
             renderTimer();

@@ -13,6 +13,7 @@ from .service import (
     daily_totals_by_project,
     day_bounds_utc,
     entries_for_range,
+    ensure_utc,
     entry_elapsed_seconds,
     entry_overlap_seconds,
     format_duration,
@@ -149,12 +150,14 @@ def start_project_timer(project_id):
 @login_required
 def pause_project_timer(project_id):
     project = _get_user_project_or_404(project_id)
+    description = (request.form.get("description") or "").strip()
     active_entry = (
         ProjectTimeEntry.query.filter_by(user_id=current_user.id, project_id=project.id, ended_at=None)
         .order_by(ProjectTimeEntry.started_at.desc())
         .first()
     )
     if active_entry:
+        active_entry.description = description or None
         active_entry.ended_at = utc_now()
 
     try:
@@ -174,18 +177,7 @@ def save_today_description(project_id):
     summary = today_project_summary(current_user.id, project.id)
     entry = summary["active_entry"]
     if entry is None:
-        day_start, day_end = day_bounds_utc(summary["date"])
-        entry = (
-            ProjectTimeEntry.query.filter_by(user_id=current_user.id, project_id=project.id)
-            .filter(ProjectTimeEntry.started_at <= day_end)
-            .filter((ProjectTimeEntry.ended_at.is_(None)) | (ProjectTimeEntry.ended_at >= day_start))
-            .order_by(ProjectTimeEntry.started_at.desc())
-            .first()
-        )
-
-    if entry is None:
-        entry = ProjectTimeEntry(owner=current_user, project=project, started_at=utc_now(), ended_at=utc_now())
-        db.session.add(entry)
+        return jsonify({"ok": False, "message": "Rozpocznij nowa sesje, zeby zapisac jej opis."}), 409
     entry.description = description or None
 
     try:
@@ -249,7 +241,24 @@ def _project_timer_payload(project, summary):
         "today_label": format_duration(summary["total_seconds"]),
         "is_running": active is not None,
         "started_at": active.started_at.isoformat() if active else None,
-        "description": summary["description"],
+        "description": summary["active_description"],
+        "day_description": summary["description"],
+        "sessions": [_timer_session_payload(entry) for entry in summary["entries"]],
+    }
+
+
+def _timer_session_payload(entry):
+    started_at = ensure_utc(entry.started_at).astimezone(app_timezone())
+    ended_at = None
+    if entry.ended_at:
+        ended_at = ensure_utc(entry.ended_at).astimezone(app_timezone())
+    return {
+        "id": entry.id,
+        "started_label": started_at.strftime("%H:%M"),
+        "ended_label": ended_at.strftime("%H:%M") if ended_at else "teraz",
+        "duration_label": format_duration(entry_elapsed_seconds(entry)),
+        "description": entry.description or "",
+        "is_running": entry.ended_at is None,
     }
 
 

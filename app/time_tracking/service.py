@@ -117,8 +117,10 @@ def today_project_summary(user_id, project_id):
     descriptions = [entry.description.strip() for entry in entries if entry.description and entry.description.strip()]
     return {
         "date": today,
+        "entries": entries,
         "total_seconds": total_seconds,
         "active_entry": active_entry,
+        "active_description": active_entry.description if active_entry and active_entry.description else "",
         "description": "\n\n".join(reversed(descriptions)),
     }
 
