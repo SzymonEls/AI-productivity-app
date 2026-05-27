@@ -1,64 +1,140 @@
-# Productivity App MVP
+# AI Productivity App
 
-A minimal Flask productivity/project tracking app with authentication, project CRUD, and an iCal-based daily calendar view.
+A Flask-based productivity application for managing projects, planning work, reviewing calendar commitments, and tracking focused time. The app combines classic project management features with AI-assisted planning, local history, iCal calendar subscriptions, and per-project work timers.
+
+## What It Does
+
+AI Productivity App is designed as a personal planning workspace. Each user can create projects, describe goals, organize work on a timeline, generate or write daily plans, connect external calendars through private iCal links, and measure how much time is spent on each project.
+
+The application stores its data in a local SQLite database by default and can be run locally or deployed with Docker and Gunicorn.
 
 ## Features
 
-- User registration, login, and logout
-- SQLite database via SQLAlchemy
-- Flask-Login session management
-- Project dashboard
-- Create, view, edit, and delete projects
-- Calendar tab with daily plan view built from saved iCal calendar URLs
-- Application factory pattern and blueprints for easy expansion
-- Flask-Migrate setup for future schema changes
+- User registration, login, logout, and session management with Flask-Login.
+- Per-user project dashboard with starred projects, private projects, editable goals, work frequency, and long-form Markdown project plans.
+- Project detail pages with inline editing, AI project organization, and daily time summary.
+- Timeline workspace for grouping projects and notes into a custom planning layout.
+- Manual daily planning flow that lets users select projects, write tasks, save the plan as Markdown, and pin it to the home view.
+- AI daily planning that sends a prompt plus starred project context to OpenAI and stores the generated Markdown response.
+- AI project organization that updates a project's short goal, frequency, and long plan based on the user's prompt.
+- AI history with saved request payloads, generated responses, editable plans, and pinning for home visibility.
+- Calendar page that reads saved iCal subscription URLs and builds a daily agenda view.
+- Calendar settings for adding and removing per-user iCal sources.
+- Time tracking with one active project timer, session descriptions, daily totals, project filters, editable entries, and simple chart data.
+- Markdown rendering for AI output and project plans.
+- SQLite persistence with SQLAlchemy models and Flask-Migrate/Alembic migrations.
+- Docker setup for VPS deployment with a persistent instance volume.
 
-## Quick Start
+## Tech Stack
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+- Python
+- Flask
+- Flask-SQLAlchemy
+- Flask-Login
+- Flask-Migrate / Alembic
+- SQLite by default
+- Gunicorn for containerized production serving
+- iCal parsing with `icalendar` and `recurring-ical-events`
+- Markdown rendering with `Markdown`
+- OpenAI integration through direct HTTP requests
+
+## Project Structure
+
+```text
+app/
+  ai/              AI planning routes and service logic
+  auth/            Login, registration, and logout routes
+  calendar/        iCal subscription and daily calendar views
+  main/            Home and root routes
+  projects/        Project dashboard, CRUD, and timeline routes
+  time_tracking/   Project timer and time entry routes
+  templates/       Jinja templates
+  static/          CSS and frontend assets
+  instance/        Local environment, secrets, and SQLite database
+migrations/        Alembic migration history
+config.py          Application configuration
+run.py             Flask entry point
+Dockerfile         Production image definition
+docker-compose.yml VPS-oriented compose configuration
+```
+
+## Configuration
+
+Create a local environment file from the example:
+
+```bash
+cp app/instance/.env.example app/instance/.env
+```
+
+Important settings:
+
+```env
+SECRET_KEY=change-me
+DATABASE_URL=sqlite:///app/instance/app.db
+REGISTRATION_ENABLED=true
+CALENDAR_TIMEZONE=Europe/Warsaw
+
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
+OPENAI_TIMEOUT=30
+OPENAI_PROJECT_TIMEOUT=90
+OPENAI_TEMPERATURE=0.7
+OPENAI_PROJECT_TEMPERATURE=0.5
+```
+
+AI features require `OPENAI_API_KEY`. The rest of the application can still be used without OpenAI configuration.
+
+## Local Development
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Copy `instance/.env.example` to `instance/.env` and fill in your settings.
+Apply database migrations:
 
-For AI features, set at least:
-
-```env
-OPENAI_API_KEY=your_api_key_here
-OPENAI_MODEL=gpt-4.1-mini
-OPENAI_TIMEOUT=30
+```bash
+flask --app run.py db upgrade
 ```
 
-4. Start the app:
+Start the development server:
 
 ```bash
 flask --app run.py run
 ```
 
-The app will automatically create tables on first run if the database is empty.
+Open the app at:
 
-5. Open `http://127.0.0.1:5000`
+```text
+http://127.0.0.1:5000
+```
 
-6. Log in, open `Kalendarz`, then use `Ustawienia kalendarzy` to add one or more secret iCal URLs.
+On a fresh local database, the app can also bootstrap empty tables automatically. Once migrations are in use, schema changes should be handled through Flask-Migrate.
 
 ## Docker / VPS Deployment
 
-The repository includes a production-oriented Docker setup:
+The repository includes a Docker setup intended for server deployment:
 
-- `web`: Flask app served by Gunicorn on port `8000`
-- SQLite database stored in a persistent Docker volume
-- `docker-entrypoint.sh`: runs `flask --app run.py db upgrade` automatically before Gunicorn starts
+- The Flask app is served by Gunicorn on port `8000`.
+- The SQLite database and instance files are persisted through `./app/instance`.
+- `docker-entrypoint.sh` runs `flask --app run.py db upgrade` before the app starts.
+- `SKIP_DB_BOOTSTRAP=1` is set in Docker so schema changes are controlled by migrations.
 
-On the VPS:
+Prepare the environment file:
 
 ```bash
-cp instance/.env.example instance/.env
+cp app/instance/.env.example app/instance/.env
 ```
 
-Edit `instance/.env` and set at least:
+Set at least:
 
 ```env
 SECRET_KEY=a-long-random-secret
@@ -69,53 +145,57 @@ APP_PORT=8000
 Build and start:
 
 ```bash
-docker compose --env-file instance/.env up -d --build
+docker compose --env-file app/instance/.env up -d --build
 ```
 
-Check logs:
+View logs:
 
 ```bash
-docker compose --env-file instance/.env logs -f web
+docker compose --env-file app/instance/.env logs -f web
 ```
 
 Run migrations manually if needed:
 
 ```bash
-docker compose --env-file instance/.env exec web flask --app run.py db upgrade
+docker compose --env-file app/instance/.env exec web flask --app run.py db upgrade
 ```
 
-The app will be available on `http://SERVER_IP:8000` unless `APP_PORT` is changed.
+The app will be available at:
 
-For a public domain, put Nginx or another reverse proxy in front of the `web` service and proxy traffic to `127.0.0.1:8000`.
+```text
+http://SERVER_IP:8000
+```
 
-### Docker Notes
+For a public domain, place Nginx or another reverse proxy in front of the `web` service and proxy traffic to `127.0.0.1:8000`.
 
-- Docker Compose uses `sqlite:////app/instance/app.db`, so the database file lives inside the persistent `instance_data` volume.
-- `SKIP_DB_BOOTSTRAP=1` is set in Docker so schema changes are handled by Alembic migrations instead of `db.create_all()`.
-- Flask instance files and the SQLite database are stored in the named volume `instance_data`.
+## Database Migrations
 
-## Migrations
-
-This repository now includes a ready-to-use Flask-Migrate / Alembic setup in `migrations/`.
-
-Apply the existing schema migration:
+Apply existing migrations:
 
 ```bash
 flask --app run.py db upgrade
 ```
 
-Create a new migration after model changes:
+Create a new migration after changing models:
 
 ```bash
 flask --app run.py db migrate -m "Describe the schema change"
 flask --app run.py db upgrade
 ```
 
+## Main Data Models
+
+- `User`: account, authentication fields, and relationships to all user-owned data.
+- `Project`: title, short goal, work frequency, long Markdown plan, starred/private flags, and timestamps.
+- `ProjectTimelineGroup` and `ProjectTimelineItem`: custom project timeline layout with project cards and notes.
+- `AIPlan`: saved AI or manual Markdown plans, request/response payloads, target date, project snapshot, and pin state.
+- `CalendarSubscription`: per-user iCal source with name and URL.
+- `ProjectTimeEntry`: project timer sessions with start/end timestamps and optional descriptions.
+
 ## Notes
 
-- The default database path is `instance/app.db`.
-- Set `SECRET_KEY` in your environment for production use.
-- Set `CALENDAR_TIMEZONE` if you want the day view rendered in a timezone other than `Europe/Warsaw`.
-- AI features use the OpenAI Responses API and save generated plans in local history.
-- Each user stores their own list of iCal subscriptions in the database.
-- The project is structured so you can later add REST APIs, more project fields, or AI-related modules cleanly.
+- Default database path: `app/instance/app.db`.
+- Instance files, local secrets, and the SQLite database should not be committed.
+- Each authenticated user can only access their own projects, calendars, AI history, timeline items, and time entries.
+- Calendar URLs are treated as private user-owned data.
+- AI output is stored locally so generated plans can be reviewed, edited, and pinned later.
