@@ -1,7 +1,7 @@
 services:
   web:
     build:
-      context: https://github.com/SzymonEls/AI-productivity-app.git#main
+      context: https://github.com/SzymonEls/AI-productivity-app.git#v1.0.0
     restart: unless-stopped
     user: "0:0"
     environment:
