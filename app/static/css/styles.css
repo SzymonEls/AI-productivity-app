@@ -1173,6 +1173,14 @@ body {
     padding: 0.7rem 0.8rem;
 }
 
+.manual-last-session {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    color: #6c757d;
+}
+
 .manual-plan-preview {
     padding: 1rem;
     border: 1px solid #e9ecef;
