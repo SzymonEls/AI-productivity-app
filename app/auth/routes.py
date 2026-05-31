@@ -46,6 +46,9 @@ def login():
     if current_user.is_authenticated:
         return redirect(url_for("projects.dashboard"))
 
+    default_login_email = current_app.config.get("DEFAULT_LOGIN_EMAIL", "")
+    default_login_password = current_app.config.get("DEFAULT_LOGIN_PASSWORD", "")
+
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -60,8 +63,14 @@ def login():
             return redirect(next_page or url_for("projects.dashboard"))
 
         flash("Invalid email or password.", "danger")
+        default_login_email = email
+        default_login_password = ""
 
-    return render_template("auth/login.html")
+    return render_template(
+        "auth/login.html",
+        default_login_email=default_login_email,
+        default_login_password=default_login_password,
+    )
 
 
 @auth_bp.route("/logout")

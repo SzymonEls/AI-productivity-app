@@ -72,6 +72,8 @@ Important settings:
 SECRET_KEY=change-me
 DATABASE_URL=sqlite:///app/instance/app.db
 REGISTRATION_ENABLED=true
+DEFAULT_LOGIN_EMAIL=
+DEFAULT_LOGIN_PASSWORD=
 CALENDAR_TIMEZONE=Europe/Warsaw
 
 OPENAI_API_KEY=your_api_key_here

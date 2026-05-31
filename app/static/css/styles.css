@@ -475,6 +475,21 @@ body {
     max-width: 16rem;
 }
 
+.timeline-group-move {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.timeline-group-move .btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    min-width: 2rem;
+    padding-left: 0;
+    padding-right: 0;
+    font-weight: 700;
+}
+
 .timeline-items {
     display: flex;
     flex-direction: column;
