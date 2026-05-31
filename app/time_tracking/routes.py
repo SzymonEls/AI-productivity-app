@@ -264,6 +264,7 @@ def _project_timer_payload(project, summary):
         "ok": True,
         "project_id": project.id,
         "project_title": project.title,
+        "project_url": url_for("projects.project_detail", project_id=project.id, open_timer=1),
         "today_seconds": summary["total_seconds"],
         "today_label": format_duration(summary["total_seconds"]),
         "is_running": active is not None,

@@ -1014,7 +1014,6 @@
             const saveDescriptionButton = timerPanel.querySelector("[data-timer-save-description]");
             const descriptionStatus = timerPanel.querySelector("[data-timer-description-status]");
             const sessionsList = timerPanel.querySelector("[data-timer-sessions]");
-            const activeTimerLink = document.querySelector("[data-active-timer]");
             const shouldOpenTimer = new URLSearchParams(window.location.search).get("open_timer") === "1";
             let elapsedSeconds = Number(timerPanel.dataset.initialSeconds || 0);
             let isRunning = timerPanel.dataset.initialRunning === "1";
@@ -1086,9 +1085,7 @@
                 if (descriptionField && typeof payload.description === "string") {
                     descriptionField.value = payload.description;
                 }
-                if (activeTimerLink && Number(payload.project_id) === Number("{{ project.id }}") && !isRunning) {
-                    activeTimerLink.remove();
-                }
+                window.updateActiveTimerLink?.(payload);
                 renderSessions(payload.sessions);
                 renderTimer();
             };

@@ -20,7 +20,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2" data-navbar-brand-group>
                 <a class="navbar-brand me-0" href="{{ url_for('projects.dashboard', view='timeline') }}">Productivity App</a>
                 {% if current_user.is_authenticated and active_time_entry %}
                     <a
@@ -29,6 +29,7 @@
                         title="Timer dziala: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
                         aria-label="Timer dziala: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
                         data-active-timer
+                        data-active-timer-project-id="{{ active_time_entry.project_id }}"
                         data-active-timer-seconds="{{ active_time_elapsed_seconds }}"
                         data-active-timer-title="Timer dziala: {{ active_time_entry.project.title }}"
                     >
@@ -119,33 +120,82 @@
         }
     </script>
     <script>
-        document.querySelectorAll("[data-active-timer]").forEach((timerLink) => {
+        const formatActiveTimerDuration = (elapsedSeconds) => {
+            const totalMinutes = Math.floor(Math.max(elapsedSeconds, 0) / 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return hours ? `${hours}h ${String(minutes).padStart(2, "0")}m` : `${totalMinutes}m`;
+        };
+
+        const initializeActiveTimerLink = (timerLink) => {
+            if (!timerLink || timerLink.dataset.activeTimerInitialized === "1") {
+                return;
+            }
+            if (timerLink.dataset.activeTimerInterval) {
+                window.clearInterval(Number(timerLink.dataset.activeTimerInterval));
+            }
             const label = timerLink.querySelector("[data-active-timer-label]");
             const initialSeconds = Number(timerLink.dataset.activeTimerSeconds || 0);
             const startedAt = Date.now();
-
-            const formatActiveTimer = (elapsedSeconds) => {
-                const totalMinutes = Math.floor(Math.max(elapsedSeconds, 0) / 60);
-                const hours = Math.floor(totalMinutes / 60);
-                const minutes = totalMinutes % 60;
-                return hours ? `${hours}h ${String(minutes).padStart(2, "0")}m` : `${totalMinutes}m`;
-            };
 
             const renderActiveTimer = () => {
                 if (!label) {
                     return;
                 }
                 const elapsedSeconds = initialSeconds + Math.floor((Date.now() - startedAt) / 1000);
-                const value = formatActiveTimer(elapsedSeconds);
+                const value = formatActiveTimerDuration(elapsedSeconds);
                 const baseLabel = timerLink.dataset.activeTimerTitle || "Timer dziala";
                 label.textContent = value;
                 timerLink.setAttribute("aria-label", `${baseLabel} (${value})`);
                 timerLink.setAttribute("title", `${baseLabel} (${value})`);
             };
 
+            timerLink.dataset.activeTimerInitialized = "1";
             renderActiveTimer();
-            window.setInterval(renderActiveTimer, 1000);
-        });
+            timerLink.dataset.activeTimerInterval = String(window.setInterval(renderActiveTimer, 1000));
+        };
+
+        window.updateActiveTimerLink = (payload) => {
+            const currentLink = document.querySelector("[data-active-timer]");
+            if (!payload?.is_running) {
+                const currentProjectId = Number(currentLink?.dataset.activeTimerProjectId || 0);
+                const payloadProjectId = Number(payload?.project_id || 0);
+                if (currentLink && currentProjectId && payloadProjectId && currentProjectId !== payloadProjectId) {
+                    return;
+                }
+                if (currentLink?.dataset.activeTimerInterval) {
+                    window.clearInterval(Number(currentLink.dataset.activeTimerInterval));
+                }
+                currentLink?.remove();
+                return;
+            }
+
+            const brandGroup = document.querySelector("[data-navbar-brand-group]");
+            if (!brandGroup) {
+                return;
+            }
+
+            const timerLink = currentLink || document.createElement("a");
+            timerLink.className = "active-timer-link";
+            timerLink.href = payload.project_url || "#";
+            timerLink.dataset.activeTimer = "";
+            timerLink.dataset.activeTimerProjectId = String(payload.project_id || "");
+            timerLink.dataset.activeTimerSeconds = String(payload.today_seconds || 0);
+            timerLink.dataset.activeTimerTitle = `Timer dziala: ${payload.project_title || "Projekt"}`;
+            timerLink.dataset.activeTimerInitialized = "0";
+            timerLink.innerHTML = `
+                <span class="active-timer-dot" aria-hidden="true"></span>
+                <span class="active-timer-label" data-active-timer-label>${formatActiveTimerDuration(payload.today_seconds || 0)}</span>
+                <span class="active-timer-icon" aria-hidden="true">⏱</span>
+            `;
+
+            if (!currentLink) {
+                brandGroup.appendChild(timerLink);
+            }
+            initializeActiveTimerLink(timerLink);
+        };
+
+        document.querySelectorAll("[data-active-timer]").forEach(initializeActiveTimerLink);
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>
