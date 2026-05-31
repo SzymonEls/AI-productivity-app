@@ -1,13 +1,14 @@
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
 from ..markdown_utils import render_markdown, strip_repeated_title
-from ..models import AIPlan, Project, ProjectTimelineGroup, ProjectTimelineItem
+from ..models import AIPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 from .service import (
     AIConfigurationError,
     AIServiceError,
@@ -195,6 +196,7 @@ def manual_daily_plan():
             today=date.today(),
             projects=projects,
             timeline_groups=timeline_groups,
+            project_last_session_labels=_project_last_session_labels(projects),
         )
 
     raw_date = request.form.get("target_date", "").strip()
@@ -281,6 +283,7 @@ def _render_manual_plan_template(target_date, projects, timeline_groups):
         today=target_date,
         projects=projects,
         timeline_groups=timeline_groups,
+        project_last_session_labels=_project_last_session_labels(projects),
     )
 
 
@@ -466,6 +469,58 @@ def _parse_project_ids(raw_project_ids):
 
 def _split_manual_project_tasks(raw_tasks):
     return [line.strip() for line in raw_tasks.splitlines() if line.strip()]
+
+
+def _project_last_session_labels(projects):
+    project_ids = [project.id for project in projects]
+    if not project_ids:
+        return {}
+
+    last_sessions = dict(
+        db.session.query(ProjectTimeEntry.project_id, func.max(ProjectTimeEntry.started_at))
+        .filter(ProjectTimeEntry.user_id == current_user.id, ProjectTimeEntry.project_id.in_(project_ids))
+        .group_by(ProjectTimeEntry.project_id)
+        .all()
+    )
+
+    now = datetime.now(timezone.utc)
+    return {
+        project.id: _human_last_session_label(last_sessions.get(project.id), now)
+        for project in projects
+    }
+
+
+def _human_last_session_label(value, now):
+    if not value:
+        return "Ostatnia sesja: brak"
+
+    timestamp = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    seconds = int(max((now - timestamp.astimezone(timezone.utc)).total_seconds(), 0))
+
+    if seconds < 60:
+        return "Ostatnia sesja: przed chwilą"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"Ostatnia sesja: {minutes} min temu"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"Ostatnia sesja: {hours} godz. temu"
+    if seconds < 172800:
+        return "Ostatnia sesja: wczoraj"
+    if seconds < 604800:
+        days = seconds // 86400
+        return f"Ostatnia sesja: {days} dni temu"
+    if seconds < 1209600:
+        return "Ostatnia sesja: tydzień temu"
+    if seconds < 2592000:
+        weeks = seconds // 604800
+        return f"Ostatnia sesja: {weeks} tyg. temu"
+    if seconds < 31536000:
+        months = seconds // 2592000
+        return f"Ostatnia sesja: {months} mies. temu"
+
+    years = seconds // 31536000
+    return "Ostatnia sesja: rok temu" if years == 1 else f"Ostatnia sesja: {years} lata temu"
 
 
 def _render_manual_daily_plan(target_date, tasks):

@@ -42,6 +42,10 @@
                         <div class="timeline-group-header {% if not group.name %}d-none{% endif %}" data-group-header>
                             <h2 class="timeline-group-title {% if not group.name %}d-none{% endif %}" data-group-title>{{ group.name or "" }}</h2>
                             <input class="form-control form-control-sm timeline-group-name d-none" value="{{ group.name or "" }}" data-group-name aria-label="Nazwa grupy">
+                            <div class="timeline-group-move d-none" data-group-move-controls>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                            </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
                         <div class="timeline-items" data-timeline-items>
@@ -405,6 +409,10 @@
                         <div class="timeline-group-header ${group.name ? "" : "d-none"}" data-group-header>
                             <h2 class="timeline-group-title ${group.name ? "" : "d-none"}" data-group-title>${escapeHtml(group.name || "")}</h2>
                             <input class="form-control form-control-sm timeline-group-name d-none" value="${escapeHtml(group.name || "")}" data-group-name aria-label="Nazwa grupy">
+                            <div class="timeline-group-move d-none" data-group-move-controls>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                            </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
                         <div class="timeline-items" data-timeline-items>
@@ -474,6 +482,20 @@
             });
         };
 
+        const updateGroupMoveButtons = () => {
+            const groups = Array.from(timelineRoot.querySelectorAll("[data-timeline-group]"));
+            groups.forEach((group, index) => {
+                const moveUpButton = group.querySelector("[data-move-group='up']");
+                const moveDownButton = group.querySelector("[data-move-group='down']");
+                if (moveUpButton) {
+                    moveUpButton.disabled = !editMode || index === 0;
+                }
+                if (moveDownButton) {
+                    moveDownButton.disabled = !editMode || index === groups.length - 1;
+                }
+            });
+        };
+
         const setEditMode = (enabled) => {
             editMode = enabled;
             editToggle?.classList.toggle("d-none", enabled);
@@ -496,11 +518,13 @@
                 title.classList.toggle("d-none", enabled || !hasTitle);
             });
             timelineRoot.querySelectorAll("[data-group-name]").forEach((input) => input.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-group-move-controls]").forEach((controls) => controls.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-group]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-add-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
             timelineRoot.querySelectorAll(".timeline-note-fields").forEach((fields) => fields.classList.toggle("d-none", !enabled));
+            updateGroupMoveButtons();
             updatePrivacyMask();
         };
 
@@ -519,6 +543,10 @@
                         <div class="timeline-group-header">
                             <h2 class="timeline-group-title d-none" data-group-title>Grupa</h2>
                             <input class="form-control form-control-sm timeline-group-name" value="" data-group-name aria-label="Nazwa grupy" placeholder="Nazwa grupy">
+                            <div class="timeline-group-move" data-group-move-controls>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                            </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-delete-group>Remove</button>
                         </div>
                         <div class="timeline-items" data-timeline-items></div>
@@ -627,6 +655,22 @@
                     return;
                 }
 
+                const moveGroupButton = event.target.closest("[data-move-group]");
+                if (moveGroupButton) {
+                    const group = moveGroupButton.closest("[data-timeline-group]");
+                    if (!group) {
+                        return;
+                    }
+                    if (moveGroupButton.dataset.moveGroup === "up" && group.previousElementSibling) {
+                        timelineRoot.insertBefore(group, group.previousElementSibling);
+                    }
+                    if (moveGroupButton.dataset.moveGroup === "down" && group.nextElementSibling) {
+                        timelineRoot.insertBefore(group.nextElementSibling, group);
+                    }
+                    updateGroupMoveButtons();
+                    return;
+                }
+
                 const deleteGroupButton = event.target.closest("[data-delete-group]");
                 if (deleteGroupButton) {
                     const group = deleteGroupButton.closest("[data-timeline-group]");
@@ -639,6 +683,7 @@
                     const targetItems = target.querySelector("[data-timeline-items]");
                     group.querySelectorAll("[data-timeline-item]").forEach((item) => targetItems.appendChild(item));
                     group.remove();
+                    updateGroupMoveButtons();
                 }
             });
         };

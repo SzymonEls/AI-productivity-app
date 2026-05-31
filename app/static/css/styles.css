@@ -475,6 +475,21 @@ body {
     max-width: 16rem;
 }
 
+.timeline-group-move {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.timeline-group-move .btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    min-width: 2rem;
+    padding-left: 0;
+    padding-right: 0;
+    font-weight: 700;
+}
+
 .timeline-items {
     display: flex;
     flex-direction: column;
@@ -728,6 +743,78 @@ body {
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, #0f9488, #1f7ae0);
+}
+
+.daily-time-pie {
+    display: grid;
+    grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: center;
+}
+
+.daily-time-pie-chart {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 13rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px rgba(31, 41, 55, 0.08);
+}
+
+.daily-time-pie-chart::after {
+    content: "";
+    position: absolute;
+    inset: 27%;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 0 0 1px rgba(31, 41, 55, 0.08);
+}
+
+.daily-time-pie-chart span {
+    position: relative;
+    z-index: 1;
+    font-weight: 700;
+    color: #1f2937;
+}
+
+.daily-time-pie-legend {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.daily-time-pie-item {
+    display: grid;
+    grid-template-columns: 0.8rem minmax(0, 1fr) auto auto;
+    gap: 0.55rem;
+    align-items: center;
+    font-size: 0.92rem;
+}
+
+.daily-time-pie-swatch {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+}
+
+.daily-time-pie-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.time-summary-panel {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: start;
+}
+
+.time-summary-panel strong {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    line-height: 1;
+    color: #1f2937;
 }
 
 .time-entry-description {
@@ -1086,6 +1173,14 @@ body {
     padding: 0.7rem 0.8rem;
 }
 
+.manual-last-session {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    color: #6c757d;
+}
+
 .manual-plan-preview {
     padding: 1rem;
     border: 1px solid #e9ecef;
@@ -1134,5 +1229,22 @@ body {
     .time-chart-row {
         grid-template-columns: 1fr;
         gap: 0.35rem;
+    }
+
+    .daily-time-pie {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .daily-time-pie-legend {
+        width: 100%;
+    }
+
+    .daily-time-pie-item {
+        grid-template-columns: 0.8rem minmax(0, 1fr) auto;
+    }
+
+    .daily-time-pie-item .text-muted {
+        grid-column: 2 / -1;
     }
 }

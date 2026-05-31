@@ -18,11 +18,18 @@
 <form class="card shadow-sm mb-4" method="get" action="{{ url_for('time_tracking.index') }}">
     <div class="card-body">
         <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label" for="trackingDate">Dzień</label>
-                <input class="form-control" type="date" id="trackingDate" name="date" value="{{ selected_day.isoformat() }}">
+            <div class="col-md-3">
+                <label class="form-label" for="trackingDateMode">Zakres dat</label>
+                <select class="form-select" id="trackingDateMode" name="date_mode" data-date-mode>
+                    <option value="day" {% if date_mode != "all" %}selected{% endif %}>Wybrany dzień</option>
+                    <option value="all" {% if date_mode == "all" %}selected{% endif %}>Wszystkie daty</option>
+                </select>
             </div>
-            <div class="col-md-5">
+            <div class="col-md-3">
+                <label class="form-label" for="trackingDate">Dzień</label>
+                <input class="form-control" type="date" id="trackingDate" name="date" value="{{ selected_day.isoformat() if selected_day else '' }}" data-date-input data-default-date="{{ today.isoformat() }}" {% if all_dates %}disabled{% endif %}>
+            </div>
+            <div class="col-md-4">
                 <label class="form-label" for="trackingProject">Projekt</label>
                 <select class="form-select" id="trackingProject" name="project_id">
                     <option value="">Wszystkie projekty</option>
@@ -33,15 +40,17 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <button class="btn btn-primary w-100" type="submit">Pokaż</button>
             </div>
         </div>
     </div>
 </form>
 
+{% if (not all_dates and chart_projects) or selected_project %}
 <div class="row g-4 mb-4">
-    <div class="col-lg-6">
+    {% if not all_dates and chart_projects %}
+    <div class="col-12">
         <section class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
@@ -49,16 +58,28 @@
                     <strong>{{ format_duration(day_total_seconds) }}</strong>
                 </div>
                 {% if chart_projects %}
-                    <div class="time-chart">
+                    {% set pie_colors = ["#0f9488", "#1f7ae0", "#f59e0b", "#dc3545", "#6f42c1", "#198754", "#0dcaf0", "#6c757d"] %}
+                    {% set pie = namespace(position=0) %}
+                    <div class="daily-time-pie">
+                        <div
+                            class="daily-time-pie-chart"
+                            role="img"
+                            aria-label="Podzial czasu pracy w wybranym dniu"
+                            style="background: conic-gradient({% for item in chart_projects %}{% set color = pie_colors[loop.index0 % (pie_colors|length)] %}{% set start = pie.position %}{% set end = pie.position + (item.seconds * 100 / day_total_seconds) %}{{ color }} {{ start|round(3) }}% {{ end|round(3) }}%{% set pie.position = end %}{% if not loop.last %}, {% endif %}{% endfor %});"
+                        >
+                            <span>{{ format_duration(day_total_seconds) }}</span>
+                        </div>
+                        <div class="daily-time-pie-legend">
                         {% for item in chart_projects %}
-                            <div class="time-chart-row">
-                                <div class="time-chart-label" title="{{ item.title }}">{{ item.title }}</div>
-                                <div class="time-chart-track" aria-label="{{ item.title }}: {{ item.label }}">
-                                    <div class="time-chart-bar" style="width: {{ (item.seconds * 100 / day_total_seconds) | round(1) }}%"></div>
-                                </div>
-                                <div class="text-end small text-muted">{{ item.label }}</div>
+                            {% set color = pie_colors[loop.index0 % (pie_colors|length)] %}
+                            <div class="daily-time-pie-item">
+                                <span class="daily-time-pie-swatch" style="background: {{ color }}"></span>
+                                <span class="daily-time-pie-title" title="{{ item.title }}">{{ item.title }}</span>
+                                <strong>{{ (item.seconds * 100 / day_total_seconds) | round(1) }}%</strong>
+                                <span class="text-muted">{{ item.label }}</span>
                             </div>
                         {% endfor %}
+                        </div>
                     </div>
                 {% else %}
                     <p class="text-muted mb-0">Brak zapisanych sesji dla wybranego dnia.</p>
@@ -66,16 +87,23 @@
             </div>
         </section>
     </div>
-    <div class="col-lg-6">
+    {% endif %}
+    {% if selected_project %}
+    <div class="col-12">
         <section class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-                    <h2 class="h5 mb-0">Projekt w czasie</h2>
+                    <h2 class="h5 mb-0">{% if all_dates %}Projekt w czasie{% else %}Czas projektu w wybranym dniu{% endif %}</h2>
                     {% if selected_project %}
                         <span class="small text-muted">{{ selected_project.title }}</span>
                     {% endif %}
                 </div>
-                {% if selected_project and project_daily_chart %}
+                {% if not all_dates %}
+                    <div class="time-summary-panel">
+                        <span class="text-muted small">{{ selected_day.strftime("%d.%m.%Y") if selected_day else "" }}</span>
+                        <strong>{{ format_duration(selected_project_day_seconds) }}</strong>
+                    </div>
+                {% elif selected_project and project_daily_chart %}
                     {% set max_project_seconds = project_daily_chart | map(attribute='seconds') | max %}
                     <div class="time-chart">
                         {% for item in project_daily_chart %}
@@ -94,7 +122,9 @@
             </div>
         </section>
     </div>
+    {% endif %}
 </div>
+{% endif %}
 
 <section class="card shadow-sm">
     <div class="card-body">
@@ -122,7 +152,8 @@
                         {% for entry in entries %}
                             <tr>
                                 <form method="post" action="{{ url_for('time_tracking.edit_entry', entry_id=entry.id) }}">
-                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() }}">
+                                    <input type="hidden" name="selected_date_mode" value="{{ date_mode }}">
+                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() if selected_day else '' }}">
                                     <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
                                     <td>
                                         <select class="form-select form-select-sm" name="project_id" aria-label="Projekt">
@@ -147,10 +178,11 @@
                                         <textarea class="form-control form-control-sm time-entry-description" name="description" rows="2">{{ entry.description or "" }}</textarea>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-primary btn-sm" type="submit" {% if not entry.ended_at %}disabled title="Zatrzymaj aktywna sesje przed edycja"{% endif %}>Zapisz</button>
+                                        <button class="btn btn-primary btn-sm" type="submit">Zapisz</button>
                                 </form>
                                 <form class="d-inline" method="post" action="{{ url_for('time_tracking.delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Usunąć tę sesję?');">
-                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() }}">
+                                    <input type="hidden" name="selected_date_mode" value="{{ date_mode }}">
+                                    <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() if selected_day else '' }}">
                                     <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
                                     <button class="btn btn-outline-danger btn-sm" type="submit">Usuń</button>
                                 </form>
@@ -160,9 +192,51 @@
                     </tbody>
                 </table>
             </div>
+            {% if entries_pagination.pages > 1 %}
+                <nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" aria-label="Strony sesji">
+                    <a
+                        class="btn btn-outline-secondary btn-sm {% if not entries_pagination.has_prev %}disabled{% endif %}"
+                        href="{% if entries_pagination.has_prev %}{{ url_for('time_tracking.index', date_mode=date_mode, date=selected_day.isoformat() if selected_day else None, project_id=selected_project_id or None, page=entries_pagination.prev_num) }}{% else %}#{% endif %}"
+                        {% if not entries_pagination.has_prev %}aria-disabled="true"{% endif %}
+                    >
+                        Poprzednie
+                    </a>
+                    <span class="small text-muted">Strona {{ entries_pagination.page }} z {{ entries_pagination.pages }}</span>
+                    <a
+                        class="btn btn-outline-secondary btn-sm {% if not entries_pagination.has_next %}disabled{% endif %}"
+                        href="{% if entries_pagination.has_next %}{{ url_for('time_tracking.index', date_mode=date_mode, date=selected_day.isoformat() if selected_day else None, project_id=selected_project_id or None, page=entries_pagination.next_num) }}{% else %}#{% endif %}"
+                        {% if not entries_pagination.has_next %}aria-disabled="true"{% endif %}
+                    >
+                        Następne
+                    </a>
+                </nav>
+            {% endif %}
         {% else %}
             <p class="text-muted mb-0">Nie ma sesji pasujących do wybranych filtrów.</p>
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block extra_scripts %}
+    {{ super() }}
+    <script>
+        const dateModeSelect = document.querySelector("[data-date-mode]");
+        const dateInput = document.querySelector("[data-date-input]");
+
+        if (dateModeSelect && dateInput) {
+            const syncDateInput = () => {
+                const allDates = dateModeSelect.value === "all";
+                dateInput.disabled = allDates;
+                if (allDates) {
+                    dateInput.value = "";
+                } else if (!dateInput.value) {
+                    dateInput.value = dateInput.dataset.defaultDate || "";
+                }
+            };
+
+            dateModeSelect.addEventListener("change", syncDateInput);
+            syncDateInput();
+        }
+    </script>
 {% endblock %}
