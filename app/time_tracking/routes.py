@@ -223,14 +223,20 @@ def edit_entry(entry_id):
     project_id = request.form.get("project_id", type=int) or entry.project_id
     project = _get_user_project_or_404(project_id)
     started_at = parse_local_datetime(request.form.get("started_at"), entry.started_at)
-    ended_at = parse_local_datetime(request.form.get("ended_at"), entry.ended_at or utc_now())
-    if ended_at <= started_at:
+    is_running = entry.ended_at is None
+    ended_at = None if is_running else parse_local_datetime(request.form.get("ended_at"), entry.ended_at)
+    if is_running:
+        if started_at >= utc_now():
+            flash("Start aktywnej sesji musi byc w przeszlosci.", "danger")
+            return redirect(_tracking_redirect(project_id))
+    elif ended_at <= started_at:
         flash("Koniec sesji musi byc pozniejszy niz start.", "danger")
         return redirect(_tracking_redirect(project_id))
 
     entry.project = project
     entry.started_at = started_at
-    entry.ended_at = ended_at
+    if not is_running:
+        entry.ended_at = ended_at
     entry.description = (request.form.get("description") or "").strip() or None
 
     try:

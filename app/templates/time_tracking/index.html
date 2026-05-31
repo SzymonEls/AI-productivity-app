@@ -178,7 +178,7 @@
                                         <textarea class="form-control form-control-sm time-entry-description" name="description" rows="2">{{ entry.description or "" }}</textarea>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-primary btn-sm" type="submit" {% if not entry.ended_at %}disabled title="Zatrzymaj aktywna sesje przed edycja"{% endif %}>Zapisz</button>
+                                        <button class="btn btn-primary btn-sm" type="submit">Zapisz</button>
                                 </form>
                                 <form class="d-inline" method="post" action="{{ url_for('time_tracking.delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Usunąć tę sesję?');">
                                     <input type="hidden" name="selected_date_mode" value="{{ date_mode }}">
