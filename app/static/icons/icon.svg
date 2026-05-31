@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="AI Productivity App">
+  <rect width="512" height="512" fill="#f8fafc"/>
+  <circle cx="256" cy="256" r="204" fill="#1f2937"/>
+  <path d="M146 314h53l15-45h84l15 45h54L283 96h-54l-83 218Zm82-89 28-84 28 84h-56Zm154 89h48V96h-48v218Z" fill="#ffffff"/>
+  <path d="M122 379c41 32 86 48 134 48s93-16 134-48" fill="none" stroke="#14b8a6" stroke-width="26" stroke-linecap="round"/>
+</svg>

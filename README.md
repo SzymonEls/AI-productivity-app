@@ -117,6 +117,12 @@ Open the app at:
 http://127.0.0.1:5000
 ```
 
+## PWA Installation
+
+The app includes an online-only PWA setup: a web app manifest, install icons, and a service worker that always uses the network and does not cache pages for offline use.
+
+For mobile installation, open the app over HTTPS. Desktop Chrome treats `localhost` as secure during development, but a phone opening the app through a local network address such as `http://192.168.x.x:5000` will not register the service worker.
+
 On a fresh local database, the app can also bootstrap empty tables automatically. Once migrations are in use, schema changes should be handled through Flask-Migrate.
 
 ## Docker / VPS Deployment
