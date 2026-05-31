@@ -1153,7 +1153,10 @@
                 }
             });
 
-            saveDescriptionButton?.addEventListener("click", async () => {
+            const saveTimerDescription = async () => {
+                if (!isRunning) {
+                    return;
+                }
                 descriptionStatus.textContent = "";
                 saveDescriptionButton.disabled = true;
                 try {
@@ -1177,6 +1180,15 @@
                     descriptionStatus.textContent = error.message;
                 } finally {
                     renderTimer();
+                }
+            };
+
+            saveDescriptionButton?.addEventListener("click", saveTimerDescription);
+
+            descriptionField?.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    event.preventDefault();
+                    saveTimerDescription();
                 }
             });
 
