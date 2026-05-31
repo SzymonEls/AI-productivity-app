@@ -49,8 +49,12 @@ def _entry_payload(entry):
 @time_tracking_bp.route("/")
 @login_required
 def index():
-    selected_day = parse_local_date(request.args.get("date"), default=utc_now().astimezone(app_timezone()).date())
+    today = utc_now().astimezone(app_timezone()).date()
+    date_mode = request.args.get("date_mode") or "day"
+    all_dates = date_mode == "all"
+    selected_day = None if all_dates else parse_local_date(request.args.get("date"), default=today)
     selected_project_id = request.args.get("project_id", type=int)
+    page = max(request.args.get("page", 1, type=int) or 1, 1)
     projects = (
         Project.query.filter_by(user_id=current_user.id)
         .order_by(Project.is_starred.desc(), Project.title.asc())
@@ -58,30 +62,48 @@ def index():
     )
     selected_project = next((project for project in projects if project.id == selected_project_id), None)
 
-    day_start, day_end = day_bounds_utc(selected_day)
-    visible_entries = entries_for_range(
-        current_user.id,
-        day_start,
-        day_end,
-        project_id=selected_project.id if selected_project else None,
+    entries_query = ProjectTimeEntry.query.filter_by(user_id=current_user.id)
+    if selected_project:
+        entries_query = entries_query.filter_by(project_id=selected_project.id)
+    if selected_day:
+        day_start, day_end = day_bounds_utc(selected_day)
+        entries_query = entries_query.filter(ProjectTimeEntry.started_at <= day_end).filter(
+            (ProjectTimeEntry.ended_at.is_(None)) | (ProjectTimeEntry.ended_at >= day_start)
+        )
+
+    entries_pagination = entries_query.order_by(ProjectTimeEntry.started_at.desc()).paginate(
+        page=page,
+        per_page=50,
+        error_out=False,
     )
-    totals_by_project = daily_totals_by_project(current_user.id, selected_day)
-    chart_projects = [
-        {
-            "id": project.id,
-            "title": project.title,
-            "seconds": totals_by_project.get(project.id, 0),
-            "label": format_duration(totals_by_project.get(project.id, 0)),
-        }
-        for project in projects
-        if totals_by_project.get(project.id, 0) > 0
-    ]
+    visible_entries = entries_pagination.items
+
+    chart_projects = []
+    if selected_day and not selected_project:
+        totals_by_project = daily_totals_by_project(current_user.id, selected_day)
+        chart_projects = [
+            {
+                "id": project.id,
+                "title": project.title,
+                "seconds": totals_by_project.get(project.id, 0),
+                "label": format_duration(totals_by_project.get(project.id, 0)),
+            }
+            for project in projects
+            if totals_by_project.get(project.id, 0) > 0
+        ]
     day_total_seconds = sum(item["seconds"] for item in chart_projects)
+    selected_project_day_seconds = 0
+    if selected_day and selected_project:
+        day_start, day_end = day_bounds_utc(selected_day)
+        selected_project_day_seconds = sum(
+            entry_overlap_seconds(entry, day_start, day_end)
+            for entry in entries_for_range(current_user.id, day_start, day_end, project_id=selected_project.id)
+        )
 
     project_daily_chart = []
-    if selected_project:
+    if all_dates and selected_project:
         for offset in range(13, -1, -1):
-            day = selected_day - timedelta(days=offset)
+            day = today - timedelta(days=offset)
             range_start, range_end = day_bounds_utc(day)
             entries = entries_for_range(current_user.id, range_start, range_end, project_id=selected_project.id)
             seconds = sum(entry_overlap_seconds(entry, range_start, range_end) for entry in entries)
@@ -98,12 +120,17 @@ def index():
     return render_template(
         "time_tracking/index.html",
         projects=projects,
+        date_mode="all" if all_dates else "day",
+        all_dates=all_dates,
+        today=today,
         selected_day=selected_day,
         selected_project=selected_project,
         selected_project_id=selected_project.id if selected_project else "",
         entries=visible_entries,
+        entries_pagination=entries_pagination,
         chart_projects=chart_projects,
         day_total_seconds=day_total_seconds,
+        selected_project_day_seconds=selected_project_day_seconds,
         project_daily_chart=project_daily_chart,
         entry_elapsed_seconds=entry_elapsed_seconds,
         format_duration=format_duration,
@@ -264,9 +291,12 @@ def _timer_session_payload(entry):
 
 def _tracking_redirect(project_id=None):
     args = {}
+    selected_date_mode = request.form.get("selected_date_mode") or request.args.get("date_mode")
     selected_date = request.form.get("selected_date") or request.args.get("date")
     selected_project = request.form.get("selected_project_id") or request.args.get("project_id") or project_id
-    if selected_date:
+    if selected_date_mode == "all":
+        args["date_mode"] = "all"
+    elif selected_date:
         args["date"] = selected_date
     if selected_project:
         args["project_id"] = selected_project
