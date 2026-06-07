@@ -1,4 +1,3 @@
-from collections import defaultdict
 from datetime import timedelta
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
@@ -116,6 +115,22 @@ def index():
                 }
             )
 
+    all_projects_daily_chart = []
+    if all_dates and not selected_project:
+        for offset in range(13, -1, -1):
+            day = today - timedelta(days=offset)
+            range_start, range_end = day_bounds_utc(day)
+            entries = entries_for_range(current_user.id, range_start, range_end)
+            seconds = sum(entry_overlap_seconds(entry, range_start, range_end) for entry in entries)
+            all_projects_daily_chart.append(
+                {
+                    "date": day.isoformat(),
+                    "label": day.strftime("%d.%m"),
+                    "seconds": seconds,
+                    "duration": format_duration(seconds),
+                }
+            )
+
     active_entry = active_entry_for_user(current_user.id)
     return render_template(
         "time_tracking/index.html",
@@ -132,6 +147,7 @@ def index():
         day_total_seconds=day_total_seconds,
         selected_project_day_seconds=selected_project_day_seconds,
         project_daily_chart=project_daily_chart,
+        all_projects_daily_chart=all_projects_daily_chart,
         entry_elapsed_seconds=entry_elapsed_seconds,
         format_duration=format_duration,
         local_datetime_value=local_datetime_value,
