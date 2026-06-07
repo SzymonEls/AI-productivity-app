@@ -2,7 +2,7 @@
   "name": "AI Productivity App",
   "short_name": "Productivity",
   "description": "Personal productivity workspace for projects, planning, calendar review, and time tracking.",
-  "start_url": "/",
+  "start_url": "/projects/dashboard?view=timeline",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f8fafc",
