@@ -538,12 +538,6 @@ def _render_manual_daily_plan(target_date, tasks):
     lines = [f"# Plan dnia - {target_date.isoformat()}", ""]
     for item in tasks:
         project = item["project"]
-        project_tasks = item["tasks"]
-        if len(project_tasks) == 1:
-            lines.append(f"- **{project.title}:** {project_tasks[0]}")
-            continue
-
-        lines.append(f"- **{project.title}:**")
-        for task in project_tasks:
-            lines.append(f"    - {task}")
+        for task in item["tasks"]:
+            lines.append(f"- **{project.title}:** {task}")
     return "\n".join(lines).strip() + "\n"

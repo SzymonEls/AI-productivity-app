@@ -239,12 +239,14 @@
 
         const showSummary = () => {
             const targetDate = form.querySelector("#target_date").value;
-            const items = selectedIds.map((projectId) => {
+            const items = [];
+            selectedIds.forEach((projectId) => {
                 const panel = projectPanels.find((item) => item.dataset.projectStep === projectId);
                 const title = getPanelTitle(panel);
                 const taskLines = getTaskLines(panel.querySelector("[data-project-task]"));
-                const nestedTasks = taskLines.map((task) => `<li>${escapeHtml(task)}</li>`).join("");
-                return `<li><strong>${escapeHtml(title)}:</strong><ul>${nestedTasks}</ul></li>`;
+                taskLines.forEach((task) => {
+                    items.push(`<li><strong>${escapeHtml(title)}:</strong> ${escapeHtml(task)}</li>`);
+                });
             });
 
             preview.innerHTML = `<h1>Plan dnia - ${escapeHtml(targetDate)}</h1><ul>${items.join("")}</ul>`;
