@@ -86,7 +86,7 @@ OPENAI_TEMPERATURE=0.7
 OPENAI_PROJECT_TEMPERATURE=0.5
 ```
 
-AI features require `OPENAI_API_KEY` and `AI_ENABLED=true`. Set `AI_ENABLED=false` to disable the AI planning module for an instance. Set `CALENDAR_ENABLED=false` to disable iCal calendar pages and event loading.
+AI features require `OPENAI_API_KEY` and `AI_ENABLED=true`. Set `AI_ENABLED=false` to disable the AI planning module for an instance. Set `CALENDAR_ENABLED=false` to disable iCal calendar pages and event loading. The home page version is read from the repository `VERSION` file, so it updates with application code.
 
 ## Local Development
 

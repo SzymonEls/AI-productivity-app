@@ -60,7 +60,9 @@
     <div class="col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Quick Access</h2>
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <h2 class="h4 mb-0">Quick Access</h2>
+                </div>
                 <div class="d-grid gap-2 mb-4">
                     {% if calendar_enabled %}
                         <a class="btn btn-outline-primary" href="{{ url_for('calendar.calendar_view') }}">Open Calendar</a>
@@ -85,6 +87,8 @@
                 {% else %}
                     <p class="text-muted mb-0">Po zalogowaniu zobaczysz tu najnowsze plany i historie.</p>
                 {% endif %}
+                <br />
+                <p class="text-muted mb-0">v{{ app_version }}</pp>
             </div>
         </div>
     </div>

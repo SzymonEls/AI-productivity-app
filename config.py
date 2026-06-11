@@ -42,6 +42,16 @@ def normalize_database_url(database_url):
 
 
 DEFAULT_DATABASE_URL = f"sqlite:///{os.path.join(INSTANCE_PATH, 'app.db')}"
+VERSION_PATH = os.path.join(BASE_DIR, "VERSION")
+
+
+def read_app_version():
+    """Read the release version shipped with the application code."""
+    try:
+        with open(VERSION_PATH, encoding="utf-8") as version_file:
+            return version_file.read().strip()
+    except OSError:
+        return ""
 
 
 class Config:
@@ -59,6 +69,7 @@ class Config:
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     AI_ENABLED = parse_bool(os.environ.get("AI_ENABLED"), True)
     CALENDAR_ENABLED = parse_bool(os.environ.get("CALENDAR_ENABLED"), True)
+    APP_VERSION = os.environ.get("APP_VERSION", "").strip() or read_app_version()
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
