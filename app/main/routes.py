@@ -19,9 +19,13 @@ def home():
 
     latest_plan = None
     if current_user.is_authenticated:
+        plan_types = [MARKDOWN_RESPONSE, "daily_plan", "manual_daily_plan"]
+        if not current_app.config.get("AI_ENABLED", True):
+            plan_types = ["manual_daily_plan"]
+
         latest_plan = (
             AIPlan.query.filter_by(user_id=current_user.id)
-            .filter(AIPlan.plan_type.in_([MARKDOWN_RESPONSE, "daily_plan", "manual_daily_plan"]))
+            .filter(AIPlan.plan_type.in_(plan_types))
             .filter_by(is_pinned=True)
             .order_by(AIPlan.created_at.desc())
             .first()
@@ -29,7 +33,7 @@ def home():
         if latest_plan is None:
             latest_plan = (
                 AIPlan.query.filter_by(user_id=current_user.id)
-                .filter(AIPlan.plan_type.in_([MARKDOWN_RESPONSE, "daily_plan", "manual_daily_plan"]))
+                .filter(AIPlan.plan_type.in_(plan_types))
                 .order_by(AIPlan.created_at.desc())
                 .first()
             )

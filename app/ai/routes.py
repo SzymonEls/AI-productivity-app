@@ -1,7 +1,7 @@
 import json
 from datetime import date, datetime, timezone
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
@@ -23,6 +23,17 @@ from .service import (
 ai_bp = Blueprint("ai", __name__, url_prefix="/ai")
 MANUAL_DAILY_PLAN = "manual_daily_plan"
 HOME_PLAN_TYPES = [MARKDOWN_RESPONSE, "daily_plan", MANUAL_DAILY_PLAN]
+
+
+@ai_bp.before_request
+def require_ai_enabled():
+    if current_app.config.get("AI_ENABLED", True):
+        return None
+    if request.endpoint not in {"ai.generate_project_plan", "ai.create_daily_plan"}:
+        return None
+    if _wants_json_response():
+        return jsonify({"ok": False, "error": "Ta funkcja jest niedostepna."}), 404
+    abort(404)
 
 
 @ai_bp.route("/daily-planning")
@@ -527,12 +538,6 @@ def _render_manual_daily_plan(target_date, tasks):
     lines = [f"# Plan dnia - {target_date.isoformat()}", ""]
     for item in tasks:
         project = item["project"]
-        project_tasks = item["tasks"]
-        if len(project_tasks) == 1:
-            lines.append(f"- **{project.title}:** {project_tasks[0]}")
-            continue
-
-        lines.append(f"- **{project.title}:**")
-        for task in project_tasks:
-            lines.append(f"    - {task}")
+        for task in item["tasks"]:
+            lines.append(f"- **{project.title}:** {task}")
     return "\n".join(lines).strip() + "\n"

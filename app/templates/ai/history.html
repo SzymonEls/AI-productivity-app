@@ -11,7 +11,7 @@
     <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Powrot na home</a>
 </div>
 
-{% if not is_openai_ready %}
+{% if ai_enabled and not is_openai_ready %}
     <div class="alert alert-warning">
         AI jest nieaktywne, dopoki nie ustawisz `OPENAI_API_KEY` w `.env`.
     </div>

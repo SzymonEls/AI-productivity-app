@@ -245,6 +245,32 @@ def save_timeline():
                     item.title = title or "Notatka"
                     item.body = body
                     item.is_private = bool(item_payload.get("is_private"))
+                elif item_type == "project_from_note":
+                    title = (item_payload.get("title") or "").strip()[:150]
+                    body = (item_payload.get("body") or "").strip()
+                    if not title and body:
+                        title = body.splitlines()[0].strip()[:150]
+                    title = title or "Projekt"
+                    project = Project(
+                        owner=current_user,
+                        title=title,
+                        short_goal=body or "-",
+                        frequency="-",
+                        long_goal=body or "-",
+                        is_private=bool(item_payload.get("is_private")),
+                    )
+                    db.session.add(project)
+                    db.session.flush()
+                    seen_project_ids.add(project.id)
+
+                    if item is None:
+                        item = ProjectTimelineItem(owner=current_user)
+                        db.session.add(item)
+                    item.item_type = "project"
+                    item.project = project
+                    item.title = None
+                    item.body = None
+                    item.is_private = False
                 else:
                     continue
 

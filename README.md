@@ -72,6 +72,8 @@ Important settings:
 SECRET_KEY=change-me
 DATABASE_URL=sqlite:///app/instance/app.db
 REGISTRATION_ENABLED=true
+AI_ENABLED=false
+CALENDAR_ENABLED=false
 DEFAULT_LOGIN_EMAIL=
 DEFAULT_LOGIN_PASSWORD=
 CALENDAR_TIMEZONE=Europe/Warsaw
@@ -84,7 +86,7 @@ OPENAI_TEMPERATURE=0.7
 OPENAI_PROJECT_TEMPERATURE=0.5
 ```
 
-AI features require `OPENAI_API_KEY`. The rest of the application can still be used without OpenAI configuration.
+AI features require `OPENAI_API_KEY` and `AI_ENABLED=true`. Set `AI_ENABLED=false` to disable the AI planning module for an instance. Set `CALENDAR_ENABLED=false` to disable iCal calendar pages and event loading. The home page version is read from the repository `VERSION` file, so it updates with application code.
 
 ## Local Development
 

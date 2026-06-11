@@ -18,7 +18,7 @@ class AIConfigurationError(AIServiceError):
 
 
 def is_openai_configured():
-    return bool(current_app.config.get("OPENAI_API_KEY"))
+    return bool(current_app.config.get("AI_ENABLED", True) and current_app.config.get("OPENAI_API_KEY"))
 
 
 def organize_project_plan(project, user_prompt):
@@ -98,6 +98,9 @@ def generate_markdown_response(user_prompt, target_date, projects):
 
 
 def _request_markdown_output(system_prompt, user_payload):
+    if not current_app.config.get("AI_ENABLED", True):
+        raise AIConfigurationError("AI jest wylaczone w konfiguracji tej instancji.")
+
     api_key = current_app.config.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise AIConfigurationError(
@@ -138,6 +141,9 @@ def _request_structured_output(
     timeout=None,
     temperature=None,
 ):
+    if not current_app.config.get("AI_ENABLED", True):
+        raise AIConfigurationError("AI jest wylaczone w konfiguracji tej instancji.")
+
     api_key = current_app.config.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         raise AIConfigurationError(

@@ -56,15 +56,17 @@
         <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
             Pobierz markdown
         </button>
-        <button
-            type="button"
-            class="btn btn-primary"
-            data-bs-toggle="modal"
-            data-bs-target="#projectAiModal"
-            {% if not is_openai_ready %}disabled{% endif %}
-        >
-            Uruchom AI
-        </button>
+        {% if ai_enabled %}
+            <button
+                type="button"
+                class="btn btn-primary"
+                data-bs-toggle="modal"
+                data-bs-target="#projectAiModal"
+                {% if not is_openai_ready %}disabled{% endif %}
+            >
+                Uruchom AI
+            </button>
+        {% endif %}
         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
         <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
             <button
@@ -260,45 +262,47 @@
     </div>
 </div>
 
-<div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content">
-            <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
-                <input type="hidden" name="project_id" value="{{ project.id }}">
-                <div class="modal-header">
-                    <h2 class="modal-title h5" id="projectAiModalLabel">AI: Uporzadkuj plan projektu</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    {% if not is_openai_ready %}
-                        <div class="alert alert-warning">
-                            AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten formularz.
-                        </div>
-                    {% endif %}
-                    <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
-                    <label class="form-label" for="ai-project-prompt">Prompt</label>
-                    <textarea
-                        class="form-control"
-                        id="ai-project-prompt"
-                        name="prompt"
-                        rows="7"
-                        placeholder="Np. Uporzadkuj ten projekt w konkretny plan markdown z krokami, checklistami i najblizszym rytmem pracy."
-                        {% if not is_openai_ready %}disabled{% endif %}
-                        required
-                    ></textarea>
-                </div>
-                <div class="modal-footer">
-                    <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">Historia AI</a>
-                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zamknij</button>
-                    <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
-                        <span class="submit-label">Uruchom AI</span>
-                        <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
-                    </button>
-                </div>
-            </form>
+{% if ai_enabled %}
+    <div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <div class="modal-header">
+                        <h2 class="modal-title h5" id="projectAiModalLabel">AI: Uporzadkuj plan projektu</h2>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        {% if not is_openai_ready %}
+                            <div class="alert alert-warning">
+                                AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten formularz.
+                            </div>
+                        {% endif %}
+                        <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
+                        <label class="form-label" for="ai-project-prompt">Prompt</label>
+                        <textarea
+                            class="form-control"
+                            id="ai-project-prompt"
+                            name="prompt"
+                            rows="7"
+                            placeholder="Np. Uporzadkuj ten projekt w konkretny plan markdown z krokami, checklistami i najblizszym rytmem pracy."
+                            {% if not is_openai_ready %}disabled{% endif %}
+                            required
+                        ></textarea>
+                    </div>
+                    <div class="modal-footer">
+                        <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">Historia AI</a>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zamknij</button>
+                        <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
+                            <span class="submit-label">Uruchom AI</span>
+                            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}

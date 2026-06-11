@@ -8,7 +8,7 @@
         <div class="card shadow-sm h-100">
             <div class="card-body p-4">
                 {% if current_user.is_authenticated %}
-                    {% if not is_openai_ready %}
+                    {% if ai_enabled and not is_openai_ready %}
                         <div class="alert alert-warning">
                             AI jest jeszcze nieaktywne. Uzupelnij `OPENAI_API_KEY` w `.env`
                             na podstawie `.env.example`.
@@ -43,7 +43,7 @@
                 {% else %}
                     <h1 class="h2 mb-3">Przypiety plan dnia</h1>
                     <p class="text-muted">
-                        Zaloguj sie, aby zarzadzac projektami, kalendarzem i odpowiedziami generowanymi przez AI.
+                        Zaloguj sie, aby zarzadzac projektami{% if calendar_enabled %}, kalendarzem{% endif %}{% if ai_enabled %} i odpowiedziami generowanymi przez AI{% endif %}.
                     </p>
 
                     <div class="d-flex flex-wrap gap-2 mt-4">
@@ -60,23 +60,35 @@
     <div class="col-lg-4">
         <div class="card shadow-sm h-100">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Quick Access</h2>
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                    <h2 class="h4 mb-0">Quick Access</h2>
+                </div>
                 <div class="d-grid gap-2 mb-4">
-                    <a class="btn btn-outline-primary" href="{{ url_for('calendar.calendar_view') }}">Open Calendar</a>
+                    {% if calendar_enabled %}
+                        <a class="btn btn-outline-primary" href="{{ url_for('calendar.calendar_view') }}">Open Calendar</a>
+                    {% endif %}
                     {% if current_user.is_authenticated %}
                         <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Open Dashboard</a>
                         <a class="btn btn-primary" href="{{ url_for('ai.daily_planning') }}">Plan dnia</a>
-                        <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">Historia AI</a>
+                        {% if ai_enabled %}
+                            <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">Historia AI</a>
+                        {% endif %}
                     {% endif %}
                 </div>
 
                 {% if current_user.is_authenticated %}
-                    <p class="text-muted mb-0">
-                        Nowy plan automatycznie przypina sie na home. Starsze plany mozesz przypiac recznie z historii.
-                    </p>
+                    {% if ai_enabled %}
+                        <p class="text-muted mb-0">
+                            Nowy plan automatycznie przypina sie na home. Starsze plany mozesz przypiac recznie z historii.
+                        </p>
+                    {% else %}
+                        <p class="text-muted mb-0">Reczny plan dnia mozesz utworzyc z szybkiego dostepu.</p>
+                    {% endif %}
                 {% else %}
                     <p class="text-muted mb-0">Po zalogowaniu zobaczysz tu najnowsze plany i historie.</p>
                 {% endif %}
+                <br />
+                <p class="text-muted mb-0">v{{ app_version }}</pp>
             </div>
         </div>
     </div>

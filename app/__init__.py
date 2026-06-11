@@ -77,7 +77,10 @@ def register_template_context(app):
                     active_time_elapsed_label = f"{elapsed_minutes}m"
 
         return {
+            "app_version": app.config.get("APP_VERSION", "local"),
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
+            "ai_enabled": app.config.get("AI_ENABLED", True),
+            "calendar_enabled": app.config.get("CALENDAR_ENABLED", True),
             "active_time_entry": active_time_entry,
             "active_time_elapsed_seconds": active_time_elapsed_seconds,
             "active_time_elapsed_label": active_time_elapsed_label,

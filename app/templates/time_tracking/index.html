@@ -43,11 +43,14 @@
             <div class="col-md-2">
                 <button class="btn btn-primary w-100" type="submit">Pokaż</button>
             </div>
+            <div class="col-md-2">
+                <a class="btn btn-secondary" href="{{ url_for('time_tracking.index') }}">Resetuj filtry</a>
+            </div>
         </div>
     </div>
 </form>
 
-{% if (not all_dates and chart_projects) or selected_project %}
+{% if (not all_dates and chart_projects) or selected_project or (all_dates and all_projects_daily_chart) %}
 <div class="row g-4 mb-4">
     {% if not all_dates and chart_projects %}
     <div class="col-12">
@@ -84,6 +87,30 @@
                 {% else %}
                     <p class="text-muted mb-0">Brak zapisanych sesji dla wybranego dnia.</p>
                 {% endif %}
+            </div>
+        </section>
+    </div>
+    {% endif %}
+    {% if all_dates and not selected_project and all_projects_daily_chart %}
+    <div class="col-12">
+        <section class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+                    <h2 class="h5 mb-0">Ostatnie dni</h2>
+                    <strong>{{ format_duration(all_projects_daily_chart | sum(attribute='seconds')) }}</strong>
+                </div>
+                {% set max_project_seconds = all_projects_daily_chart | map(attribute='seconds') | max %}
+                <div class="time-chart">
+                    {% for item in all_projects_daily_chart %}
+                        <div class="time-chart-row">
+                            <div class="time-chart-label">{{ item.label }}</div>
+                            <div class="time-chart-track" aria-label="{{ item.date }}: {{ item.duration }}">
+                                <div class="time-chart-bar" style="width: {% if max_project_seconds %}{{ (item.seconds * 100 / max_project_seconds) | round(1) }}{% else %}0{% endif %}%"></div>
+                            </div>
+                            <div class="text-end small text-muted">{{ item.duration }}</div>
+                        </div>
+                    {% endfor %}
+                </div>
             </div>
         </section>
     </div>
