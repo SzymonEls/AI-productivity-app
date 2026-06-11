@@ -72,6 +72,7 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <button type="button" class="btn btn-outline-primary btn-sm d-none" data-convert-note>Convert to project</button>
                                         <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
                                     </article>
                                 {% endif %}
@@ -453,6 +454,7 @@
                             </div>
                         </div>
                     </div>
+                    <button type="button" class="btn btn-outline-primary btn-sm d-none" data-convert-note>Convert to project</button>
                     <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
                 </article>
             `;
@@ -521,6 +523,7 @@
             timelineRoot.querySelectorAll("[data-group-move-controls]").forEach((controls) => controls.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-group]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-add-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-convert-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
             timelineRoot.querySelectorAll(".timeline-note-fields").forEach((fields) => fields.classList.toggle("d-none", !enabled));
@@ -655,6 +658,19 @@
                     return;
                 }
 
+                const convertNoteButton = event.target.closest("[data-convert-note]");
+                if (convertNoteButton) {
+                    const item = convertNoteButton.closest("[data-timeline-item]");
+                    if (!item) {
+                        return;
+                    }
+                    item.dataset.convertToProject = "1";
+                    item.classList.add("is-converting-to-project");
+                    convertNoteButton.textContent = "Will become project";
+                    convertNoteButton.disabled = true;
+                    return;
+                }
+
                 const moveGroupButton = event.target.closest("[data-move-group]");
                 if (moveGroupButton) {
                     const group = moveGroupButton.closest("[data-timeline-group]");
@@ -698,6 +714,16 @@
                             id: item.dataset.itemId || null,
                             type: "project",
                             project_id: item.dataset.projectId,
+                        };
+                    }
+
+                    if (item.dataset.convertToProject === "1") {
+                        return {
+                            id: item.dataset.itemId || null,
+                            type: "project_from_note",
+                            title: item.querySelector("[data-note-title]")?.value.trim() || "",
+                            body: item.querySelector("[data-note-body]")?.value.trim() || "",
+                            is_private: Boolean(item.querySelector("[data-note-private]")?.checked),
                         };
                     }
 
