@@ -57,6 +57,8 @@ class Config:
         days=int(os.environ.get("REMEMBER_COOKIE_DAYS", "30"))
     )
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
+    AI_ENABLED = parse_bool(os.environ.get("AI_ENABLED"), True)
+    CALENDAR_ENABLED = parse_bool(os.environ.get("CALENDAR_ENABLED"), True)
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")

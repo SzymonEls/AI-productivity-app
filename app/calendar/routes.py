@@ -1,4 +1,4 @@
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from ..extensions import db
@@ -7,6 +7,17 @@ from .service import fetch_daily_plan, normalize_requested_date
 
 
 calendar_bp = Blueprint("calendar", __name__)
+
+
+@calendar_bp.before_request
+def require_calendar_enabled():
+    if current_app.config.get("CALENDAR_ENABLED", True):
+        return None
+    message = "Kalendarz jest wylaczony w konfiguracji tej instancji."
+    if _wants_json_response():
+        return jsonify({"ok": False, "message": message}), 404
+    flash(message, "warning")
+    return redirect(url_for("main.home"))
 
 
 @calendar_bp.route("/calendar")
@@ -112,3 +123,10 @@ def current_app_timezone():
 
 def _looks_like_url(value):
     return value.startswith("http://") or value.startswith("https://")
+
+
+def _wants_json_response():
+    return (
+        request.headers.get("X-Requested-With") in {"XMLHttpRequest", "fetch"}
+        or request.accept_mimetypes.best == "application/json"
+    )
