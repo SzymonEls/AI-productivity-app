@@ -161,11 +161,49 @@
             });
         };
 
+        const normalizeTwoSpaceNestedLists = (plainText) => {
+            const lines = plainText.split("\n");
+            const normalizedLines = [];
+            let inListBlock = false;
+            let twoSpaceListBlock = false;
+
+            lines.forEach((line) => {
+                let currentLine = line;
+                let listMatch = currentLine.match(/^(\s*)(?:[-*+]\s|\d+\.\s)/);
+                let listIndent = listMatch ? listMatch[1].replace(/\t/g, "    ").length : null;
+
+                if (listMatch && (listIndent === 2 || (twoSpaceListBlock && listIndent && listIndent > 0))) {
+                    currentLine = `${" ".repeat(listIndent)}${currentLine}`;
+                    listMatch = currentLine.match(/^(\s*)(?:[-*+]\s|\d+\.\s)/);
+                    listIndent = listMatch ? listMatch[1].replace(/\t/g, "    ").length : null;
+                }
+
+                normalizedLines.push(currentLine);
+
+                if (listMatch) {
+                    inListBlock = true;
+                    if (listIndent === 2) {
+                        twoSpaceListBlock = true;
+                    }
+                } else if (!currentLine.trim() && inListBlock) {
+                    return;
+                } else if (currentLine.trim()) {
+                    inListBlock = false;
+                    twoSpaceListBlock = false;
+                }
+            });
+
+            return normalizedLines.join("\n");
+        };
+
         const editor = new EasyMDE({
             element: textarea,
             autoDownloadFontAwesome: false,
             forceSync: true,
             minHeight: "360px",
+            previewRender: function (plainText) {
+                return this.markdown(normalizeTwoSpaceNestedLists(plainText));
+            },
             spellChecker: false,
             status: false,
             toolbar: [

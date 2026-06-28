@@ -164,15 +164,40 @@ body {
 .markdown-content .task-list-item,
 .editor-preview .task-list-item,
 .editor-preview-side .task-list-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
+    display: block;
+    list-style: none;
 }
 
 .markdown-content .task-list-checkbox,
 .editor-preview .task-list-checkbox,
 .editor-preview-side .task-list-checkbox {
-    margin-top: 0.28rem;
+    margin: 0 0.5rem 0 0;
+    vertical-align: -0.08rem;
+}
+
+.markdown-content ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.markdown-content ol:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview ol:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview-side ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview-side ol:not(.task-list) > .task-list-item > .task-list-checkbox {
+    margin-left: -1.25rem;
+}
+
+.markdown-content .task-list .task-list,
+.editor-preview .task-list .task-list,
+.editor-preview-side .task-list .task-list {
+    padding-left: 1.35rem;
+}
+
+.markdown-content .task-list-item > ul,
+.markdown-content .task-list-item > ol,
+.editor-preview .task-list-item > ul,
+.editor-preview .task-list-item > ol,
+.editor-preview-side .task-list-item > ul,
+.editor-preview-side .task-list-item > ol {
+    margin-top: 0.25rem;
+    margin-bottom: 0;
 }
 
 .markdown-content .task-list-item:has(.task-list-checkbox:checked),
