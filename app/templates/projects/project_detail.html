@@ -93,7 +93,7 @@
             <div class="card shadow-sm h-100 inline-edit-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                        <h2 class="h4 mb-0">Next Mini-Goal</h2>
+                        <h2 class="h4 mb-0">Thoughts</h2>
                         <div class="inline-section-controls">
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="short-goal">Edit</button>
                             <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
@@ -410,8 +410,44 @@
             })
             .join("");
 
+        const normalizeTwoSpaceNestedLists = (plainText) => {
+            const lines = plainText.split("\n");
+            const normalizedLines = [];
+            let inListBlock = false;
+            let twoSpaceListBlock = false;
+
+            lines.forEach((line) => {
+                let currentLine = line;
+                let listMatch = currentLine.match(/^(\s*)(?:[-*+]\s|\d+\.\s)/);
+                let listIndent = listMatch ? listMatch[1].replace(/\t/g, "    ").length : null;
+
+                if (listMatch && (listIndent === 2 || (twoSpaceListBlock && listIndent && listIndent > 0))) {
+                    currentLine = `${" ".repeat(listIndent)}${currentLine}`;
+                    listMatch = currentLine.match(/^(\s*)(?:[-*+]\s|\d+\.\s)/);
+                    listIndent = listMatch ? listMatch[1].replace(/\t/g, "    ").length : null;
+                }
+
+                normalizedLines.push(currentLine);
+
+                if (listMatch) {
+                    inListBlock = true;
+                    if (listIndent === 2) {
+                        twoSpaceListBlock = true;
+                    }
+                } else if (!currentLine.trim() && inListBlock) {
+                    return;
+                } else if (currentLine.trim()) {
+                    inListBlock = false;
+                    twoSpaceListBlock = false;
+                }
+            });
+
+            return normalizedLines.join("\n");
+        };
+
         const renderLongGoalMarkdown = (plainText, editor) => {
-            const markdownHtml = editor?.markdown ? editor.markdown(plainText) : renderBasicMarkdown(plainText);
+            const normalizedPlainText = normalizeTwoSpaceNestedLists(plainText);
+            const markdownHtml = editor?.markdown ? editor.markdown(normalizedPlainText) : renderBasicMarkdown(normalizedPlainText);
             return groupProjectMarkdownSections(markdownHtml);
         };
 
@@ -601,7 +637,7 @@
             const sections = [`# ${title}`];
 
             if (shortGoal) {
-                sections.push(`## Next Mini-Goal\n\n${shortGoal}`);
+                sections.push(`## Thoughts\n\n${shortGoal}`);
             }
 
             if (frequency) {

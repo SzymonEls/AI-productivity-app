@@ -12,7 +12,6 @@ TASK_ITEM_PATTERN = re.compile(
 )
 TOP_LEVEL_HEADING_PATTERN = re.compile(r"<h1(?P<attrs>[^>]*)>.*?</h1>", re.DOTALL)
 LIST_ITEM_PATTERN = re.compile(r"^(?P<indent>\s*)(?:[-*+]\s|\d+\.\s)")
-TWO_SPACE_NESTED_ITEM_PATTERN = re.compile(r"^  (?:[-*+]\s|\d+\.\s)")
 
 
 def render_markdown(value):
@@ -68,27 +67,30 @@ def _render_markdown_html(value):
 def _normalize_two_space_nested_lists(value):
     lines = value.splitlines()
     normalized_lines = []
-    in_two_space_nested_list = False
+    in_list_block = False
+    two_space_list_block = False
 
     for line in lines:
         list_match = LIST_ITEM_PATTERN.match(line)
         list_indent = len(list_match.group("indent").replace("\t", "    ")) if list_match else None
 
-        if TWO_SPACE_NESTED_ITEM_PATTERN.match(line) and in_two_space_nested_list:
-            line = f"  {line}"
+        if list_match and (list_indent == 2 or (two_space_list_block and list_indent and list_indent > 0)):
+            two_space_list_block = True
+            line = f"{' ' * list_indent}{line}"
             list_match = LIST_ITEM_PATTERN.match(line)
             list_indent = len(list_match.group("indent").replace("\t", "    "))
 
         normalized_lines.append(line)
 
-        if list_match and list_indent == 0:
-            in_two_space_nested_list = True
-        elif list_match and list_indent >= 4:
-            in_two_space_nested_list = True
-        elif list_match:
-            in_two_space_nested_list = False
+        if list_match:
+            in_list_block = True
+            if list_indent == 2:
+                two_space_list_block = True
+        elif not line.strip() and in_list_block:
+            continue
         elif line.strip():
-            in_two_space_nested_list = False
+            in_list_block = False
+            two_space_list_block = False
 
     trailing_newline = "\n" if value.endswith("\n") else ""
     return "\n".join(normalized_lines) + trailing_newline

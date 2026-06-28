@@ -128,13 +128,13 @@
                             <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-private-input>
 
                             <div class="project-inline-section">
-                                <p class="small text-uppercase text-muted fw-semibold mb-2">Next Mini-Goal</p>
+                                <p class="small text-uppercase text-muted fw-semibold mb-2">Thoughts</p>
                                 <div data-edit-display="short-goal">
                                     <div class="d-flex justify-content-between align-items-start gap-2">
                                         <p class="card-text mb-0" data-display-value="short_goal">
                                             {{ project.short_goal[:120] }}{% if project.short_goal|length > 120 %}...{% endif %}
                                         </p>
-                                        <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit next mini-goal">✎</button>
+                                        <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit thoughts">✎</button>
                                     </div>
                                 </div>
                                 <div class="d-none" data-edit-form="short-goal">
@@ -227,9 +227,9 @@
 
                                 <section class="mb-4">
                                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                        <h4 class="h6 text-uppercase text-muted mb-0">Next Mini-Goal</h4>
+                                        <h4 class="h6 text-uppercase text-muted mb-0">Thoughts</h4>
                                         <div class="inline-section-controls">
-                                            <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit next mini-goal">✎</button>
+                                            <button type="button" class="inline-pencil-button" data-edit-toggle="short-goal" aria-label="Edit thoughts">✎</button>
                                             <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
                                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
                                         </div>
