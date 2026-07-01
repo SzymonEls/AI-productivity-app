@@ -76,6 +76,7 @@ class Project(db.Model):
     short_goal = db.Column(db.Text, nullable=False)
     frequency = db.Column(db.String(255), nullable=False)
     long_goal = db.Column(db.Text, nullable=False)
+    archived_long_goal = db.Column(db.Text, nullable=False, default="")
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

@@ -255,8 +255,31 @@ body {
 }
 
 .project-markdown-section-card {
+    position: relative;
     padding: 0.85rem 1rem;
+    padding-right: 2.65rem;
     background: var(--project-section-bg, #f0f1ff);
+}
+
+.project-section-archive-button {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid rgba(17, 24, 39, 0.14);
+    border-radius: 6px;
+    color: #4b5563;
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.project-section-archive-button:hover,
+.project-section-archive-button:focus-visible {
+    color: #111827;
+    background: #fff;
 }
 
 .project-markdown-section-card > h1,

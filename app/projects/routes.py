@@ -111,7 +111,7 @@ def edit_project(project_id):
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
 
-    if not title or not short_goal or not frequency or not long_goal:
+    if not title or not short_goal or not frequency:
         error_message = "Please complete all project fields."
         if _wants_json_response():
             return jsonify({"ok": False, "message": error_message}), 400
@@ -145,6 +145,9 @@ def edit_project(project_id):
                         "frequency": project.frequency,
                         "long_goal": project.long_goal,
                         "long_goal_html": str(render_project_markdown(project.long_goal)),
+                        "archived_long_goal": project.archived_long_goal or "",
+                        "archived_long_goal_html": str(render_project_markdown(project.archived_long_goal or "")),
+                        "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
                         "updated_label": "just now",
@@ -154,6 +157,96 @@ def edit_project(project_id):
         flash(success_message, "success")
 
     return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+@projects_bp.route("/<int:project_id>/archive-section", methods=["POST"])
+@login_required
+def archive_project_section(project_id):
+    project = _get_user_project_or_404(project_id)
+    section_index = _coerce_int(request.form.get("section_index"))
+    if section_index is None:
+        return jsonify({"ok": False, "message": "Nie wybrano sekcji do archiwizacji."}), 400
+
+    try:
+        active_plan, archived_section = _remove_top_level_markdown_section(project.long_goal, section_index)
+    except ValueError as error:
+        return jsonify({"ok": False, "message": str(error)}), 400
+
+    project.long_goal = active_plan
+    project.archived_long_goal = _append_markdown_section(project.archived_long_goal or "", archived_section)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Nie udalo sie zarchiwizowac sekcji."}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Sekcja zostala przeniesiona do archiwum.",
+            "project": {
+                "title": project.title,
+                "short_goal": project.short_goal,
+                "frequency": project.frequency,
+                "long_goal": project.long_goal,
+                "long_goal_html": str(render_project_markdown(project.long_goal)),
+                "archived_long_goal": project.archived_long_goal or "",
+                "archived_long_goal_html": str(render_project_markdown(project.archived_long_goal or "")),
+                "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
+                "is_starred": project.is_starred,
+                "is_private": project.is_private,
+                "updated_label": "just now",
+            },
+        }
+    )
+
+
+@projects_bp.route("/<int:project_id>/restore-section", methods=["POST"])
+@login_required
+def restore_project_section(project_id):
+    project = _get_user_project_or_404(project_id)
+    section_index = _coerce_int(request.form.get("section_index"))
+    if section_index is None:
+        return jsonify({"ok": False, "message": "Nie wybrano sekcji do przywrocenia."}), 400
+
+    try:
+        archived_plan, restored_section = _remove_top_level_markdown_section(
+            project.archived_long_goal,
+            section_index,
+            empty_message="Archiwum nie ma sekcji # do przywrocenia.",
+        )
+    except ValueError as error:
+        return jsonify({"ok": False, "message": str(error)}), 400
+
+    project.archived_long_goal = archived_plan
+    project.long_goal = _append_markdown_section(project.long_goal or "", restored_section)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Nie udalo sie przywrocic sekcji."}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": "Sekcja zostala przywrocona z archiwum.",
+            "project": {
+                "title": project.title,
+                "short_goal": project.short_goal,
+                "frequency": project.frequency,
+                "long_goal": project.long_goal,
+                "long_goal_html": str(render_project_markdown(project.long_goal)),
+                "archived_long_goal": project.archived_long_goal or "",
+                "archived_long_goal_html": str(render_project_markdown(project.archived_long_goal or "")),
+                "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
+                "is_starred": project.is_starred,
+                "is_private": project.is_private,
+                "updated_label": "just now",
+            },
+        }
+    )
 
 
 @projects_bp.route("/<int:project_id>/delete", methods=["POST"])
@@ -386,6 +479,43 @@ def _coerce_int(value):
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _remove_top_level_markdown_section(markdown, section_index, empty_message="Ten plan nie ma sekcji # do archiwizacji."):
+    sections = _top_level_markdown_section_ranges(markdown or "")
+    if not sections:
+        raise ValueError(empty_message)
+    if section_index < 0 or section_index >= len(sections):
+        raise ValueError("Nie znaleziono wybranej sekcji.")
+
+    start, end = sections[section_index]
+    archived_section = (markdown or "")[start:end].strip()
+    active_plan = f"{(markdown or '')[:start].rstrip()}\n\n{(markdown or '')[end:].lstrip()}".strip()
+    return active_plan, archived_section
+
+
+def _top_level_markdown_section_ranges(markdown):
+    lines = (markdown or "").splitlines(keepends=True)
+    heading_offsets = []
+    offset = 0
+    for line in lines:
+        if line.startswith("# ") and line.strip()[2:].strip():
+            heading_offsets.append(offset)
+        offset += len(line)
+
+    ranges = []
+    for index, start in enumerate(heading_offsets):
+        end = heading_offsets[index + 1] if index + 1 < len(heading_offsets) else len(markdown or "")
+        ranges.append((start, end))
+    return ranges
+
+
+def _append_markdown_section(markdown, section):
+    current = (markdown or "").strip()
+    section = (section or "").strip()
+    if not current:
+        return section
+    return f"{current}\n\n{section}"
 
 
 def _form_bool(name, default=False):

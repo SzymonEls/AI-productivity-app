@@ -56,6 +56,15 @@
         <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
             Pobierz markdown
         </button>
+        <button
+            type="button"
+            class="btn btn-outline-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#projectArchiveModal"
+            data-archive-open-button
+        >
+            Archiwum
+        </button>
         {% if ai_enabled %}
             <button
                 type="button"
@@ -158,7 +167,11 @@
                         </div>
                     </div>
                     <div data-edit-display="long-goal">
-                        <div class="markdown-content long-goal-preview" data-display-value="long_goal">{{ project.long_goal | project_markdown }}</div>
+                        <div
+                            class="markdown-content long-goal-preview"
+                            data-display-value="long_goal"
+                            data-archive-section-url="{{ url_for('projects.archive_project_section', project_id=project.id) }}"
+                        >{{ project.long_goal | project_markdown }}</div>
                     </div>
                     <div class="d-none" data-edit-form="long-goal">
                         <textarea
@@ -166,7 +179,6 @@
                             name="long_goal"
                             class="form-control inline-edit-textarea long-goal-markdown-field"
                             rows="8"
-                            required
                         >{{ project.long_goal }}</textarea>
                     </div>
                 </div>
@@ -176,6 +188,29 @@
 
     <input type="hidden" name="title" value="{{ project.title }}" data-project-title-hidden>
 </form>
+
+<div class="modal fade" id="projectArchiveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5">Zarchiwizowane sekcje</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-0 {% if project.archived_long_goal %}d-none{% endif %}" data-archive-empty>
+                    Brak zarchiwizowanych sekcji.
+                </p>
+                <div
+                    class="markdown-content {% if not project.archived_long_goal %}d-none{% endif %}"
+                    data-archive-preview
+                    data-restore-section-url="{{ url_for('projects.restore_project_section', project_id=project.id) }}"
+                >
+                    {{ project.archived_long_goal | project_markdown }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div
     class="modal fade"
@@ -328,6 +363,11 @@
         const titleInput = document.querySelector("[data-project-title-input]");
         const titleHiddenInput = form.querySelector("[data-project-title-hidden]");
         const longGoalPreview = form.querySelector("[data-display-value='long_goal']");
+        const archiveSectionUrl = longGoalPreview?.dataset.archiveSectionUrl || "";
+        const archivedPlanPreview = document.querySelector("[data-archive-preview]");
+        const restoreSectionUrl = archivedPlanPreview?.dataset.restoreSectionUrl || "";
+        const archivedPlanEmpty = document.querySelector("[data-archive-empty]");
+        const archiveOpenButton = document.querySelector("[data-archive-open-button]");
         const markdownDownloadButton = document.querySelector("[data-download-project-markdown]");
         const settingsForm = document.querySelector("[data-project-settings-form]");
         let isSaving = false;
@@ -390,6 +430,48 @@
             });
 
             return wrapper.innerHTML.trim() ? wrapper.outerHTML : html;
+        };
+
+        const decorateArchiveSectionButtons = () => {
+            if (!longGoalPreview || !archiveSectionUrl) {
+                return;
+            }
+
+            longGoalPreview.querySelectorAll(".project-markdown-section").forEach((section, index) => {
+                if (section.querySelector("[data-archive-section]")) {
+                    return;
+                }
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "project-section-archive-button";
+                button.dataset.archiveSection = String(index);
+                button.setAttribute("aria-label", "Archiwizuj sekcje");
+                button.title = "Archiwizuj sekcje";
+                button.innerHTML = '<i class="fa-solid fa-box-archive" aria-hidden="true"></i>';
+                section.querySelector(".project-markdown-section-card")?.appendChild(button);
+            });
+        };
+
+        const decorateRestoreSectionButtons = () => {
+            if (!archivedPlanPreview || !restoreSectionUrl) {
+                return;
+            }
+
+            archivedPlanPreview.querySelectorAll(".project-markdown-section").forEach((section, index) => {
+                if (section.querySelector("[data-restore-section]")) {
+                    return;
+                }
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "project-section-archive-button";
+                button.dataset.restoreSection = String(index);
+                button.setAttribute("aria-label", "Przywroc sekcje z archiwum");
+                button.title = "Przywroc sekcje z archiwum";
+                button.innerHTML = '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i>';
+                section.querySelector(".project-markdown-section-card")?.appendChild(button);
+            });
         };
 
         const escapeHtml = (value) => value
@@ -693,6 +775,7 @@
                 return;
             }
 
+            decorateArchiveSectionButtons();
             longGoalPreview.querySelectorAll(".task-list-checkbox").forEach((checkbox, index) => {
                 checkbox.disabled = false;
                 checkbox.dataset.taskIndex = String(index);
@@ -799,6 +882,13 @@
                 longGoalPreview.innerHTML = project.long_goal_html;
                 enablePreviewTaskCheckboxes();
             }
+            if (archivedPlanPreview && archivedPlanEmpty) {
+                archivedPlanPreview.innerHTML = project.archived_long_goal_html || "";
+                const hasArchivedPlan = Boolean(project.has_archived_long_goal);
+                archivedPlanPreview.classList.toggle("d-none", !hasArchivedPlan);
+                archivedPlanEmpty.classList.toggle("d-none", hasArchivedPlan);
+                decorateRestoreSectionButtons();
+            }
 
             form.querySelector("[name='short_goal']").value = project.short_goal;
             form.querySelector("[name='frequency']").value = project.frequency;
@@ -890,6 +980,90 @@
             }
         };
 
+        const archiveProjectSection = async (button) => {
+            if (!archiveSectionUrl) {
+                return;
+            }
+            if (hasUnsavedChanges()) {
+                showAlert("Zapisz albo anuluj niezapisane zmiany przed archiwizacja sekcji.", "warning");
+                return;
+            }
+            if (!window.confirm("Przeniesc te sekcje do archiwum?")) {
+                return;
+            }
+
+            hideAlert();
+            isSaving = true;
+            button.disabled = true;
+            const formData = new FormData();
+            formData.append("section_index", button.dataset.archiveSection);
+
+            try {
+                const response = await fetch(archiveSectionUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Nie udalo sie zarchiwizowac sekcji.");
+                }
+
+                updateDisplayValues(payload.project);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            } finally {
+                isSaving = false;
+                button.disabled = false;
+            }
+        };
+
+        const restoreProjectSection = async (button) => {
+            if (!restoreSectionUrl) {
+                return;
+            }
+            if (hasUnsavedChanges()) {
+                showAlert("Zapisz albo anuluj niezapisane zmiany przed przywroceniem sekcji.", "warning");
+                return;
+            }
+            if (!window.confirm("Przywrocic te sekcje z archiwum do planu?")) {
+                return;
+            }
+
+            hideAlert();
+            isSaving = true;
+            button.disabled = true;
+            const formData = new FormData();
+            formData.append("section_index", button.dataset.restoreSection);
+
+            try {
+                const response = await fetch(restoreSectionUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Nie udalo sie przywrocic sekcji.");
+                }
+
+                updateDisplayValues(payload.project);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            } finally {
+                isSaving = false;
+                button.disabled = false;
+            }
+        };
+
         window.addEventListener("beforeunload", (event) => {
             if (!isSaving && hasUnsavedChanges()) {
                 event.preventDefault();
@@ -908,6 +1082,8 @@
                 "data-edit-toggle",
                 "data-edit-cancel",
                 "data-save-section",
+                "data-archive-section",
+                "data-restore-section",
             ].some((attribute) => navigable.hasAttribute(attribute));
             const isEditorToolbarControl = Boolean(
                 navigable.closest(".editor-toolbar")
@@ -1032,7 +1208,31 @@
 
         enablePreviewTaskCheckboxes();
 
+        if (archivedPlanPreview) {
+            decorateRestoreSectionButtons();
+
+            archivedPlanPreview.addEventListener("click", (event) => {
+                const restoreButton = event.target.closest("[data-restore-section]");
+                if (!restoreButton) {
+                    return;
+                }
+
+                restoreProjectSection(restoreButton);
+            });
+        }
+
         if (longGoalPreview) {
+            decorateArchiveSectionButtons();
+
+            longGoalPreview.addEventListener("click", (event) => {
+                const archiveButton = event.target.closest("[data-archive-section]");
+                if (!archiveButton) {
+                    return;
+                }
+
+                archiveProjectSection(archiveButton);
+            });
+
             longGoalPreview.addEventListener("change", (event) => {
                 const checkbox = event.target.closest(".task-list-checkbox");
                 if (!checkbox || checkbox.disabled) {
