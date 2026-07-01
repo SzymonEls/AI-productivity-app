@@ -127,13 +127,13 @@
                         </div>
 
                         <div class="mt-4">
-                            <label class="form-label" for="task_{{ project.id }}">Zadania do planu dnia</label>
+                            <label class="form-label" for="task_{{ project.id }}">Zadania do planu dnia (opcjonalnie)</label>
                             <textarea
                                 class="form-control"
                                 id="task_{{ project.id }}"
                                 name="task_{{ project.id }}"
                                 rows="5"
-                                placeholder="Wpisz zadania dla tego projektu, kazde w osobnej linii."
+                                placeholder="Wpisz zadania dla tego projektu, kazde w osobnej linii. Mozesz zostawic puste."
                                 data-project-task
                             ></textarea>
                         </div>
@@ -225,18 +225,6 @@
             .map((line) => line.trim())
             .filter(Boolean);
 
-        const validateCurrentTask = () => {
-            const panel = projectPanels.find((item) => item.dataset.projectStep === selectedIds[currentIndex]);
-            const task = panel?.querySelector("[data-project-task]");
-            if (!task || getTaskLines(task).length > 0) {
-                return true;
-            }
-
-            task.focus();
-            task.classList.add("is-invalid");
-            return false;
-        };
-
         const showSummary = () => {
             const targetDate = form.querySelector("#target_date").value;
             const items = [];
@@ -282,10 +270,6 @@
 
         form.querySelectorAll("[data-manual-next]").forEach((button) => {
             button.addEventListener("click", () => {
-                if (!validateCurrentTask()) {
-                    return;
-                }
-
                 if (currentIndex === selectedIds.length - 1) {
                     showSummary();
                     return;
@@ -293,10 +277,6 @@
 
                 showProject(currentIndex + 1);
             });
-        });
-
-        form.querySelectorAll("[data-project-task]").forEach((textarea) => {
-            textarea.addEventListener("input", () => textarea.classList.remove("is-invalid"));
         });
 
         form.querySelector("[data-manual-summary-back]").addEventListener("click", () => {
@@ -310,15 +290,6 @@
                 showSelection();
                 window.alert("Wybierz przynajmniej jeden projekt.");
                 return;
-            }
-
-            for (let index = 0; index < selectedIds.length; index += 1) {
-                currentIndex = index;
-                if (!validateCurrentTask()) {
-                    event.preventDefault();
-                    showProject(index);
-                    return;
-                }
             }
         });
     })();

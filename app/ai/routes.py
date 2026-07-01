@@ -237,8 +237,7 @@ def manual_daily_plan():
     for project in ordered_projects:
         project_tasks = _split_manual_project_tasks(request.form.get(f"task_{project.id}", ""))
         if not project_tasks:
-            flash(f"Wpisz zadanie dla projektu: {project.title}.", "danger")
-            return _render_manual_plan_template(target_date, projects, timeline_groups), 400
+            continue
         tasks.append({"project": project, "tasks": project_tasks})
 
     title = f"Plan dnia - {target_date.isoformat()}"
