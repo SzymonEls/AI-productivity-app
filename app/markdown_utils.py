@@ -7,7 +7,7 @@ from markupsafe import Markup
 
 
 TASK_ITEM_PATTERN = re.compile(
-    r"<li>\s*\[(?P<checked>[xX ])\]\s*(?P<content>.*?)</li>",
+    r"<li>\s*\[(?P<checked>[xX ])\]\s*(?P<content>.*?)(?=</li>|<ul>|<ol>)",
     re.DOTALL,
 )
 TOP_LEVEL_HEADING_PATTERN = re.compile(r"<h1(?P<attrs>[^>]*)>.*?</h1>", re.DOTALL)
@@ -118,7 +118,7 @@ def _render_task_item(match):
     return (
         '<li class="task-list-item">'
         f'<input class="task-list-checkbox" type="checkbox" disabled {checked}> '
-        f"{content}</li>"
+        f"{content}"
     )
 
 

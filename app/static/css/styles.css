@@ -160,9 +160,9 @@ body {
     margin-bottom: 0;
 }
 
-.markdown-content .task-list-item:has(.task-list-checkbox:checked),
-.editor-preview .task-list-item:has(.task-list-checkbox:checked),
-.editor-preview-side .task-list-item:has(.task-list-checkbox:checked) {
+.markdown-content .task-list-item:has(> .task-list-checkbox:checked),
+.editor-preview .task-list-item:has(> .task-list-checkbox:checked),
+.editor-preview-side .task-list-item:has(> .task-list-checkbox:checked) {
     color: #6c757d;
     text-decoration: line-through;
 }
