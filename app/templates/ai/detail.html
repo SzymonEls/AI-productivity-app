@@ -151,14 +151,96 @@
             cm.focus();
         };
 
-        const toggleTaskList = (editor) => {
-            updateSelectedLines(editor, (line) => {
-                if (/^\s*-\s\[( |x|X)\]\s/.test(line)) {
-                    return line.replace(/^(\s*)-\s\[( |x|X)\]\s/, "$1");
-                }
+        const listMarkerPatterns = {
+            task: /^(\s*)[-*+]\s\[( |x|X)\]\s(.*)$/,
+            ordered: /^(\s*)\d+\.\s(.*)$/,
+            unordered: /^(\s*)[-*+]\s(.*)$/,
+        };
 
-                return line.replace(/^(\s*)/, "$1- [ ] ");
+        const getLineListType = (line) => {
+            if (listMarkerPatterns.task.test(line)) {
+                return "task";
+            }
+            if (listMarkerPatterns.ordered.test(line)) {
+                return "ordered";
+            }
+            if (listMarkerPatterns.unordered.test(line)) {
+                return "unordered";
+            }
+            return null;
+        };
+
+        const stripListMarker = (line) => {
+            const taskMatch = line.match(listMarkerPatterns.task);
+            if (taskMatch) {
+                return { indent: taskMatch[1], content: taskMatch[3] };
+            }
+
+            const orderedMatch = line.match(listMarkerPatterns.ordered);
+            if (orderedMatch) {
+                return { indent: orderedMatch[1], content: orderedMatch[2] };
+            }
+
+            const unorderedMatch = line.match(listMarkerPatterns.unordered);
+            if (unorderedMatch) {
+                return { indent: unorderedMatch[1], content: unorderedMatch[2] };
+            }
+
+            const indentMatch = line.match(/^(\s*)/);
+            return { indent: indentMatch[1], content: line.slice(indentMatch[1].length) };
+        };
+
+        const setListType = (editor, type) => {
+            const cm = editor.codemirror;
+            const selections = cm.listSelections();
+
+            cm.operation(() => {
+                selections.forEach((selection) => {
+                    const startLine = Math.min(selection.anchor.line, selection.head.line);
+                    const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                    const lineNumbers = [];
+                    for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                        if (cm.getLine(lineNumber).trim()) {
+                            lineNumbers.push(lineNumber);
+                        }
+                    }
+
+                    if (!lineNumbers.length) {
+                        return;
+                    }
+
+                    const alreadyTargetType = lineNumbers.every(
+                        (lineNumber) => getLineListType(cm.getLine(lineNumber)) === type
+                    );
+
+                    let orderedIndex = 1;
+                    lineNumbers.forEach((lineNumber) => {
+                        const lineText = cm.getLine(lineNumber);
+                        const { indent, content } = stripListMarker(lineText);
+
+                        let newLine;
+                        if (alreadyTargetType) {
+                            newLine = `${indent}${content}`;
+                        } else if (type === "ordered") {
+                            newLine = `${indent}${orderedIndex}. ${content}`;
+                            orderedIndex += 1;
+                        } else if (type === "task") {
+                            newLine = `${indent}- [ ] ${content}`;
+                        } else {
+                            newLine = `${indent}- ${content}`;
+                        }
+
+                        cm.replaceRange(
+                            newLine,
+                            { line: lineNumber, ch: 0 },
+                            { line: lineNumber, ch: lineText.length }
+                        );
+                    });
+                });
             });
+
+            cm.focus();
         };
 
         const normalizeTwoSpaceNestedLists = (plainText) => {
@@ -217,11 +299,21 @@
                 },
                 "heading",
                 "|",
-                "unordered-list",
-                "ordered-list",
+                {
+                    name: "unordered-list",
+                    action: (activeEditor) => setListType(activeEditor, "unordered"),
+                    className: "fa fa-list-ul",
+                    title: "Generic List",
+                },
+                {
+                    name: "ordered-list",
+                    action: (activeEditor) => setListType(activeEditor, "ordered"),
+                    className: "fa fa-list-ol",
+                    title: "Numbered List",
+                },
                 {
                     name: "task-list",
-                    action: toggleTaskList,
+                    action: (activeEditor) => setListType(activeEditor, "task"),
                     className: "fa-regular fa-square-check",
                     title: "Checklist item",
                 },

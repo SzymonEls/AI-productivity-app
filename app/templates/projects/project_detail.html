@@ -276,6 +276,18 @@
                     <input type="hidden" name="frequency" value="{{ project.frequency }}" data-settings-frequency>
                     <input type="hidden" name="long_goal" value="{{ project.long_goal }}" data-settings-long-goal>
                     <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-settings-private-input>
+                    <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-settings-starred-input>
+
+                    <div class="form-check form-switch">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="projectStarred"
+                            data-settings-starred-toggle
+                            {% if project.is_starred %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="projectStarred">Ulubiony (kontekst dla AI Daily Planning)</label>
+                    </div>
 
                     <div class="form-check form-switch">
                         <input
@@ -566,14 +578,96 @@
                 cm.focus();
             };
 
-            const toggleTaskList = (editor) => {
-                updateSelectedLines(editor, (line) => {
-                    if (/^\s*-\s\[( |x|X)\]\s/.test(line)) {
-                        return line.replace(/^(\s*)-\s\[( |x|X)\]\s/, "$1");
-                    }
+            const listMarkerPatterns = {
+                task: /^(\s*)[-*+]\s\[( |x|X)\]\s(.*)$/,
+                ordered: /^(\s*)\d+\.\s(.*)$/,
+                unordered: /^(\s*)[-*+]\s(.*)$/,
+            };
 
-                    return line.replace(/^(\s*)/, "$1- [ ] ");
+            const getLineListType = (line) => {
+                if (listMarkerPatterns.task.test(line)) {
+                    return "task";
+                }
+                if (listMarkerPatterns.ordered.test(line)) {
+                    return "ordered";
+                }
+                if (listMarkerPatterns.unordered.test(line)) {
+                    return "unordered";
+                }
+                return null;
+            };
+
+            const stripListMarker = (line) => {
+                const taskMatch = line.match(listMarkerPatterns.task);
+                if (taskMatch) {
+                    return { indent: taskMatch[1], content: taskMatch[3] };
+                }
+
+                const orderedMatch = line.match(listMarkerPatterns.ordered);
+                if (orderedMatch) {
+                    return { indent: orderedMatch[1], content: orderedMatch[2] };
+                }
+
+                const unorderedMatch = line.match(listMarkerPatterns.unordered);
+                if (unorderedMatch) {
+                    return { indent: unorderedMatch[1], content: unorderedMatch[2] };
+                }
+
+                const indentMatch = line.match(/^(\s*)/);
+                return { indent: indentMatch[1], content: line.slice(indentMatch[1].length) };
+            };
+
+            const setListType = (editor, type) => {
+                const cm = editor.codemirror;
+                const selections = cm.listSelections();
+
+                cm.operation(() => {
+                    selections.forEach((selection) => {
+                        const startLine = Math.min(selection.anchor.line, selection.head.line);
+                        const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                        const lineNumbers = [];
+                        for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                            if (cm.getLine(lineNumber).trim()) {
+                                lineNumbers.push(lineNumber);
+                            }
+                        }
+
+                        if (!lineNumbers.length) {
+                            return;
+                        }
+
+                        const alreadyTargetType = lineNumbers.every(
+                            (lineNumber) => getLineListType(cm.getLine(lineNumber)) === type
+                        );
+
+                        let orderedIndex = 1;
+                        lineNumbers.forEach((lineNumber) => {
+                            const lineText = cm.getLine(lineNumber);
+                            const { indent, content } = stripListMarker(lineText);
+
+                            let newLine;
+                            if (alreadyTargetType) {
+                                newLine = `${indent}${content}`;
+                            } else if (type === "ordered") {
+                                newLine = `${indent}${orderedIndex}. ${content}`;
+                                orderedIndex += 1;
+                            } else if (type === "task") {
+                                newLine = `${indent}- [ ] ${content}`;
+                            } else {
+                                newLine = `${indent}- ${content}`;
+                            }
+
+                            cm.replaceRange(
+                                newLine,
+                                { line: lineNumber, ch: 0 },
+                                { line: lineNumber, ch: lineText.length }
+                            );
+                        });
+                    });
                 });
+
+                cm.focus();
             };
 
             longGoalEditor = new EasyMDE({
@@ -599,11 +693,21 @@
                     },
                     "heading",
                     "|",
-                    "unordered-list",
-                    "ordered-list",
+                    {
+                        name: "unordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "unordered"),
+                        className: "fa fa-list-ul",
+                        title: "Generic List",
+                    },
+                    {
+                        name: "ordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "ordered"),
+                        className: "fa fa-list-ol",
+                        title: "Numbered List",
+                    },
                     {
                         name: "task-list",
-                        action: toggleTaskList,
+                        action: (activeEditor) => setListType(activeEditor, "task"),
                         className: "fa-regular fa-square-check",
                         title: "Checklist item",
                     },
@@ -929,6 +1033,14 @@
                 if (settingsPrivateToggle) {
                     settingsPrivateToggle.checked = project.is_private;
                 }
+                const settingsStarredInput = settingsForm.querySelector("[data-settings-starred-input]");
+                const settingsStarredToggle = settingsForm.querySelector("[data-settings-starred-toggle]");
+                if (settingsStarredInput) {
+                    settingsStarredInput.value = project.is_starred ? "true" : "false";
+                }
+                if (settingsStarredToggle) {
+                    settingsStarredToggle.checked = project.is_starred;
+                }
             }
         };
 
@@ -1165,9 +1277,15 @@
                 const privateInput = settingsForm.querySelector("[data-settings-private-input]");
                 const privateToggle = settingsForm.querySelector("[data-settings-private-toggle]");
                 const previousPrivate = privateInput?.value === "true";
+                const starredInput = settingsForm.querySelector("[data-settings-starred-input]");
+                const starredToggle = settingsForm.querySelector("[data-settings-starred-toggle]");
+                const previousStarred = starredInput?.value === "true";
 
                 if (privateInput) {
                     privateInput.value = privateToggle?.checked ? "true" : "false";
+                }
+                if (starredInput) {
+                    starredInput.value = starredToggle?.checked ? "true" : "false";
                 }
                 if (submitButton) {
                     submitButton.disabled = true;
@@ -1196,6 +1314,12 @@
                     }
                     if (privateToggle) {
                         privateToggle.checked = previousPrivate;
+                    }
+                    if (starredInput) {
+                        starredInput.value = previousStarred ? "true" : "false";
+                    }
+                    if (starredToggle) {
+                        starredToggle.checked = previousStarred;
                     }
                     showAlert(error.message, "danger");
                 } finally {

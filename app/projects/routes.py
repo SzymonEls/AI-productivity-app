@@ -24,7 +24,7 @@ def _get_user_project_or_404(project_id):
 def dashboard():
     projects = (
         Project.query.filter_by(user_id=current_user.id)
-        .order_by(Project.is_starred.desc(), func.lower(Project.title).asc())
+        .order_by(func.lower(Project.title).asc())
         .all()
     )
     timeline_groups = _get_or_create_timeline(projects)
