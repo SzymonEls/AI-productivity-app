@@ -1204,7 +1204,8 @@
             );
             const isMarkdownDownload = Boolean(navigable.closest("[data-download-project-markdown]"));
             const dismissesModal = navigable.dataset.bsDismiss;
-            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal) {
+            const opensModal = navigable.dataset.bsToggle === "modal";
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal || opensModal) {
                 return;
             }
 
