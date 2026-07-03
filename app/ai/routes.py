@@ -233,6 +233,17 @@ def manual_daily_plan():
         flash("Could not find all the selected projects.", "danger")
         return _render_manual_plan_template(target_date, projects, timeline_groups), 400
 
+    for project in ordered_projects:
+        short_goal = request.form.get(f"short_goal_{project.id}", "").strip()
+        frequency = request.form.get(f"frequency_{project.id}", "").strip()
+        long_goal = request.form.get(f"long_goal_{project.id}", "").strip()
+        if short_goal:
+            project.short_goal = short_goal
+        if frequency:
+            project.frequency = frequency
+        if long_goal:
+            project.long_goal = long_goal
+
     tasks = []
     for project in ordered_projects:
         project_tasks = _split_manual_project_tasks(request.form.get(f"task_{project.id}", ""))

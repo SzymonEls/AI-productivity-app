@@ -2,6 +2,13 @@
 
 {% block title %}Manual daily planning{% endblock %}
 
+{% block extra_head %}
+{% if projects %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.5.2/css/all.min.css">
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
@@ -112,17 +119,41 @@
                         <div class="row g-4">
                             <div class="col-lg-5">
                                 <section class="mb-4">
-                                    <h3 class="h6 text-uppercase text-muted">Short-term goal</h3>
-                                    <p class="preserve-lines mb-0">{{ project.short_goal }}</p>
+                                    <label class="form-label h6 text-uppercase text-muted" for="short_goal_{{ project.id }}">Short-term goal</label>
+                                    <textarea
+                                        class="form-control"
+                                        id="short_goal_{{ project.id }}"
+                                        name="short_goal_{{ project.id }}"
+                                        rows="3"
+                                        data-autoresize="true"
+                                        required
+                                    >{{ project.short_goal }}</textarea>
                                 </section>
                                 <section>
-                                    <h3 class="h6 text-uppercase text-muted">Frequency</h3>
-                                    <p class="preserve-lines mb-0">{{ project.frequency }}</p>
+                                    <label class="form-label h6 text-uppercase text-muted" for="frequency_{{ project.id }}">Frequency</label>
+                                    <input
+                                        type="text"
+                                        class="form-control"
+                                        id="frequency_{{ project.id }}"
+                                        name="frequency_{{ project.id }}"
+                                        value="{{ project.frequency }}"
+                                        required
+                                    >
                                 </section>
                             </div>
                             <div class="col-lg-7">
-                                <h3 class="h6 text-uppercase text-muted">Full project description</h3>
-                                <div class="markdown-content manual-project-description">{{ project.long_goal | project_markdown }}</div>
+                                <label class="form-label h6 text-uppercase text-muted" for="long_goal_{{ project.id }}">Full project description</label>
+                                <textarea
+                                    class="form-control long-goal-markdown-field"
+                                    id="long_goal_{{ project.id }}"
+                                    name="long_goal_{{ project.id }}"
+                                    rows="8"
+                                    data-project-long-goal
+                                    required
+                                >{{ project.long_goal }}</textarea>
+                                <div class="form-text">
+                                    Changes are saved to the project when you save the daily plan.
+                                </div>
                             </div>
                         </div>
 
@@ -168,6 +199,9 @@
 {% endblock %}
 
 {% block extra_scripts %}
+{% if projects %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+{% endif %}
 <script>
     (() => {
         const form = document.getElementById("manual-daily-plan-form");
@@ -182,6 +216,213 @@
         const preview = form.querySelector("[data-manual-preview]");
         let selectedIds = [];
         let currentIndex = 0;
+
+        const autoResize = (textarea) => {
+            textarea.style.height = "auto";
+            textarea.style.height = `${textarea.scrollHeight}px`;
+        };
+
+        form.querySelectorAll("textarea[data-autoresize='true']").forEach((textarea) => {
+            autoResize(textarea);
+            textarea.addEventListener("input", () => autoResize(textarea));
+        });
+
+        const updateSelectedLines = (editor, transformLine) => {
+            const cm = editor.codemirror;
+            const selections = cm.listSelections();
+
+            cm.operation(() => {
+                selections.forEach((selection) => {
+                    const startLine = Math.min(selection.anchor.line, selection.head.line);
+                    const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                    for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                        const lineText = cm.getLine(lineNumber);
+                        cm.replaceRange(
+                            transformLine(lineText),
+                            { line: lineNumber, ch: 0 },
+                            { line: lineNumber, ch: lineText.length }
+                        );
+                    }
+                });
+            });
+
+            cm.focus();
+        };
+
+        const listMarkerPatterns = {
+            task: /^(\s*)[-*+]\s\[( |x|X)\]\s(.*)$/,
+            ordered: /^(\s*)\d+\.\s(.*)$/,
+            unordered: /^(\s*)[-*+]\s(.*)$/,
+        };
+
+        const getLineListType = (line) => {
+            if (listMarkerPatterns.task.test(line)) {
+                return "task";
+            }
+            if (listMarkerPatterns.ordered.test(line)) {
+                return "ordered";
+            }
+            if (listMarkerPatterns.unordered.test(line)) {
+                return "unordered";
+            }
+            return null;
+        };
+
+        const stripListMarker = (line) => {
+            const taskMatch = line.match(listMarkerPatterns.task);
+            if (taskMatch) {
+                return { indent: taskMatch[1], content: taskMatch[3] };
+            }
+
+            const orderedMatch = line.match(listMarkerPatterns.ordered);
+            if (orderedMatch) {
+                return { indent: orderedMatch[1], content: orderedMatch[2] };
+            }
+
+            const unorderedMatch = line.match(listMarkerPatterns.unordered);
+            if (unorderedMatch) {
+                return { indent: unorderedMatch[1], content: unorderedMatch[2] };
+            }
+
+            const indentMatch = line.match(/^(\s*)/);
+            return { indent: indentMatch[1], content: line.slice(indentMatch[1].length) };
+        };
+
+        const setListType = (editor, type) => {
+            const cm = editor.codemirror;
+            const selections = cm.listSelections();
+
+            cm.operation(() => {
+                selections.forEach((selection) => {
+                    const startLine = Math.min(selection.anchor.line, selection.head.line);
+                    const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                    const lineNumbers = [];
+                    for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                        if (cm.getLine(lineNumber).trim()) {
+                            lineNumbers.push(lineNumber);
+                        }
+                    }
+
+                    if (!lineNumbers.length) {
+                        return;
+                    }
+
+                    const alreadyTargetType = lineNumbers.every(
+                        (lineNumber) => getLineListType(cm.getLine(lineNumber)) === type
+                    );
+
+                    let orderedIndex = 1;
+                    lineNumbers.forEach((lineNumber) => {
+                        const lineText = cm.getLine(lineNumber);
+                        const { indent, content } = stripListMarker(lineText);
+
+                        let newLine;
+                        if (alreadyTargetType) {
+                            newLine = `${indent}${content}`;
+                        } else if (type === "ordered") {
+                            newLine = `${indent}${orderedIndex}. ${content}`;
+                            orderedIndex += 1;
+                        } else if (type === "task") {
+                            newLine = `${indent}- [ ] ${content}`;
+                        } else {
+                            newLine = `${indent}- ${content}`;
+                        }
+
+                        cm.replaceRange(
+                            newLine,
+                            { line: lineNumber, ch: 0 },
+                            { line: lineNumber, ch: lineText.length }
+                        );
+                    });
+                });
+            });
+
+            cm.focus();
+        };
+
+        const longGoalEditors = new Map();
+
+        const ensureLongGoalEditor = (panel) => {
+            const projectId = panel.dataset.projectStep;
+            if (longGoalEditors.has(projectId)) {
+                return longGoalEditors.get(projectId);
+            }
+            const textarea = panel.querySelector("[data-project-long-goal]");
+            if (!textarea || !window.EasyMDE) {
+                return null;
+            }
+
+            const editor = new EasyMDE({
+                element: textarea,
+                autoDownloadFontAwesome: false,
+                forceSync: true,
+                minHeight: "220px",
+                spellChecker: false,
+                status: false,
+                toolbar: [
+                    "bold",
+                    "italic",
+                    {
+                        name: "strikethrough",
+                        action: EasyMDE.toggleStrikethrough,
+                        className: "fa-solid fa-strikethrough",
+                        title: "Strikethrough",
+                    },
+                    "heading",
+                    "|",
+                    {
+                        name: "unordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "unordered"),
+                        className: "fa fa-list-ul",
+                        title: "Generic List",
+                    },
+                    {
+                        name: "ordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "ordered"),
+                        className: "fa fa-list-ol",
+                        title: "Numbered List",
+                    },
+                    {
+                        name: "task-list",
+                        action: (activeEditor) => setListType(activeEditor, "task"),
+                        className: "fa-regular fa-square-check",
+                        title: "Checklist item",
+                    },
+                    {
+                        name: "indent",
+                        action: (activeEditor) => updateSelectedLines(activeEditor, (line) => `    ${line}`),
+                        className: "fa-solid fa-indent",
+                        title: "Increase indent",
+                    },
+                    {
+                        name: "outdent",
+                        action: (activeEditor) => updateSelectedLines(
+                            activeEditor,
+                            (line) => line.replace(/^(\t| {1,4})/, "")
+                        ),
+                        className: "fa-solid fa-outdent",
+                        title: "Decrease indent",
+                    },
+                    "|",
+                    "link",
+                    "quote",
+                    "code",
+                    "|",
+                    "preview",
+                    "side-by-side",
+                    "fullscreen",
+                ],
+            });
+
+            editor.codemirror.on("change", () => {
+                editor.codemirror.save();
+            });
+
+            longGoalEditors.set(projectId, editor);
+            return editor;
+        };
 
         const getSelectedIds = () => Array.from(form.querySelectorAll("[data-project-choice]:checked")).map((input) => input.value);
 
@@ -208,6 +449,9 @@
                     counter.textContent = `${currentIndex + 1} / ${selectedIds.length}`;
                     nextButton.textContent = currentIndex === selectedIds.length - 1 ? "Summary" : "Next";
                     prevButton.textContent = currentIndex === 0 ? "Choose projects" : "Back";
+                    panel.querySelectorAll("textarea[data-autoresize='true']").forEach(autoResize);
+                    const longGoalEditor = ensureLongGoalEditor(panel);
+                    longGoalEditor?.codemirror.refresh();
                     panel.querySelector("[data-project-task]")?.focus();
                 }
             });
@@ -291,6 +535,8 @@
                 window.alert("Choose at least one project.");
                 return;
             }
+
+            longGoalEditors.forEach((editor) => editor.codemirror.save());
         });
     })();
 </script>
