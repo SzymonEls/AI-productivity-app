@@ -94,6 +94,7 @@
         const watchedFields = Array.from(form.querySelectorAll("input, textarea, select"));
         const initialValues = new Map(watchedFields.map((field) => [field.name, field.value]));
         let isSubmitting = false;
+        let leaving = false;
 
         const hasUnsavedChanges = () => watchedFields.some((field) => initialValues.get(field.name) !== field.value);
 
@@ -112,7 +113,7 @@
         });
 
         window.addEventListener("beforeunload", (event) => {
-            if (!isSubmitting && hasUnsavedChanges()) {
+            if (!isSubmitting && !leaving && hasUnsavedChanges()) {
                 event.preventDefault();
                 event.returnValue = "";
             }
@@ -138,11 +139,17 @@
 
         history.pushState({ formGuard: true }, "", window.location.href);
         window.addEventListener("popstate", () => {
+            // Nothing to protect: skip past the guard entry so a single "back" actually leaves.
             if (isSubmitting || !hasUnsavedChanges()) {
+                leaving = true;
+                history.back();
                 return;
             }
 
-            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+            if (window.confirm("You have unsaved changes. Leave this page?")) {
+                leaving = true;
+                history.back();
+            } else {
                 history.pushState({ formGuard: true }, "", window.location.href);
             }
         });

@@ -383,6 +383,7 @@
         const markdownDownloadButton = document.querySelector("[data-download-project-markdown]");
         const settingsForm = document.querySelector("[data-project-settings-form]");
         let isSaving = false;
+        let leaving = false;
         let longGoalEditor = null;
 
         const getTrackedFields = () => Array.from(form.querySelectorAll("input[name], textarea[name], select[name]"));
@@ -1177,7 +1178,7 @@
         };
 
         window.addEventListener("beforeunload", (event) => {
-            if (!isSaving && hasUnsavedChanges()) {
+            if (!isSaving && !leaving && hasUnsavedChanges()) {
                 event.preventDefault();
                 event.returnValue = "";
             }
@@ -1217,11 +1218,17 @@
 
         history.pushState({ formGuard: true }, "", window.location.href);
         window.addEventListener("popstate", () => {
+            // Nothing to protect: skip past the guard entry so a single "back" actually leaves.
             if (isSaving || !hasUnsavedChanges()) {
+                leaving = true;
+                history.back();
                 return;
             }
 
-            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+            if (window.confirm("You have unsaved changes. Leave this page?")) {
+                leaving = true;
+                history.back();
+            } else {
                 history.pushState({ formGuard: true }, "", window.location.href);
             }
         });
