@@ -10,17 +10,17 @@
                 {% if current_user.is_authenticated %}
                     {% if ai_enabled and not is_openai_ready %}
                         <div class="alert alert-warning">
-                            AI jest jeszcze nieaktywne. Uzupelnij `OPENAI_API_KEY` w `.env`
-                            na podstawie `.env.example`.
+                            AI is not active yet. Fill in `OPENAI_API_KEY` in `.env`
+                            based on `.env.example`.
                         </div>
                     {% endif %}
 
                     <div id="latest-plan-empty" {% if latest_plan %}class="d-none"{% endif %}>
-                        <p class="text-muted mb-0">Nie ma jeszcze przypietego planu dnia.</p>
+                        <p class="text-muted mb-0">There is no pinned daily plan yet.</p>
                     </div>
                     <div id="latest-plan-content" {% if not latest_plan %}class="d-none"{% endif %}>
                         <div class="plan-chip mb-3">
-                            <span class="badge text-bg-primary">przypiety</span>
+                            <span class="badge text-bg-primary">pinned</span>
                             <span id="latest-plan-type" class="badge text-bg-dark">
                                 {% if latest_plan %}{{ latest_plan.plan_type.replace('_', ' ') }}{% endif %}
                             </span>
@@ -37,17 +37,17 @@
                             class="btn btn-outline-primary btn-sm mt-3"
                             href="{% if latest_plan %}{{ url_for('ai.history_detail', plan_id=latest_plan.id) }}{% else %}#{% endif %}"
                         >
-                            Edytuj plan
+                            Edit plan
                         </a>
                     </div>
                 {% else %}
-                    <h1 class="h2 mb-3">Przypiety plan dnia</h1>
+                    <h1 class="h2 mb-3">Pinned daily plan</h1>
                     <p class="text-muted">
-                        Zaloguj sie, aby zarzadzac projektami{% if calendar_enabled %}, kalendarzem{% endif %}{% if ai_enabled %} i odpowiedziami generowanymi przez AI{% endif %}.
+                        Log in to manage projects{% if calendar_enabled %}, the calendar{% endif %}{% if ai_enabled %}, and AI-generated responses{% endif %}.
                     </p>
 
                     <div class="d-flex flex-wrap gap-2 mt-4">
-                        <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Login</a>
+                        <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Log in</a>
                         {% if registration_enabled %}
                             <a class="btn btn-outline-secondary" href="{{ url_for('auth.register') }}">Register</a>
                         {% endif %}
@@ -69,9 +69,9 @@
                     {% endif %}
                     {% if current_user.is_authenticated %}
                         <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Open Dashboard</a>
-                        <a class="btn btn-primary" href="{{ url_for('ai.daily_planning') }}">Plan dnia</a>
+                        <a class="btn btn-primary" href="{{ url_for('ai.daily_planning') }}">Daily plan</a>
                         {% if ai_enabled %}
-                            <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">Historia AI</a>
+                            <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">AI History</a>
                         {% endif %}
                     {% endif %}
                 </div>
@@ -79,13 +79,13 @@
                 {% if current_user.is_authenticated %}
                     {% if ai_enabled %}
                         <p class="text-muted mb-0">
-                            Nowy plan automatycznie przypina sie na home. Starsze plany mozesz przypiac recznie z historii.
+                            A new plan is automatically pinned to home. You can pin older plans manually from the history.
                         </p>
                     {% else %}
-                        <p class="text-muted mb-0">Reczny plan dnia mozesz utworzyc z szybkiego dostepu.</p>
+                        <p class="text-muted mb-0">You can create a manual daily plan from quick access.</p>
                     {% endif %}
                 {% else %}
-                    <p class="text-muted mb-0">Po zalogowaniu zobaczysz tu najnowsze plany i historie.</p>
+                    <p class="text-muted mb-0">Once logged in, you'll see the latest plans and history here.</p>
                 {% endif %}
                 <br />
                 <p class="text-muted mb-0">v{{ app_version }}</pp>

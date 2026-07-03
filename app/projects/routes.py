@@ -63,7 +63,7 @@ def create_project():
                 db.session.commit()
             except SQLAlchemyError:
                 db.session.rollback()
-                flash("Nie udalo sie utworzyc projektu. Baza danych jest niedostepna do zapisu.", "danger")
+                flash("Failed to create the project. The database is unavailable for writing.", "danger")
                 return render_template(
                     "projects/project_form.html",
                     page_title="Create Project",
@@ -127,7 +127,7 @@ def edit_project(project_id):
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
-            error_message = "Nie udalo sie zapisac projektu. Baza danych jest niedostepna do zapisu."
+            error_message = "Failed to save the project. The database is unavailable for writing."
             if _wants_json_response():
                 return jsonify({"ok": False, "message": error_message}), 500
             flash(error_message, "danger")
@@ -165,7 +165,7 @@ def archive_project_section(project_id):
     project = _get_user_project_or_404(project_id)
     section_index = _coerce_int(request.form.get("section_index"))
     if section_index is None:
-        return jsonify({"ok": False, "message": "Nie wybrano sekcji do archiwizacji."}), 400
+        return jsonify({"ok": False, "message": "No sections were selected to archive."}), 400
 
     try:
         active_plan, archived_section = _remove_top_level_markdown_section(project.long_goal, section_index)
@@ -179,12 +179,12 @@ def archive_project_section(project_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zarchiwizowac sekcji."}), 500
+        return jsonify({"ok": False, "message": "Failed to archive the section(s)."}), 500
 
     return jsonify(
         {
             "ok": True,
-            "message": "Sekcja zostala przeniesiona do archiwum.",
+            "message": "The section was moved to the archive.",
             "project": {
                 "title": project.title,
                 "short_goal": project.short_goal,
@@ -208,13 +208,13 @@ def restore_project_section(project_id):
     project = _get_user_project_or_404(project_id)
     section_index = _coerce_int(request.form.get("section_index"))
     if section_index is None:
-        return jsonify({"ok": False, "message": "Nie wybrano sekcji do przywrocenia."}), 400
+        return jsonify({"ok": False, "message": "No sections were selected to restore."}), 400
 
     try:
         archived_plan, restored_section = _remove_top_level_markdown_section(
             project.archived_long_goal,
             section_index,
-            empty_message="Archiwum nie ma sekcji # do przywrocenia.",
+            empty_message="Archive has no section # to restore.",
         )
     except ValueError as error:
         return jsonify({"ok": False, "message": str(error)}), 400
@@ -226,12 +226,12 @@ def restore_project_section(project_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie przywrocic sekcji."}), 500
+        return jsonify({"ok": False, "message": "Failed to restore the section(s)."}), 500
 
     return jsonify(
         {
             "ok": True,
-            "message": "Sekcja zostala przywrocona z archiwum.",
+            "message": "The section was restored from the archive.",
             "project": {
                 "title": project.title,
                 "short_goal": project.short_goal,
@@ -265,7 +265,7 @@ def save_timeline():
     payload = request.get_json(silent=True) or {}
     incoming_groups = payload.get("groups")
     if not isinstance(incoming_groups, list):
-        return jsonify({"ok": False, "message": "Nieprawidlowy uklad timeline."}), 400
+        return jsonify({"ok": False, "message": "Invalid timeline layout."}), 400
 
     projects = Project.query.filter_by(user_id=current_user.id).all()
     user_projects = {project.id: project for project in projects}
@@ -335,7 +335,7 @@ def save_timeline():
                         db.session.add(item)
                     item.item_type = "note"
                     item.project_id = None
-                    item.title = title or "Notatka"
+                    item.title = title or "Note"
                     item.body = body
                     item.is_private = bool(item_payload.get("is_private"))
                 elif item_type == "project_from_note":
@@ -343,7 +343,7 @@ def save_timeline():
                     body = (item_payload.get("body") or "").strip()
                     if not title and body:
                         title = body.splitlines()[0].strip()[:150]
-                    title = title or "Projekt"
+                    title = title or "Project"
                     project = Project(
                         owner=current_user,
                         title=title,
@@ -383,7 +383,7 @@ def save_timeline():
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zapisac timeline."}), 500
+        return jsonify({"ok": False, "message": "Failed to save the timeline."}), 500
 
     timeline_groups = _get_or_create_timeline(projects)
     return jsonify({"ok": True, "groups": [_serialize_timeline_group(group) for group in timeline_groups]})
@@ -405,7 +405,7 @@ def _get_or_create_timeline(projects):
     changed = False
 
     if not groups:
-        groups = [ProjectTimelineGroup(owner=current_user, name="Projekty", position=0)]
+        groups = [ProjectTimelineGroup(owner=current_user, name="Projects", position=0)]
         db.session.add(groups[0])
         db.session.flush()
         changed = True
@@ -460,7 +460,7 @@ def _serialize_timeline_item(item):
             "id": item.id,
             "type": "project",
             "project_id": item.project_id,
-            "title": item.project.title if item.project else "Projekt",
+            "title": item.project.title if item.project else "Project",
             "url": url_for("projects.project_detail", project_id=item.project_id) if item.project_id else "#",
             "is_private": bool(item.project.is_private) if item.project else False,
         }
@@ -468,7 +468,7 @@ def _serialize_timeline_item(item):
     return {
         "id": item.id,
         "type": "note",
-        "title": item.title or "Notatka",
+        "title": item.title or "Note",
         "body": item.body or "",
         "is_private": bool(item.is_private),
     }
@@ -481,12 +481,12 @@ def _coerce_int(value):
         return None
 
 
-def _remove_top_level_markdown_section(markdown, section_index, empty_message="Ten plan nie ma sekcji # do archiwizacji."):
+def _remove_top_level_markdown_section(markdown, section_index, empty_message="This plan has no section # to archive."):
     sections = _top_level_markdown_section_ranges(markdown or "")
     if not sections:
         raise ValueError(empty_message)
     if section_index < 0 or section_index >= len(sections):
-        raise ValueError("Nie znaleziono wybranej sekcji.")
+        raise ValueError("The selected section was not found.")
 
     start, end = sections[section_index]
     archived_section = (markdown or "")[start:end].strip()

@@ -16,7 +16,7 @@
         <div class="timeline-edit-actions" data-timeline-edit-actions>
             <div class="form-check form-switch timeline-private-toggle">
                 <input class="form-check-input" type="checkbox" id="hidePrivateTimelineItems" data-hide-private-timeline>
-                <label class="form-check-label small" for="hidePrivateTimelineItems">Ukryj prywatne projekty</label>
+                <label class="form-check-label small" for="hidePrivateTimelineItems">Hide private projects</label>
             </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>Add group</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>Edit timeline</button>
@@ -37,10 +37,10 @@
                     <div class="timeline-group-content">
                         <div class="timeline-group-header {% if not group.name %}d-none{% endif %}" data-group-header>
                             <h2 class="timeline-group-title {% if not group.name %}d-none{% endif %}" data-group-title>{{ group.name or "" }}</h2>
-                            <input class="form-control form-control-sm timeline-group-name d-none" value="{{ group.name or "" }}" data-group-name aria-label="Nazwa grupy">
+                            <input class="form-control form-control-sm timeline-group-name d-none" value="{{ group.name or "" }}" data-group-name aria-label="Group name">
                             <div class="timeline-group-move d-none" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
                             </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
@@ -57,14 +57,14 @@
                                     <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="note" data-is-private="{{ 1 if item.is_private else 0 }}">
                                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                                         <div class="timeline-item-main">
-                                            <strong class="timeline-item-title" data-note-title-display data-private-mask-title>{{ item.title or "Notatka" }}</strong>
+                                            <strong class="timeline-item-title" data-note-title-display data-private-mask-title>{{ item.title or "Note" }}</strong>
                                             <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>{{ item.body }}</p>
                                             <div class="timeline-note-fields d-none">
-                                                <input class="form-control form-control-sm" value="{{ item.title or "" }}" data-note-title aria-label="Tytul notatki">
-                                                <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">{{ item.body or "" }}</textarea>
+                                                <input class="form-control form-control-sm" value="{{ item.title or "" }}" data-note-title aria-label="Note title">
+                                                <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Note content">{{ item.body or "" }}</textarea>
                                                 <div class="form-check timeline-note-privacy">
-                                                    <input class="form-check-input" type="checkbox" data-note-private aria-label="Oznacz blok jako prywatny" {% if item.is_private %}checked{% endif %}>
-                                                    <label class="form-check-label small">Prywatne</label>
+                                                    <input class="form-check-input" type="checkbox" data-note-private aria-label="Mark block as private" {% if item.is_private %}checked{% endif %}>
+                                                    <label class="form-check-label small">Private</label>
                                                 </div>
                                             </div>
                                         </div>
@@ -114,7 +114,7 @@
             .replaceAll(">", "&gt;")
             .replaceAll('"', "&quot;");
 
-        const privateLabel = "(prywatne)";
+        const privateLabel = "(private)";
 
         const renderTimeline = (groups) => {
             timelineRoot.innerHTML = groups.map((group) => `
@@ -123,10 +123,10 @@
                     <div class="timeline-group-content">
                         <div class="timeline-group-header ${group.name ? "" : "d-none"}" data-group-header>
                             <h2 class="timeline-group-title ${group.name ? "" : "d-none"}" data-group-title>${escapeHtml(group.name || "")}</h2>
-                            <input class="form-control form-control-sm timeline-group-name d-none" value="${escapeHtml(group.name || "")}" data-group-name aria-label="Nazwa grupy">
+                            <input class="form-control form-control-sm timeline-group-name d-none" value="${escapeHtml(group.name || "")}" data-group-name aria-label="Group name">
                             <div class="timeline-group-move d-none" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
                             </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
@@ -147,7 +147,7 @@
                     <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="project" data-project-id="${escapeHtml(item.project_id ?? "")}" data-is-private="${item.is_private ? "1" : "0"}">
                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                         <div class="timeline-item-main">
-                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}" data-private-mask-title>${escapeHtml(item.title || "Projekt")}</a>
+                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}" data-private-mask-title>${escapeHtml(item.title || "Project")}</a>
                         </div>
                     </article>
                 `;
@@ -157,14 +157,14 @@
                 <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="note" data-is-private="${item.is_private ? "1" : "0"}">
                     <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                     <div class="timeline-item-main">
-                        <strong class="timeline-item-title" data-note-title-display data-private-mask-title>${escapeHtml(item.title || "Notatka")}</strong>
+                        <strong class="timeline-item-title" data-note-title-display data-private-mask-title>${escapeHtml(item.title || "Note")}</strong>
                         <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>${escapeHtml(item.body || "")}</p>
                         <div class="timeline-note-fields d-none">
-                            <input class="form-control form-control-sm" value="${escapeHtml(item.title || "")}" data-note-title aria-label="Tytul notatki">
-                            <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Tresc notatki">${escapeHtml(item.body || "")}</textarea>
+                            <input class="form-control form-control-sm" value="${escapeHtml(item.title || "")}" data-note-title aria-label="Note title">
+                            <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Note content">${escapeHtml(item.body || "")}</textarea>
                             <div class="form-check timeline-note-privacy">
-                                <input class="form-check-input" type="checkbox" data-note-private aria-label="Oznacz blok jako prywatny" ${item.is_private ? "checked" : ""}>
-                                <label class="form-check-label small">Prywatne</label>
+                                <input class="form-check-input" type="checkbox" data-note-private aria-label="Mark block as private" ${item.is_private ? "checked" : ""}>
+                                <label class="form-check-label small">Private</label>
                             </div>
                         </div>
                     </div>
@@ -247,7 +247,7 @@
 
         const createNoteElement = () => {
             const wrapper = document.createElement("div");
-            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Notatka", body: "" }).trim();
+            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Note", body: "" }).trim();
             return wrapper.firstElementChild;
         };
 
@@ -258,11 +258,11 @@
                     <div class="timeline-group-marker"></div>
                     <div class="timeline-group-content">
                         <div class="timeline-group-header">
-                            <h2 class="timeline-group-title d-none" data-group-title>Grupa</h2>
-                            <input class="form-control form-control-sm timeline-group-name" value="" data-group-name aria-label="Nazwa grupy" placeholder="Nazwa grupy">
+                            <h2 class="timeline-group-title d-none" data-group-title>Group</h2>
+                            <input class="form-control form-control-sm timeline-group-name" value="" data-group-name aria-label="Group name" placeholder="Group name">
                             <div class="timeline-group-move" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Przenieś sekcję wyżej">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Przenieś sekcję niżej">↓</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
                             </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-delete-group>Remove</button>
                         </div>
@@ -479,7 +479,7 @@
                 });
                 const payload = await response.json();
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Nie udalo sie zapisac timeline.");
+                    throw new Error(payload.message || "Failed to save timeline.");
                 }
 
                 savedTimeline = payload.groups;

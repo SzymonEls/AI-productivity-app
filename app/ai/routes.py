@@ -32,7 +32,7 @@ def require_ai_enabled():
     if request.endpoint not in {"ai.generate_project_plan", "ai.create_daily_plan"}:
         return None
     if _wants_json_response():
-        return jsonify({"ok": False, "error": "Ta funkcja jest niedostepna."}), 404
+        return jsonify({"ok": False, "error": "This feature is unavailable."}), 404
     abort(404)
 
 
@@ -61,8 +61,8 @@ def generate_project_plan():
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first_or_404()
     if not user_prompt:
         if _wants_json_response():
-            return jsonify({"ok": False, "error": "Wpisz prompt dla AI."}), 400
-        flash("Wpisz prompt dla AI, aby uporzadkowac plan projektu.", "danger")
+            return jsonify({"ok": False, "error": "Enter a prompt for AI."}), 400
+        flash("Enter a prompt for AI to organize the project plan.", "danger")
         return redirect(url_for("projects.project_detail", project_id=project.id))
 
     try:
@@ -94,14 +94,14 @@ def generate_project_plan():
     except SQLAlchemyError:
         db.session.rollback()
         if _wants_json_response():
-            return jsonify({"ok": False, "error": "Nie udalo sie zapisac zmian projektu i historii AI."}), 500
-        flash("Nie udalo sie zapisac zmian projektu i historii AI.", "danger")
+            return jsonify({"ok": False, "error": "Failed to save project changes and AI history."}), 500
+        flash("Failed to save project changes and AI history.", "danger")
         return redirect(url_for("projects.project_detail", project_id=project.id))
     if _wants_json_response():
         return jsonify(
             {
                 "ok": True,
-                "message": "AI uporzadkowalo plan projektu.",
+                "message": "AI organized the project plan.",
                 "project": {
                     "title": project.title,
                     "short_goal": project.short_goal,
@@ -114,7 +114,7 @@ def generate_project_plan():
                 "history_url": url_for("ai.history_detail", plan_id=history_entry.id),
             }
         )
-    flash("AI uporzadkowalo plan projektu i zapisalo wynik w historii.", "success")
+    flash("AI organized the project plan and saved the result in history.", "success")
     return redirect(url_for("projects.project_detail", project_id=project.id))
 
 
@@ -126,16 +126,16 @@ def create_daily_plan():
 
     if not user_prompt:
         if _wants_json_response():
-            return jsonify({"ok": False, "error": "Wpisz prompt dla AI."}), 400
-        flash("Wpisz prompt dla AI, aby wygenerowac odpowiedz markdown.", "danger")
+            return jsonify({"ok": False, "error": "Enter a prompt for AI."}), 400
+        flash("Enter a prompt for AI to generate a markdown response.", "danger")
         return redirect(url_for("ai.daily_planning"))
 
     try:
         target_date = date.fromisoformat(raw_date)
     except ValueError:
         if _wants_json_response():
-            return jsonify({"ok": False, "error": "Wybierz poprawna date."}), 400
-        flash("Wybierz poprawna date planu dnia.", "danger")
+            return jsonify({"ok": False, "error": "Choose a valid date."}), 400
+        flash("Choose a valid date for the daily plan.", "danger")
         return redirect(url_for("ai.daily_planning"))
 
     projects = (
@@ -170,8 +170,8 @@ def create_daily_plan():
     except SQLAlchemyError:
         db.session.rollback()
         if _wants_json_response():
-            return jsonify({"ok": False, "error": "Nie udalo sie zapisac odpowiedzi AI w historii."}), 500
-        flash("Nie udalo sie zapisac odpowiedzi AI w historii.", "danger")
+            return jsonify({"ok": False, "error": "Failed to save the AI response in history."}), 500
+        flash("Failed to save the AI response in history.", "danger")
         return redirect(url_for("ai.daily_planning"))
     if _wants_json_response():
         visible_content = strip_repeated_title(history_entry.content, history_entry.title)
@@ -187,7 +187,7 @@ def create_daily_plan():
                 },
             }
         )
-    flash("AI przygotowalo odpowiedz markdown i zapisalo ja w historii.", "success")
+    flash("AI prepared the markdown response and saved it in history.", "success")
     return redirect(url_for("ai.history_detail", plan_id=history_entry.id))
 
 
@@ -214,12 +214,12 @@ def manual_daily_plan():
     try:
         target_date = date.fromisoformat(raw_date)
     except ValueError:
-        flash("Wybierz poprawna date planu dnia.", "danger")
+        flash("Choose a valid date for the daily plan.", "danger")
         return _render_manual_plan_template(date.today(), projects, timeline_groups), 400
 
     selected_project_ids = _parse_project_ids(request.form.getlist("project_ids"))
     if not selected_project_ids:
-        flash("Wybierz przynajmniej jeden projekt do planu recznego.", "danger")
+        flash("Choose at least one project for the manual plan.", "danger")
         return _render_manual_plan_template(target_date, projects, timeline_groups), 400
 
     selected_projects = (
@@ -230,7 +230,7 @@ def manual_daily_plan():
     ordered_projects = [project_by_id[project_id] for project_id in selected_project_ids if project_id in project_by_id]
 
     if len(ordered_projects) != len(selected_project_ids):
-        flash("Nie udalo sie znalezc wszystkich wybranych projektow.", "danger")
+        flash("Could not find all the selected projects.", "danger")
         return _render_manual_plan_template(target_date, projects, timeline_groups), 400
 
     tasks = []
@@ -240,7 +240,7 @@ def manual_daily_plan():
             continue
         tasks.append({"project": project, "tasks": project_tasks})
 
-    title = f"Plan dnia - {target_date.isoformat()}"
+    title = f"Daily plan - {target_date.isoformat()}"
     content = _render_manual_daily_plan(target_date, tasks)
     request_payload = {
         "mode": "manual_daily_plan",
@@ -263,7 +263,7 @@ def manual_daily_plan():
         owner=current_user,
         plan_type=MANUAL_DAILY_PLAN,
         title=title,
-        user_prompt="Plan reczny",
+        user_prompt="Manual plan",
         target_date=target_date,
         content=content,
         request_payload=json.dumps(request_payload, ensure_ascii=False, indent=2),
@@ -280,10 +280,10 @@ def manual_daily_plan():
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie zapisac recznego planu dnia.", "danger")
+        flash("Failed to save the manual daily plan.", "danger")
         return _render_manual_plan_template(target_date, projects, timeline_groups), 500
 
-    flash("Reczny plan dnia zostal zapisany i przypiety na home.", "success")
+    flash("The manual daily plan was saved and pinned to home.", "success")
     return redirect(url_for("ai.history_detail", plan_id=history_entry.id))
 
 
@@ -352,7 +352,7 @@ def edit_history_plan(plan_id):
     raw_date = request.form.get("target_date", "").strip()
 
     if not title or not content:
-        flash("Tytul i tresc planu nie moga byc puste.", "danger")
+        flash("The plan title and content cannot be empty.", "danger")
         return redirect(url_for("ai.history_detail", plan_id=plan.id))
 
     target_date = None
@@ -360,7 +360,7 @@ def edit_history_plan(plan_id):
         try:
             target_date = date.fromisoformat(raw_date)
         except ValueError:
-            flash("Wybierz poprawna date planu.", "danger")
+            flash("Choose a valid plan date.", "danger")
             return redirect(url_for("ai.history_detail", plan_id=plan.id))
 
     plan.title = title
@@ -371,10 +371,10 @@ def edit_history_plan(plan_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie zapisac edycji planu.", "danger")
+        flash("Failed to save plan edits.", "danger")
         return redirect(url_for("ai.history_detail", plan_id=plan.id))
 
-    flash("Plan zostal zapisany.", "success")
+    flash("The plan was saved.", "success")
     return redirect(url_for("ai.history_detail", plan_id=plan.id))
 
 
@@ -392,10 +392,10 @@ def pin_history_plan(plan_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie przypiac planu.", "danger")
+        flash("Failed to pin the plan.", "danger")
         return redirect(url_for("ai.history_detail", plan_id=plan.id))
 
-    flash("Plan jest teraz przypiety na home.", "success")
+    flash("The plan is now pinned to home.", "success")
     return redirect(request.form.get("next") or url_for("ai.history_detail", plan_id=plan.id))
 
 
@@ -424,7 +424,7 @@ def _get_or_create_timeline(projects):
     changed = False
 
     if not groups:
-        groups = [ProjectTimelineGroup(owner=current_user, name="Projekty", position=0)]
+        groups = [ProjectTimelineGroup(owner=current_user, name="Projects", position=0)]
         db.session.add(groups[0])
         db.session.flush()
         changed = True
@@ -502,39 +502,39 @@ def _project_last_session_labels(projects):
 
 def _human_last_session_label(value, now):
     if not value:
-        return "Ostatnia sesja: brak"
+        return "Last session: none"
 
     timestamp = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
     seconds = int(max((now - timestamp.astimezone(timezone.utc)).total_seconds(), 0))
 
     if seconds < 60:
-        return "Ostatnia sesja: przed chwilą"
+        return "Last session: just now"
     if seconds < 3600:
         minutes = seconds // 60
-        return f"Ostatnia sesja: {minutes} min temu"
+        return f"Last session: {minutes} min ago"
     if seconds < 86400:
         hours = seconds // 3600
-        return f"Ostatnia sesja: {hours} godz. temu"
+        return f"Last session: {hours} hr ago"
     if seconds < 172800:
-        return "Ostatnia sesja: wczoraj"
+        return "Last session: yesterday"
     if seconds < 604800:
         days = seconds // 86400
-        return f"Ostatnia sesja: {days} dni temu"
+        return f"Last session: {days} days ago"
     if seconds < 1209600:
-        return "Ostatnia sesja: tydzień temu"
+        return "Last session: a week ago"
     if seconds < 2592000:
         weeks = seconds // 604800
-        return f"Ostatnia sesja: {weeks} tyg. temu"
+        return f"Last session: {weeks} wk ago"
     if seconds < 31536000:
         months = seconds // 2592000
-        return f"Ostatnia sesja: {months} mies. temu"
+        return f"Last session: {months} mo ago"
 
     years = seconds // 31536000
-    return "Ostatnia sesja: rok temu" if years == 1 else f"Ostatnia sesja: {years} lata temu"
+    return "Last session: a year ago" if years == 1 else f"Last session: {years} years ago"
 
 
 def _render_manual_daily_plan(target_date, tasks):
-    lines = [f"# Plan dnia - {target_date.isoformat()}", ""]
+    lines = [f"# Daily plan - {target_date.isoformat()}", ""]
     for item in tasks:
         project = item["project"]
         for task in item["tasks"]:

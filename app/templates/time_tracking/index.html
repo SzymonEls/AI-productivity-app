@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Śledzenie czasu{% endblock %}
+{% block title %}Time tracking{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
-        <h1 class="h2 mb-1">Śledzenie czasu</h1>
-        <p class="text-muted mb-0">Statystyki pracy, aktywny timer oraz edycja historycznych sesji.</p>
+        <h1 class="h2 mb-1">Time tracking</h1>
+        <p class="text-muted mb-0">Work statistics, active timer, and editing of historical sessions.</p>
     </div>
     {% if active_entry %}
         <a class="btn btn-outline-success" href="{{ url_for('projects.project_detail', project_id=active_entry.project_id) }}">
-            Aktywny timer: {{ active_entry.project.title }}
+            Active timer: {{ active_entry.project.title }}
         </a>
     {% endif %}
 </div>
@@ -19,20 +19,20 @@
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-md-3">
-                <label class="form-label" for="trackingDateMode">Zakres dat</label>
+                <label class="form-label" for="trackingDateMode">Date range</label>
                 <select class="form-select" id="trackingDateMode" name="date_mode" data-date-mode>
-                    <option value="day" {% if date_mode != "all" %}selected{% endif %}>Wybrany dzień</option>
-                    <option value="all" {% if date_mode == "all" %}selected{% endif %}>Wszystkie daty</option>
+                    <option value="day" {% if date_mode != "all" %}selected{% endif %}>Selected day</option>
+                    <option value="all" {% if date_mode == "all" %}selected{% endif %}>All dates</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label" for="trackingDate">Dzień</label>
+                <label class="form-label" for="trackingDate">Day</label>
                 <input class="form-control" type="date" id="trackingDate" name="date" value="{{ selected_day.isoformat() if selected_day else '' }}" data-date-input data-default-date="{{ today.isoformat() }}" {% if all_dates %}disabled{% endif %}>
             </div>
             <div class="col-md-4">
-                <label class="form-label" for="trackingProject">Projekt</label>
+                <label class="form-label" for="trackingProject">Project</label>
                 <select class="form-select" id="trackingProject" name="project_id">
-                    <option value="">Wszystkie projekty</option>
+                    <option value="">All projects</option>
                     {% for project in projects %}
                         <option value="{{ project.id }}" {% if selected_project and selected_project.id == project.id %}selected{% endif %}>
                             {{ project.title }}
@@ -41,10 +41,10 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <button class="btn btn-primary w-100" type="submit">Pokaż</button>
+                <button class="btn btn-primary w-100" type="submit">Show</button>
             </div>
             <div class="col-md-2">
-                <a class="btn btn-secondary" href="{{ url_for('time_tracking.index') }}">Resetuj filtry</a>
+                <a class="btn btn-secondary" href="{{ url_for('time_tracking.index') }}">Reset filters</a>
             </div>
         </div>
     </div>
@@ -57,7 +57,7 @@
         <section class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-                    <h2 class="h5 mb-0">Wybrany dzień</h2>
+                    <h2 class="h5 mb-0">Selected day</h2>
                     <strong>{{ format_duration(day_total_seconds) }}</strong>
                 </div>
                 {% if chart_projects %}
@@ -67,7 +67,7 @@
                         <div
                             class="daily-time-pie-chart"
                             role="img"
-                            aria-label="Podzial czasu pracy w wybranym dniu"
+                            aria-label="Breakdown of work time on the selected day"
                             style="background: conic-gradient({% for item in chart_projects %}{% set color = pie_colors[loop.index0 % (pie_colors|length)] %}{% set start = pie.position %}{% set end = pie.position + (item.seconds * 100 / day_total_seconds) %}{{ color }} {{ start|round(3) }}% {{ end|round(3) }}%{% set pie.position = end %}{% if not loop.last %}, {% endif %}{% endfor %});"
                         >
                             <span>{{ format_duration(day_total_seconds) }}</span>
@@ -85,7 +85,7 @@
                         </div>
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">Brak zapisanych sesji dla wybranego dnia.</p>
+                    <p class="text-muted mb-0">No sessions recorded for the selected day.</p>
                 {% endif %}
             </div>
         </section>
@@ -96,7 +96,7 @@
         <section class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-                    <h2 class="h5 mb-0">Ostatnie dni</h2>
+                    <h2 class="h5 mb-0">Recent days</h2>
                     <strong>{{ format_duration(all_projects_daily_chart | sum(attribute='seconds')) }}</strong>
                 </div>
                 {% set max_project_seconds = all_projects_daily_chart | map(attribute='seconds') | max %}
@@ -120,7 +120,7 @@
         <section class="card shadow-sm h-100">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-                    <h2 class="h5 mb-0">{% if all_dates %}Projekt w czasie{% else %}Czas projektu w wybranym dniu{% endif %}</h2>
+                    <h2 class="h5 mb-0">{% if all_dates %}Project over time{% else %}Project time on the selected day{% endif %}</h2>
                     {% if selected_project %}
                         <span class="small text-muted">{{ selected_project.title }}</span>
                     {% endif %}
@@ -144,7 +144,7 @@
                         {% endfor %}
                     </div>
                 {% else %}
-                    <p class="text-muted mb-0">Wybierz projekt, aby zobaczyć podział na poszczególne dni.</p>
+                    <p class="text-muted mb-0">Select a project to see the breakdown by day.</p>
                 {% endif %}
             </div>
         </section>
@@ -157,8 +157,8 @@
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
             <div>
-                <h2 class="h5 mb-1">Sesje</h2>
-                <p class="text-muted mb-0">Możesz ręcznie poprawić projekt, zakres czasu i opis albo usunąć wpis.</p>
+                <h2 class="h5 mb-1">Sessions</h2>
+                <p class="text-muted mb-0">You can manually edit the project, time range, and description, or delete the entry.</p>
             </div>
         </div>
 
@@ -167,12 +167,12 @@
                 <table class="table align-middle">
                     <thead>
                         <tr>
-                            <th>Projekt</th>
+                            <th>Project</th>
                             <th>Start</th>
-                            <th>Koniec</th>
-                            <th>Czas</th>
-                            <th>Opis</th>
-                            <th class="text-end">Akcje</th>
+                            <th>End</th>
+                            <th>Duration</th>
+                            <th>Description</th>
+                            <th class="text-end">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -183,7 +183,7 @@
                                     <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() if selected_day else '' }}">
                                     <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
                                     <td>
-                                        <select class="form-select form-select-sm" name="project_id" aria-label="Projekt">
+                                        <select class="form-select form-select-sm" name="project_id" aria-label="Project">
                                             {% for project in projects %}
                                                 <option value="{{ project.id }}" {% if project.id == entry.project_id %}selected{% endif %}>
                                                     {{ project.title }}
@@ -197,7 +197,7 @@
                                     <td>
                                         <input class="form-control form-control-sm" type="datetime-local" name="ended_at" value="{{ local_datetime_value(entry.ended_at) }}" {% if not entry.ended_at %}disabled{% endif %} required>
                                         {% if not entry.ended_at %}
-                                            <span class="badge text-bg-success mt-1">trwa</span>
+                                            <span class="badge text-bg-success mt-1">ongoing</span>
                                         {% endif %}
                                     </td>
                                     <td class="text-nowrap">{{ format_duration(entry_elapsed_seconds(entry)) }}</td>
@@ -205,13 +205,13 @@
                                         <textarea class="form-control form-control-sm time-entry-description" name="description" rows="2">{{ entry.description or "" }}</textarea>
                                     </td>
                                     <td class="text-end">
-                                        <button class="btn btn-primary btn-sm" type="submit">Zapisz</button>
+                                        <button class="btn btn-primary btn-sm" type="submit">Save</button>
                                 </form>
-                                <form class="d-inline" method="post" action="{{ url_for('time_tracking.delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Usunąć tę sesję?');">
+                                <form class="d-inline" method="post" action="{{ url_for('time_tracking.delete_entry', entry_id=entry.id) }}" onsubmit="return confirm('Delete this session?');">
                                     <input type="hidden" name="selected_date_mode" value="{{ date_mode }}">
                                     <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() if selected_day else '' }}">
                                     <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
-                                    <button class="btn btn-outline-danger btn-sm" type="submit">Usuń</button>
+                                    <button class="btn btn-outline-danger btn-sm" type="submit">Delete</button>
                                 </form>
                                     </td>
                             </tr>
@@ -220,26 +220,26 @@
                 </table>
             </div>
             {% if entries_pagination.pages > 1 %}
-                <nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" aria-label="Strony sesji">
+                <nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" aria-label="Session pages">
                     <a
                         class="btn btn-outline-secondary btn-sm {% if not entries_pagination.has_prev %}disabled{% endif %}"
                         href="{% if entries_pagination.has_prev %}{{ url_for('time_tracking.index', date_mode=date_mode, date=selected_day.isoformat() if selected_day else None, project_id=selected_project_id or None, page=entries_pagination.prev_num) }}{% else %}#{% endif %}"
                         {% if not entries_pagination.has_prev %}aria-disabled="true"{% endif %}
                     >
-                        Poprzednie
+                        Previous
                     </a>
-                    <span class="small text-muted">Strona {{ entries_pagination.page }} z {{ entries_pagination.pages }}</span>
+                    <span class="small text-muted">Page {{ entries_pagination.page }} of {{ entries_pagination.pages }}</span>
                     <a
                         class="btn btn-outline-secondary btn-sm {% if not entries_pagination.has_next %}disabled{% endif %}"
                         href="{% if entries_pagination.has_next %}{{ url_for('time_tracking.index', date_mode=date_mode, date=selected_day.isoformat() if selected_day else None, project_id=selected_project_id or None, page=entries_pagination.next_num) }}{% else %}#{% endif %}"
                         {% if not entries_pagination.has_next %}aria-disabled="true"{% endif %}
                     >
-                        Następne
+                        Next
                     </a>
                 </nav>
             {% endif %}
         {% else %}
-            <p class="text-muted mb-0">Nie ma sesji pasujących do wybranych filtrów.</p>
+            <p class="text-muted mb-0">No sessions match the selected filters.</p>
         {% endif %}
     </div>
 </section>

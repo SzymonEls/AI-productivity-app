@@ -15,7 +15,7 @@
         <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
             <span class="badge text-bg-dark">{{ plan.plan_type.replace('_', ' ') }}</span>
             {% if plan.is_pinned %}
-                <span class="badge text-bg-primary">przypiety</span>
+                <span class="badge text-bg-primary">pinned</span>
             {% endif %}
             {% if plan.target_date %}
                 <span class="badge text-bg-light">{{ plan.target_date.isoformat() }}</span>
@@ -29,17 +29,17 @@
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <button type="button" class="btn btn-outline-primary" data-download-plan-markdown>
-            Pobierz markdown
+            Download markdown
         </button>
         {% if plan.plan_type in home_plan_types %}
             <form method="post" action="{{ url_for('ai.pin_history_plan', plan_id=plan.id) }}">
                 <input type="hidden" name="next" value="{{ url_for('ai.history_detail', plan_id=plan.id) }}">
                 <button class="btn btn-outline-primary" type="submit" {% if plan.is_pinned %}disabled{% endif %}>
-                    {% if plan.is_pinned %}Przypiety na home{% else %}Przypnij na home{% endif %}
+                    {% if plan.is_pinned %}Pinned to home{% else %}Pin to home{% endif %}
                 </button>
             </form>
         {% endif %}
-        <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">Historia</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">History</a>
         <a class="btn btn-outline-primary" href="{{ url_for('main.home') }}">Home</a>
     </div>
 </div>
@@ -53,14 +53,14 @@
         <div class="card shadow-sm">
             <div class="card-body p-4">
                 {% if plan.plan_type in home_plan_types %}
-                    <h2 class="h4 mb-3">Edytuj plan</h2>
+                    <h2 class="h4 mb-3">Edit plan</h2>
                     <form method="post" action="{{ url_for('ai.edit_history_plan', plan_id=plan.id) }}" id="plan-editor">
                         <div class="mb-3">
-                            <label class="form-label" for="plan-title">Tytul</label>
+                            <label class="form-label" for="plan-title">Title</label>
                             <input class="form-control" id="plan-title" name="title" value="{{ plan.title }}" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label" for="plan-target-date">Data planu</label>
+                            <label class="form-label" for="plan-target-date">Plan date</label>
                             <input
                                 class="form-control"
                                 id="plan-target-date"
@@ -70,16 +70,16 @@
                             >
                         </div>
                         <div class="mb-3">
-                            <label class="form-label" for="plan-content">Tresc markdown</label>
+                            <label class="form-label" for="plan-content">Markdown content</label>
                             <textarea class="form-control long-goal-markdown-field" id="plan-content" name="content" rows="18" required>{{ plan.content }}</textarea>
                         </div>
-                        <button class="btn btn-primary" type="submit">Zapisz zmiany</button>
+                        <button class="btn btn-primary" type="submit">Save changes</button>
                     </form>
 
                     <!-- <hr class="my-4"> -->
-                    <!-- <h2 class="h4 mb-3">Podglad</h2> -->
+                    <!-- <h2 class="h4 mb-3">Preview</h2> -->
                 {% else %}
-                    <h2 class="h4 mb-3">Zapisana odpowiedz</h2>
+                    <h2 class="h4 mb-3">Saved response</h2>
                     <div class="markdown-content">{{ plan.content | without_repeated_title(plan.title) | markdown }}</div>
                 {% endif %}
                 
@@ -89,18 +89,18 @@
     <div class="col-lg-4">
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <h2 class="h5 mb-3">Prompt uzytkownika</h2>
+                <h2 class="h5 mb-3">User prompt</h2>
                 <p class="preserve-lines mb-0">{{ plan.user_prompt }}</p>
             </div>
         </div>
 
         <div class="card shadow-sm mb-4">
             <div class="card-body">
-                <h2 class="h5 mb-3">Wyslane do AI</h2>
+                <h2 class="h5 mb-3">Sent to AI</h2>
                 {% if parsed_request_payload %}
                     <pre class="history-raw-json mb-0">{{ parsed_request_payload | tojson(indent=2) }}</pre>
                 {% else %}
-                    <p class="text-muted mb-0">Ten wpis nie ma zapisanego pelnego requestu. Nowe wpisy beda go pokazywac tutaj.</p>
+                    <p class="text-muted mb-0">This entry doesn't have a saved full request. New entries will show it here.</p>
                 {% endif %}
             </div>
         </div>
@@ -108,7 +108,7 @@
         {% if parsed_payload %}
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="h5 mb-3">Surowy wynik AI</h2>
+                    <h2 class="h5 mb-3">Raw AI output</h2>
                     <pre class="history-raw-json mb-0">{{ parsed_payload | tojson(indent=2) }}</pre>
                 </div>
             </div>
@@ -295,7 +295,7 @@
                     name: "strikethrough",
                     action: EasyMDE.toggleStrikethrough,
                     className: "fa-solid fa-strikethrough",
-                    title: "Przekreslenie",
+                    title: "Strikethrough",
                 },
                 "heading",
                 "|",
@@ -372,11 +372,11 @@
                 .replace(/[^a-z0-9]+/g, "-")
                 .replace(/^-+|-+$/g, "");
 
-            return `${normalizedTitle || "opis-projektu"}.md`;
+            return `${normalizedTitle || "project-description"}.md`;
         };
 
         const downloadMarkdown = () => {
-            const title = document.getElementById("plan-title")?.value.trim() || initialData.title || "Opis projektu";
+            const title = document.getElementById("plan-title")?.value.trim() || initialData.title || "Project description";
             const content = textarea?.value ?? initialData.content ?? "";
             const blob = new Blob([`${content.trim()}\n`], { type: "text/markdown;charset=utf-8" });
             const url = URL.createObjectURL(blob);

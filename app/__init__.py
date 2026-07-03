@@ -93,13 +93,13 @@ def register_json_error_handlers(app):
     @app.errorhandler(404)
     def not_found_error(error):
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Nie znaleziono tego zasobu."}), 404
+            return jsonify({"ok": False, "message": "This resource was not found."}), 404
         return error
 
     @app.errorhandler(500)
     def internal_error(error):
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Wystapil blad serwera podczas zapisu."}), 500
+            return jsonify({"ok": False, "message": "A server error occurred while saving."}), 500
         return error
 
 
@@ -107,7 +107,7 @@ def register_login_handlers(manager):
     @manager.unauthorized_handler
     def unauthorized():
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Sesja wygasla. Zaloguj sie ponownie."}), 401
+            return jsonify({"ok": False, "message": "Session expired. Please log in again."}), 401
         return redirect_to_login()
 
 

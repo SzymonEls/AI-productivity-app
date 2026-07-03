@@ -13,7 +13,7 @@ calendar_bp = Blueprint("calendar", __name__)
 def require_calendar_enabled():
     if current_app.config.get("CALENDAR_ENABLED", True):
         return None
-    message = "Kalendarz jest wylaczony w konfiguracji tej instancji."
+    message = "The calendar is disabled in this instance's configuration."
     if _wants_json_response():
         return jsonify({"ok": False, "message": message}), 404
     flash(message, "warning")
@@ -80,9 +80,9 @@ def settings():
         ical_url = request.form.get("ical_url", "").strip()
 
         if not name or not ical_url:
-            flash("Podaj nazwe kalendarza i adres iCal.", "danger")
+            flash("Enter a calendar name and iCal address.", "danger")
         elif not _looks_like_url(ical_url):
-            flash("Adres iCal musi zaczynac sie od http:// lub https://.", "danger")
+            flash("The iCal address must start with http:// or https://.", "danger")
         else:
             subscription = CalendarSubscription(
                 user_id=current_user.id,
@@ -91,7 +91,7 @@ def settings():
             )
             db.session.add(subscription)
             db.session.commit()
-            flash("Kalendarz iCal zostal dodany.", "success")
+            flash("The iCal calendar was added.", "success")
             return redirect(url_for("calendar.settings"))
 
     subscriptions = (
@@ -113,7 +113,7 @@ def delete_subscription(subscription_id):
     ).first_or_404()
     db.session.delete(subscription)
     db.session.commit()
-    flash(f'Usunieto kalendarz "{subscription.name}".', "info")
+    flash(f'Deleted calendar "{subscription.name}".', "info")
     return redirect(url_for("calendar.settings"))
 
 

@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
-{% block title %}Reczne planowanie dnia{% endblock %}
+{% block title %}Manual daily planning{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
-        <h1 class="h2 mb-1">Reczne planowanie dnia</h1>
-        <p class="text-muted mb-0">Wybierz projekty, przejdz przez nie po kolei i wpisz zadanie dla kazdego.</p>
+        <h1 class="h2 mb-1">Manual daily planning</h1>
+        <p class="text-muted mb-0">Choose projects, go through them one by one, and enter a task for each.</p>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-outline-secondary" href="{{ url_for('ai.daily_planning') }}">Tryby planowania</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('ai.daily_planning') }}">Planning modes</a>
         <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Home</a>
     </div>
 </div>
@@ -20,7 +20,7 @@
             <div class="card-body p-4">
                 <div class="row g-4">
                     <div class="col-lg-4">
-                        <label class="form-label" for="target_date">Data planu</label>
+                        <label class="form-label" for="target_date">Plan date</label>
                         <input
                             type="date"
                             class="form-control"
@@ -31,7 +31,7 @@
                         >
                     </div>
                     <div class="col-lg-8">
-                        <p class="form-label mb-2">Projekty w planie</p>
+                        <p class="form-label mb-2">Projects in plan</p>
                         <div class="project-timeline manual-project-timeline">
                             {% for group in timeline_groups %}
                                 <section class="timeline-group">
@@ -57,17 +57,17 @@
                                                             <span class="d-flex align-items-center gap-2 flex-wrap">
                                                                 <strong class="timeline-item-title">{{ item.project.title }}</strong>
                                                                 {% if item.project.is_starred %}
-                                                                    <span class="manual-star-icon" aria-label="Projekt z gwiazdka" title="Projekt z gwiazdka">★</span>
+                                                                    <span class="manual-star-icon" aria-label="Starred project" title="Starred project">★</span>
                                                                 {% endif %}
                                                             </span>
                                                             <span class="timeline-item-text preserve-lines">{{ item.project.frequency }}</span>
-                                                            <span class="manual-last-session">{{ project_last_session_labels.get(item.project.id, "Ostatnia sesja: brak") }}</span>
+                                                            <span class="manual-last-session">{{ project_last_session_labels.get(item.project.id, "Last session: none") }}</span>
                                                         </span>
                                                     </label>
                                                 {% elif item.item_type == "note" %}
                                                     <article class="timeline-item timeline-note-item manual-timeline-note">
                                                         <div class="timeline-item-main">
-                                                            <strong class="timeline-item-title">{{ item.title or "Notatka" }}</strong>
+                                                            <strong class="timeline-item-title">{{ item.title or "Note" }}</strong>
                                                             {% if item.body %}
                                                                 <p class="timeline-item-text preserve-lines">{{ item.body }}</p>
                                                             {% endif %}
@@ -83,7 +83,7 @@
                     </div>
                 </div>
                 <div class="d-flex justify-content-end mt-4">
-                    <button class="btn btn-primary" type="button" data-manual-next-from-select>Dalej</button>
+                    <button class="btn btn-primary" type="button" data-manual-next-from-select>Next</button>
                 </div>
             </div>
         </div>
@@ -97,50 +97,50 @@
                                 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
                                     <span class="badge text-bg-dark" data-manual-counter></span>
                                     {% if project.is_starred %}
-                                        <span class="manual-star-icon" aria-label="Projekt z gwiazdka" title="Projekt z gwiazdka">★</span>
+                                        <span class="manual-star-icon" aria-label="Starred project" title="Starred project">★</span>
                                     {% endif %}
                                 </div>
                                 <h2 class="h3 mb-1">{{ project.title }}</h2>
                                 <p class="text-muted mb-0">{{ project.frequency }}</p>
-                                <p class="manual-last-session mb-0">{{ project_last_session_labels.get(project.id, "Ostatnia sesja: brak") }}</p>
+                                <p class="manual-last-session mb-0">{{ project_last_session_labels.get(project.id, "Last session: none") }}</p>
                             </div>
                             <button class="btn btn-outline-secondary" type="button" data-manual-back-to-select>
-                                Zmien projekty
+                                Change projects
                             </button>
                         </div>
 
                         <div class="row g-4">
                             <div class="col-lg-5">
                                 <section class="mb-4">
-                                    <h3 class="h6 text-uppercase text-muted">Krotki cel</h3>
+                                    <h3 class="h6 text-uppercase text-muted">Short-term goal</h3>
                                     <p class="preserve-lines mb-0">{{ project.short_goal }}</p>
                                 </section>
                                 <section>
-                                    <h3 class="h6 text-uppercase text-muted">Czestotliwosc</h3>
+                                    <h3 class="h6 text-uppercase text-muted">Frequency</h3>
                                     <p class="preserve-lines mb-0">{{ project.frequency }}</p>
                                 </section>
                             </div>
                             <div class="col-lg-7">
-                                <h3 class="h6 text-uppercase text-muted">Pelny opis projektu</h3>
+                                <h3 class="h6 text-uppercase text-muted">Full project description</h3>
                                 <div class="markdown-content manual-project-description">{{ project.long_goal | project_markdown }}</div>
                             </div>
                         </div>
 
                         <div class="mt-4">
-                            <label class="form-label" for="task_{{ project.id }}">Zadania do planu dnia (opcjonalnie)</label>
+                            <label class="form-label" for="task_{{ project.id }}">Tasks for the daily plan (optional)</label>
                             <textarea
                                 class="form-control"
                                 id="task_{{ project.id }}"
                                 name="task_{{ project.id }}"
                                 rows="5"
-                                placeholder="Wpisz zadania dla tego projektu, kazde w osobnej linii. Mozesz zostawic puste."
+                                placeholder="Enter tasks for this project, one per line. You can leave this empty."
                                 data-project-task
                             ></textarea>
                         </div>
 
                         <div class="d-flex justify-content-between gap-2 flex-wrap mt-4">
-                            <button class="btn btn-outline-secondary" type="button" data-manual-prev>Wstecz</button>
-                            <button class="btn btn-primary" type="button" data-manual-next>Dalej</button>
+                            <button class="btn btn-outline-secondary" type="button" data-manual-prev>Back</button>
+                            <button class="btn btn-primary" type="button" data-manual-next>Next</button>
                         </div>
                     </div>
                 </section>
@@ -149,19 +149,19 @@
 
         <div class="card shadow-sm manual-plan-step d-none" data-step="summary">
             <div class="card-body p-4">
-                <h2 class="h4 mb-3">Podsumowanie</h2>
+                <h2 class="h4 mb-3">Summary</h2>
                 <div class="markdown-content manual-plan-preview mb-4" data-manual-preview></div>
                 <div class="d-flex justify-content-between gap-2 flex-wrap">
-                    <button class="btn btn-outline-secondary" type="button" data-manual-summary-back>Wstecz</button>
-                    <button class="btn btn-primary" type="submit">Zapisz plan dnia</button>
+                    <button class="btn btn-outline-secondary" type="button" data-manual-summary-back>Back</button>
+                    <button class="btn btn-primary" type="submit">Save daily plan</button>
                 </div>
             </div>
         </div>
     </form>
 {% else %}
     <div class="empty-state text-center p-5 bg-light rounded-3">
-        <h2 class="h4">Brak projektow</h2>
-        <p class="text-muted">Utworz pierwszy projekt, zanim zbudujesz reczny plan dnia.</p>
+        <h2 class="h4">No projects</h2>
+        <p class="text-muted">Create your first project before building a manual daily plan.</p>
         <a class="btn btn-primary" href="{{ url_for('projects.create_project') }}">Create Project</a>
     </div>
 {% endif %}
@@ -206,8 +206,8 @@
                     const nextButton = panel.querySelector("[data-manual-next]");
                     const prevButton = panel.querySelector("[data-manual-prev]");
                     counter.textContent = `${currentIndex + 1} / ${selectedIds.length}`;
-                    nextButton.textContent = currentIndex === selectedIds.length - 1 ? "Podsumowanie" : "Dalej";
-                    prevButton.textContent = currentIndex === 0 ? "Wybierz projekty" : "Wstecz";
+                    nextButton.textContent = currentIndex === selectedIds.length - 1 ? "Summary" : "Next";
+                    prevButton.textContent = currentIndex === 0 ? "Choose projects" : "Back";
                     panel.querySelector("[data-project-task]")?.focus();
                 }
             });
@@ -218,7 +218,7 @@
             .replaceAll("<", "&lt;")
             .replaceAll(">", "&gt;");
 
-        const getPanelTitle = (panel) => panel.querySelector("h2")?.textContent.trim() || "Projekt";
+        const getPanelTitle = (panel) => panel.querySelector("h2")?.textContent.trim() || "Project";
 
         const getTaskLines = (textarea) => textarea.value
             .split(/\r?\n/)
@@ -237,7 +237,7 @@
                 });
             });
 
-            preview.innerHTML = `<h1>Plan dnia - ${escapeHtml(targetDate)}</h1><ul>${items.join("")}</ul>`;
+            preview.innerHTML = `<h1>Daily plan - ${escapeHtml(targetDate)}</h1><ul>${items.join("")}</ul>`;
             selectStep.classList.add("d-none");
             projectsStep.classList.add("d-none");
             summaryStep.classList.remove("d-none");
@@ -246,7 +246,7 @@
         form.querySelector("[data-manual-next-from-select]").addEventListener("click", () => {
             selectedIds = getSelectedIds();
             if (selectedIds.length === 0) {
-                window.alert("Wybierz przynajmniej jeden projekt.");
+                window.alert("Choose at least one project.");
                 return;
             }
 
@@ -288,7 +288,7 @@
             if (!selectedIds.length) {
                 event.preventDefault();
                 showSelection();
-                window.alert("Wybierz przynajmniej jeden projekt.");
+                window.alert("Choose at least one project.");
                 return;
             }
         });

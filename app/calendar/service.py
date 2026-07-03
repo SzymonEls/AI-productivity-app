@@ -38,9 +38,9 @@ def fetch_daily_plan(subscriptions, target_date, timezone_name, timeout=10):
                 if parsed_event:
                     events.append(parsed_event)
         except requests.RequestException as exc:
-            errors.append(f"{subscription.name}: nie udalo sie pobrac kalendarza ({exc})")
+            errors.append(f"{subscription.name}: failed to fetch the calendar ({exc})")
         except Exception as exc:
-            errors.append(f"{subscription.name}: nie udalo sie odczytac danych iCal ({exc})")
+            errors.append(f"{subscription.name}: failed to read iCal data ({exc})")
 
     events.sort(key=lambda item: (item["sort_start"], not item["is_all_day"], item["title"].lower()))
     return events, errors
@@ -62,7 +62,7 @@ def _parse_ical_event(component, calendar_name, day_start, day_end, timezone):
     raw_start = component.decoded("DTSTART")
     start = _to_local_datetime(raw_start, timezone)
     end = _to_local_datetime(component.decoded("DTEND"), timezone) if component.get("DTEND") else None
-    title = str(component.get("SUMMARY", "Bez tytulu"))
+    title = str(component.get("SUMMARY", "Untitled"))
     is_all_day = isinstance(raw_start, date) and not isinstance(raw_start, datetime)
 
     if is_all_day and end is None:

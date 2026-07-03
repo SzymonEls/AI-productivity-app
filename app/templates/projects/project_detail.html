@@ -42,7 +42,7 @@
             aria-controls="projectTimerModal"
         >
             <i class="fa-regular fa-clock" aria-hidden="true"></i>
-            <span>Dzisiejszy czas pracy</span>
+            <span>Today's work time</span>
             <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
         <button
@@ -54,7 +54,7 @@
             Settings
         </button>
         <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
-            Pobierz markdown
+            Download markdown
         </button>
         <button
             type="button"
@@ -63,7 +63,7 @@
             data-bs-target="#projectArchiveModal"
             data-archive-open-button
         >
-            Archiwum
+            Archive
         </button>
         {% if ai_enabled %}
             <button
@@ -73,7 +73,7 @@
                 data-bs-target="#projectAiModal"
                 {% if not is_openai_ready %}disabled{% endif %}
             >
-                Uruchom AI
+                Run AI
             </button>
         {% endif %}
         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
@@ -193,12 +193,12 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title h5">Zarchiwizowane sekcje</h2>
+                <h2 class="modal-title h5">Archived sections</h2>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <p class="text-muted mb-0 {% if project.archived_long_goal %}d-none{% endif %}" data-archive-empty>
-                    Brak zarchiwizowanych sekcji.
+                    No archived sections.
                 </p>
                 <div
                     class="markdown-content {% if not project.archived_long_goal %}d-none{% endif %}"
@@ -229,9 +229,9 @@
         <div class="modal-content project-timer-modal">
             <div class="modal-header project-timer-modal-header">
                 <div class="min-w-0">
-                    <h2 class="modal-title h5">Dzisiejszy czas pracy</h2>
+                    <h2 class="modal-title h5">Today's work time</h2>
                     <span class="small text-muted" data-timer-state>
-                        {% if timer_summary.active_entry %}Timer jest uruchomiony{% else %}Timer jest zatrzymany{% endif %}
+                        {% if timer_summary.active_entry %}Timer is running{% else %}Timer is stopped{% endif %}
                     </span>
                 </div>
                 <strong class="project-timer-clock ms-auto" data-timer-clock>00:00:00</strong>
@@ -239,24 +239,24 @@
             </div>
             <div class="modal-body">
                 <div class="project-timer-actions mb-3">
-                    <button type="button" class="btn btn-success" data-timer-start>Rozpocznij sesję</button>
-                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>Zakończ sesję</button>
+                    <button type="button" class="btn btn-success" data-timer-start>Start session</button>
+                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>End session</button>
                 </div>
-                <label class="form-label" for="projectTimerDescription">Opis bieżącej sesji</label>
+                <label class="form-label" for="projectTimerDescription">Current session description</label>
                 <textarea
                     id="projectTimerDescription"
                     class="form-control timer-description-field"
                     data-timer-description
-                    placeholder="Co zostało zrobione w tej sesji..."
+                    placeholder="What was done in this session..."
                 >{{ timer_summary.active_description }}</textarea>
                 <div class="project-timer-sessions mt-3">
-                    <h3 class="h6 mb-2">Dzisiejsze sesje</h3>
+                    <h3 class="h6 mb-2">Today's sessions</h3>
                     <div class="project-timer-session-list" data-timer-sessions></div>
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
                 <span class="small text-muted" data-timer-description-status></span>
-                <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Zapisz opis</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Save description</button>
             </div>
         </div>
     </div>
@@ -286,7 +286,7 @@
                             data-settings-starred-toggle
                             {% if project.is_starred %}checked{% endif %}
                         >
-                        <label class="form-check-label" for="projectStarred">Ulubiony (kontekst dla AI Daily Planning)</label>
+                        <label class="form-check-label" for="projectStarred">Starred (context for AI Daily Planning)</label>
                     </div>
 
                     <div class="form-check form-switch">
@@ -297,7 +297,7 @@
                             data-settings-private-toggle
                             {% if project.is_private %}checked{% endif %}
                         >
-                        <label class="form-check-label" for="projectPrivate">Projekt prywatny</label>
+                        <label class="form-check-label" for="projectPrivate">Private project</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -316,13 +316,13 @@
                 <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
                     <input type="hidden" name="project_id" value="{{ project.id }}">
                     <div class="modal-header">
-                        <h2 class="modal-title h5" id="projectAiModalLabel">AI: Uporzadkuj plan projektu</h2>
+                        <h2 class="modal-title h5" id="projectAiModalLabel">AI: Organize project plan</h2>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
                         {% if not is_openai_ready %}
                             <div class="alert alert-warning">
-                                AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten formularz.
+                                AI is inactive. Add `OPENAI_API_KEY` to `.env` to enable this form.
                             </div>
                         {% endif %}
                         <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
@@ -332,16 +332,16 @@
                             id="ai-project-prompt"
                             name="prompt"
                             rows="7"
-                            placeholder="Np. Uporzadkuj ten projekt w konkretny plan markdown z krokami, checklistami i najblizszym rytmem pracy."
+                            placeholder="E.g. Organize this project into a concrete markdown plan with steps, checklists, and a near-term work rhythm."
                             {% if not is_openai_ready %}disabled{% endif %}
                             required
                         ></textarea>
                     </div>
                     <div class="modal-footer">
-                        <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">Historia AI</a>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zamknij</button>
+                        <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">AI History</a>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
                         <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
-                            <span class="submit-label">Uruchom AI</span>
+                            <span class="submit-label">Run AI</span>
                             <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
                         </button>
                     </div>
@@ -458,8 +458,8 @@
                 button.type = "button";
                 button.className = "project-section-archive-button";
                 button.dataset.archiveSection = String(index);
-                button.setAttribute("aria-label", "Archiwizuj sekcje");
-                button.title = "Archiwizuj sekcje";
+                button.setAttribute("aria-label", "Archive section");
+                button.title = "Archive section";
                 button.innerHTML = '<i class="fa-solid fa-box-archive" aria-hidden="true"></i>';
                 section.querySelector(".project-markdown-section-card")?.appendChild(button);
             });
@@ -479,8 +479,8 @@
                 button.type = "button";
                 button.className = "project-section-archive-button";
                 button.dataset.restoreSection = String(index);
-                button.setAttribute("aria-label", "Przywroc sekcje z archiwum");
-                button.title = "Przywroc sekcje z archiwum";
+                button.setAttribute("aria-label", "Restore section from archive");
+                button.title = "Restore section from archive";
                 button.innerHTML = '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i>';
                 section.querySelector(".project-markdown-section-card")?.appendChild(button);
             });
@@ -689,7 +689,7 @@
                         name: "strikethrough",
                         action: EasyMDE.toggleStrikethrough,
                         className: "fa-solid fa-strikethrough",
-                        title: "Przekreslenie",
+                        title: "Strikethrough",
                     },
                     "heading",
                     "|",
@@ -767,7 +767,7 @@
                 return response.json();
             }
 
-            throw new Error(response.redirected ? "Sesja wygasla. Zaloguj sie ponownie i sprobuj jeszcze raz." : fallbackMessage);
+            throw new Error(response.redirected ? "Session expired. Please log in again and try again." : fallbackMessage);
         };
 
         const getLongGoalMarkdown = () => {
@@ -812,11 +812,11 @@
                 .replace(/[^a-z0-9]+/g, "-")
                 .replace(/^-+|-+$/g, "");
 
-            return `${normalizedTitle || "projekt"}.md`;
+            return `${normalizedTitle || "project"}.md`;
         };
 
         const buildProjectMarkdown = () => {
-            const title = getSectionCurrentValue("title").trim() || "Projekt";
+            const title = getSectionCurrentValue("title").trim() || "Project";
             const shortGoal = getSectionCurrentValue("short-goal").trim();
             const frequency = getSectionCurrentValue("frequency").trim();
             const longGoal = getSectionCurrentValue("long-goal").trim();
@@ -1070,7 +1070,7 @@
                     body: new FormData(form),
                 });
 
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
                     throw new Error(payload.message || "Could not save changes.");
                 }
@@ -1097,10 +1097,10 @@
                 return;
             }
             if (hasUnsavedChanges()) {
-                showAlert("Zapisz albo anuluj niezapisane zmiany przed archiwizacja sekcji.", "warning");
+                showAlert("Save or cancel unsaved changes before archiving the section.", "warning");
                 return;
             }
-            if (!window.confirm("Przeniesc te sekcje do archiwum?")) {
+            if (!window.confirm("Move this section to the archive?")) {
                 return;
             }
 
@@ -1119,9 +1119,9 @@
                     },
                     body: formData,
                 });
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Nie udalo sie zarchiwizowac sekcji.");
+                    throw new Error(payload.message || "Failed to archive the section.");
                 }
 
                 updateDisplayValues(payload.project);
@@ -1139,10 +1139,10 @@
                 return;
             }
             if (hasUnsavedChanges()) {
-                showAlert("Zapisz albo anuluj niezapisane zmiany przed przywroceniem sekcji.", "warning");
+                showAlert("Save or cancel unsaved changes before restoring the section.", "warning");
                 return;
             }
-            if (!window.confirm("Przywrocic te sekcje z archiwum do planu?")) {
+            if (!window.confirm("Restore this section from the archive to the plan?")) {
                 return;
             }
 
@@ -1161,9 +1161,9 @@
                     },
                     body: formData,
                 });
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Nie udalo sie przywrocic sekcji.");
+                    throw new Error(payload.message || "Failed to restore the section.");
                 }
 
                 updateDisplayValues(payload.project);
@@ -1301,7 +1301,7 @@
                         },
                         body: new FormData(settingsForm),
                     });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                     if (!response.ok || !payload.ok) {
                         throw new Error(payload.message || "Could not save settings.");
                     }
@@ -1403,11 +1403,11 @@
                     buttonClock.classList.toggle("d-none", !isRunning);
                 }
                 if (stateLabel) {
-                    stateLabel.textContent = isRunning ? "Timer jest uruchomiony" : "Timer jest zatrzymany";
+                    stateLabel.textContent = isRunning ? "Timer is running" : "Timer is stopped";
                 }
                 if (startButton) {
                     startButton.disabled = isRunning;
-                    startButton.textContent = isRunning ? "Sesja trwa" : "Rozpocznij nową sesję";
+                    startButton.textContent = isRunning ? "Session in progress" : "Start new session";
                 }
                 if (pauseButton) {
                     pauseButton.disabled = !isRunning;
@@ -1415,8 +1415,8 @@
                 if (descriptionField) {
                     descriptionField.disabled = !isRunning;
                     descriptionField.placeholder = isRunning
-                        ? "Co zostało zrobione w tej sesji..."
-                        : "Rozpocznij nową sesję, żeby dodać jej opis.";
+                        ? "What was done in this session..."
+                        : "Start a new session to add its description.";
                 }
                 if (saveDescriptionButton) {
                     saveDescriptionButton.disabled = !isRunning;
@@ -1428,7 +1428,7 @@
                     return;
                 }
                 if (!Array.isArray(sessions) || sessions.length === 0) {
-                    sessionsList.innerHTML = `<p class="text-muted small mb-0">Brak zapisanych sesji dzisiaj.</p>`;
+                    sessionsList.innerHTML = `<p class="text-muted small mb-0">No sessions recorded today.</p>`;
                     return;
                 }
                 sessionsList.innerHTML = sessions.map((session) => `
@@ -1436,9 +1436,9 @@
                         <div class="project-timer-session-meta">
                             <span>${escapeHtml(session.started_label)}-${escapeHtml(session.ended_label)}</span>
                             <strong>${escapeHtml(session.duration_label)}</strong>
-                            ${session.is_running ? `<span class="badge text-bg-success">teraz</span>` : ""}
+                            ${session.is_running ? `<span class="badge text-bg-success">now</span>` : ""}
                         </div>
-                        <p class="project-timer-session-description">${escapeHtml(session.description || "Bez opisu")}</p>
+                        <p class="project-timer-session-description">${escapeHtml(session.description || "No description")}</p>
                     </article>
                 `).join("");
             };
@@ -1464,9 +1464,9 @@
                     },
                     body: formData,
                 });
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Nie udalo sie zaktualizowac timera.");
+                    throw new Error(payload.message || "Failed to update the timer.");
                 }
                 applyTimerPayload(payload);
             };
@@ -1487,7 +1487,7 @@
                     "X-Requested-With": "XMLHttpRequest",
                 },
             })
-                .then((response) => readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON."))
+                .then((response) => readJsonResponse(response, "The server did not return a valid JSON response."))
                 .then(applyTimerPayload)
                 .catch(() => renderTimer());
 
@@ -1532,12 +1532,12 @@
                         },
                         body: formData,
                     });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                     if (!response.ok || !payload.ok) {
-                        throw new Error(payload.message || "Nie udalo sie zapisac opisu.");
+                        throw new Error(payload.message || "Failed to save the description.");
                     }
                     applyTimerPayload(payload);
-                    descriptionStatus.textContent = "Zapisano.";
+                    descriptionStatus.textContent = "Saved.";
                 } catch (error) {
                     descriptionStatus.textContent = error.message;
                 } finally {
@@ -1618,7 +1618,7 @@
                 event.preventDefault();
                 projectAiError.classList.add("d-none");
                 projectAiSubmit.disabled = true;
-                projectAiLabel.textContent = "Pracuje...";
+                projectAiLabel.textContent = "Working...";
                 projectAiSpinner.classList.remove("d-none");
 
                 try {
@@ -1630,9 +1630,9 @@
                         },
                         body: new FormData(projectAiForm),
                     });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                     if (!response.ok || !payload.ok) {
-                        throw new Error(payload.error || "Nie udalo sie uruchomic AI dla projektu.");
+                        throw new Error(payload.error || "Failed to run AI for the project.");
                     }
 
                     updateDisplayValues(payload.project);
@@ -1645,7 +1645,7 @@
                     projectAiError.classList.remove("d-none");
                 } finally {
                     projectAiSubmit.disabled = false;
-                    projectAiLabel.textContent = "Uruchom AI";
+                    projectAiLabel.textContent = "Run AI";
                     projectAiSpinner.classList.add("d-none");
                 }
             });

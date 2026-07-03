@@ -1,6 +1,6 @@
 {% if errors %}
     <div class="alert alert-warning py-2 mb-3">
-        <strong>Niektore kalendarze nie zostaly zaladowane.</strong>
+        <strong>Some calendars could not be loaded.</strong>
         <ul class="mb-0 mt-2 small">
             {% for error in errors %}
                 <li>{{ error }}</li>
@@ -15,7 +15,7 @@
             <article class="calendar-event-row">
                 <div class="calendar-event-time">
                     {% if event.is_all_day %}
-                        <span class="calendar-time-badge">Caly dzien</span>
+                        <span class="calendar-time-badge">All day</span>
                     {% else %}
                         <div class="calendar-time-range">
                             <strong>{{ event.display_start.strftime("%H:%M") }}</strong>
@@ -31,7 +31,7 @@
                     {% if not event.is_all_day %}
                         <p class="calendar-event-meta mb-0">
                             Start: {{ event.start.strftime("%d.%m %H:%M") }} |
-                            Koniec: {{ event.end.strftime("%d.%m %H:%M") }}
+                            End: {{ event.end.strftime("%d.%m %H:%M") }}
                         </p>
                     {% endif %}
                 </div>
@@ -39,5 +39,5 @@
         {% endfor %}
     </div>
 {% elif subscriptions %}
-    <p class="mb-0 text-muted">Brak wydarzen dla wybranego dnia.</p>
+    <p class="mb-0 text-muted">No events for the selected day.</p>
 {% endif %}

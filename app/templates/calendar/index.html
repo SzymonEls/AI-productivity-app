@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Kalendarz{% endblock %}
+{% block title %}Calendar{% endblock %}
 
 {% block content %}
 <section
@@ -13,22 +13,22 @@
         <div class="card-body py-3">
             <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
                 <div>
-                    <h1 class="h3 mb-1">Plan dnia</h1>
-                    <p class="text-muted mb-0">Szybki widok wydarzen ze wszystkich zapisanych kalendarzy iCal.</p>
+                    <h1 class="h3 mb-1">Daily plan</h1>
+                    <p class="text-muted mb-0">Quick view of events from all saved iCal calendars.</p>
                 </div>
                 <div class="d-flex gap-2 flex-wrap">
-                    <a href="{{ url_for('calendar.settings') }}" class="btn btn-outline-primary btn-sm">Ustawienia kalendarzy</a>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-refresh>Odswiez</button>
+                    <a href="{{ url_for('calendar.settings') }}" class="btn btn-outline-primary btn-sm">Calendar settings</a>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-refresh>Refresh</button>
                 </div>
             </div>
 
             <div class="calendar-toolbar-controls mt-3">
                 <div class="calendar-date-pill">
-                    <span class="calendar-date-label">Dzien</span>
+                    <span class="calendar-date-label">Day</span>
                     <strong data-calendar-date-label>{{ selected_date.strftime("%d.%m.%Y") }}</strong>
                 </div>
                 <form method="get" class="calendar-date-form" data-calendar-form>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="-1">Poprzedni</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="-1">Previous</button>
                     <input
                         type="date"
                         name="date"
@@ -36,8 +36,8 @@
                         class="form-control form-control-sm"
                         data-calendar-input
                     >
-                    <button type="submit" class="btn btn-primary btn-sm">Pokaz</button>
-                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="1">Nastepny</button>
+                    <button type="submit" class="btn btn-primary btn-sm">Show</button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-calendar-shift="1">Next</button>
                 </form>
             </div>
         </div>
@@ -46,9 +46,9 @@
     {% if not subscriptions %}
         <div class="card shadow-sm">
             <div class="card-body py-4">
-                <h2 class="h5 mb-2">Brak kalendarzy</h2>
-                <p class="mb-3 text-muted">Dodaj pierwszy tajny adres iCal, aby zobaczyc plan dnia.</p>
-                <a href="{{ url_for('calendar.settings') }}" class="btn btn-primary btn-sm">Dodaj kalendarz iCal</a>
+                <h2 class="h5 mb-2">No calendars</h2>
+                <p class="mb-3 text-muted">Add your first secret iCal address to see your daily plan.</p>
+                <a href="{{ url_for('calendar.settings') }}" class="btn btn-primary btn-sm">Add iCal calendar</a>
             </div>
         </div>
     {% else %}
@@ -56,7 +56,7 @@
             <aside class="calendar-sidebar card shadow-sm">
                 <div class="card-body py-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h2 class="h6 mb-0">Kalendarze</h2>
+                        <h2 class="h6 mb-0">Calendars</h2>
                         <span class="badge rounded-pill text-bg-dark">{{ subscriptions|length }}</span>
                     </div>
                     <div class="calendar-subscription-list">
@@ -72,11 +72,11 @@
                     <div class="calendar-events-container" data-calendar-events>
                         <div class="calendar-loading-state" data-calendar-loading>
                             <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
-                            <span>Ladowanie wydarzen...</span>
+                            <span>Loading events...</span>
                         </div>
                     </div>
                     <noscript>
-                        <p class="mb-0 mt-3 text-muted">Do zaladowania wydarzen potrzebny jest JavaScript.</p>
+                        <p class="mb-0 mt-3 text-muted">JavaScript is required to load events.</p>
                     </noscript>
                 </div>
             </section>
@@ -107,7 +107,7 @@
     function formatDateLabel(dateValue) {
         const [year, month, day] = dateValue.split("-").map(Number);
         const localDate = new Date(year, month - 1, day);
-        return new Intl.DateTimeFormat("pl-PL").format(localDate);
+        return new Intl.DateTimeFormat("en-GB").format(localDate);
     }
 
     function setDate(dateValue, pushState = true) {
@@ -133,7 +133,7 @@
         eventsContainer.innerHTML = `
             <div class="calendar-loading-state">
                 <div class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true"></div>
-                <span>Ladowanie wydarzen...</span>
+                <span>Loading events...</span>
             </div>
         `;
 
@@ -162,7 +162,7 @@
 
             eventsContainer.innerHTML = `
                 <div class="alert alert-warning py-2 mb-0">
-                    Nie udalo sie zaladowac wydarzen. Sprobuj ponownie za chwile.
+                    Failed to load events. Please try again in a moment.
                 </div>
             `;
         }

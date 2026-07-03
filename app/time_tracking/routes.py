@@ -172,7 +172,7 @@ def start_project_timer(project_id):
         return jsonify(
             {
                 "ok": False,
-                "message": f"Zatrzymaj najpierw timer projektu: {active_entry.project.title}.",
+                "message": f"Stop the timer for project {active_entry.project.title} first.",
                 "active_project_url": url_for("projects.project_detail", project_id=active_entry.project_id),
             }
         ), 409
@@ -184,7 +184,7 @@ def start_project_timer(project_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie uruchomic timera."}), 500
+        return jsonify({"ok": False, "message": "Failed to start the timer."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -207,7 +207,7 @@ def pause_project_timer(project_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zatrzymac timera."}), 500
+        return jsonify({"ok": False, "message": "Failed to stop the timer."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -220,14 +220,14 @@ def save_today_description(project_id):
     summary = today_project_summary(current_user.id, project.id)
     entry = summary["active_entry"]
     if entry is None:
-        return jsonify({"ok": False, "message": "Rozpocznij nowa sesje, zeby zapisac jej opis."}), 409
+        return jsonify({"ok": False, "message": "Start a new session to save its description."}), 409
     entry.description = description or None
 
     try:
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zapisac opisu."}), 500
+        return jsonify({"ok": False, "message": "Failed to save the description."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -243,10 +243,10 @@ def edit_entry(entry_id):
     ended_at = None if is_running else parse_local_datetime(request.form.get("ended_at"), entry.ended_at)
     if is_running:
         if started_at >= utc_now():
-            flash("Start aktywnej sesji musi byc w przeszlosci.", "danger")
+            flash("The start of an active session must be in the past.", "danger")
             return redirect(_tracking_redirect(project_id))
     elif ended_at <= started_at:
-        flash("Koniec sesji musi byc pozniejszy niz start.", "danger")
+        flash("The session end must be later than the start.", "danger")
         return redirect(_tracking_redirect(project_id))
 
     entry.project = project
@@ -257,10 +257,10 @@ def edit_entry(entry_id):
 
     try:
         db.session.commit()
-        flash("Sesja czasu zostala zaktualizowana.", "success")
+        flash("The time session was updated.", "success")
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie zapisac sesji czasu.", "danger")
+        flash("Failed to save the time session.", "danger")
 
     return redirect(_tracking_redirect(project_id))
 
@@ -273,10 +273,10 @@ def delete_entry(entry_id):
     db.session.delete(entry)
     try:
         db.session.commit()
-        flash("Sesja czasu zostala usunieta.", "info")
+        flash("The time session was deleted.", "info")
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie usunac sesji czasu.", "danger")
+        flash("Failed to delete the time session.", "danger")
     return redirect(_tracking_redirect(project_id))
 
 
@@ -305,7 +305,7 @@ def _timer_session_payload(entry):
     return {
         "id": entry.id,
         "started_label": started_at.strftime("%H:%M"),
-        "ended_label": ended_at.strftime("%H:%M") if ended_at else "teraz",
+        "ended_label": ended_at.strftime("%H:%M") if ended_at else "now",
         "duration_label": format_duration(entry_elapsed_seconds(entry)),
         "description": entry.description or "",
         "is_running": entry.ended_at is None,

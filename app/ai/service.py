@@ -53,7 +53,7 @@ def organize_project_plan(project, user_prompt):
         "frequency": payload["frequency"].strip(),
         "long_goal": payload["long_goal"].strip(),
         "summary": payload["summary"].strip(),
-        "history_title": f"Plan projektu: {project.title}",
+        "history_title": f"Project plan: {project.title}",
         "history_content": _render_project_history_content(project.title, user_prompt, payload),
         "request_payload": json.dumps(request_payload, ensure_ascii=False, indent=2),
         "response_payload": json.dumps(payload, ensure_ascii=False, indent=2),
@@ -202,7 +202,7 @@ def _post_openai_request(request_payload, api_key, timeout):
             timeout=timeout,
         )
     except requests.Timeout as exc:
-        raise AIServiceError("OpenAI nie zdazylo odpowiedziec. Sprobuj ponownie za chwile.") from exc
+        raise AIServiceError("OpenAI did not respond in time. Please try again shortly.") from exc
     except requests.RequestException as exc:
         raise AIServiceError(f"Could not reach OpenAI: {exc}") from exc
 

@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Planowanie dnia{% endblock %}
+{% block title %}Daily planning{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
     <div>
-        <h1 class="h2 mb-1">Planowanie dnia</h1>
+        <h1 class="h2 mb-1">Daily planning</h1>
         <p class="text-muted mb-0">
             {% if ai_enabled %}
-                Wybierz tryb pracy: AI z gwiazdkowanymi projektami albo reczny kreator krok po kroku.
+                Choose your mode: AI using your starred projects, or a manual step-by-step wizard.
             {% else %}
-                Zbuduj reczny plan dnia krok po kroku.
+                Build a manual daily plan step by step.
             {% endif %}
         </p>
     </div>
-    <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Powrot na home</a>
+    <a class="btn btn-outline-secondary" href="{{ url_for('main.home') }}">Back to home</a>
 </div>
 
 {% if ai_enabled %}
@@ -24,21 +24,21 @@
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
                         <div>
-                            <h2 class="h4 mb-1">Planowanie przez AI</h2>
-                            <p class="text-muted mb-0">AI dostanie Twoj prompt oraz liste projektow oznaczonych gwiazdka.</p>
+                            <h2 class="h4 mb-1">AI planning</h2>
+                            <p class="text-muted mb-0">AI will receive your prompt along with the list of starred projects.</p>
                         </div>
-                        <span class="badge text-bg-primary">{{ starred_projects|length }} gwiazdkowane</span>
+                        <span class="badge text-bg-primary">{{ starred_projects|length }} starred</span>
                     </div>
 
                     {% if not is_openai_ready %}
                         <div class="alert alert-warning">
-                            AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten tryb.
+                            AI is inactive. Add `OPENAI_API_KEY` to `.env` to enable this mode.
                         </div>
                     {% endif %}
 
                     <form method="post" action="{{ url_for('ai.create_daily_plan') }}">
                         <div class="mb-3">
-                            <label class="form-label" for="target_date">Data planu</label>
+                            <label class="form-label" for="target_date">Plan date</label>
                             <input
                                 type="date"
                                 class="form-control"
@@ -56,16 +56,16 @@
                                 id="daily-plan-prompt"
                                 name="prompt"
                                 rows="7"
-                                placeholder="Np. Uloz plan dnia z uwzglednieniem najwazniejszych projektow i mojego poziomu energii."
+                                placeholder="E.g. Build a daily plan taking into account my most important projects and my energy level."
                                 {% if not is_openai_ready %}disabled{% endif %}
                                 required
                             ></textarea>
                         </div>
                         <div class="d-flex gap-2 flex-wrap">
                             <button class="btn btn-primary" type="submit" {% if not is_openai_ready %}disabled{% endif %}>
-                                Generuj przez AI
+                                Generate with AI
                             </button>
-                            <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Przejdz do projektow</a>
+                            <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Go to projects</a>
                         </div>
                     </form>
                 </div>
@@ -75,7 +75,7 @@
         <div class="col-lg-5">
             <div class="card shadow-sm h-100">
                 <div class="card-body p-4">
-                    <h2 class="h4 mb-3">Kontekst dla AI</h2>
+                    <h2 class="h4 mb-3">Context for AI</h2>
                     {% if starred_projects %}
                         <ul class="daily-project-context-list mb-0">
                             {% for project in starred_projects %}
@@ -84,8 +84,8 @@
                         </ul>
                     {% else %}
                         <p class="text-muted mb-0">
-                            Nie masz jeszcze projektow z gwiazdka. AI nadal moze odpowiedziec na prompt,
-                            ale nie dostanie kontekstu projektow.
+                            You don't have any starred projects yet. AI can still respond to your prompt,
+                            but it won't receive project context.
                         </p>
                     {% endif %}
                 </div>
@@ -97,10 +97,10 @@
 <div class="card shadow-sm {% if ai_enabled %}mt-4{% endif %}">
     <div class="card-body p-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div>
-            <h2 class="h4 mb-1">Planowanie reczne</h2>
-            <p class="text-muted mb-0">Osobny kreator: wybierz projekty, wpisz zadanie dla kazdego i zapisz plan dnia.</p>
+            <h2 class="h4 mb-1">Manual planning</h2>
+            <p class="text-muted mb-0">A separate wizard: choose projects, enter a task for each, and save the daily plan.</p>
         </div>
-        <a class="btn btn-outline-primary" href="{{ url_for('ai.manual_daily_plan') }}">Otworz kreator reczny</a>
+        <a class="btn btn-outline-primary" href="{{ url_for('ai.manual_daily_plan') }}">Open manual wizard</a>
     </div>
 </div>
 {% endblock %}
