@@ -507,6 +507,11 @@ body {
     padding: 0.2rem 0;
 }
 
+.timeline-items:empty {
+    min-height: 0;
+    padding: 0;
+}
+
 .project-timeline.is-editing .timeline-items {
     min-height: 4.9rem;
     padding: 0.65rem;

@@ -44,8 +44,7 @@
                             </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
-                        <div class="timeline-items" data-timeline-items>
-                            {% for item in group.items %}
+                        <div class="timeline-items" data-timeline-items>{% for item in group.items %}
                                 {% if item.item_type == "project" and item.project %}
                                     <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}" data-is-private="{{ 1 if item.project.is_private else 0 }}">
                                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
@@ -72,8 +71,7 @@
                                         <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
                                     </article>
                                 {% endif %}
-                            {% endfor %}
-                        </div>
+                            {% endfor %}</div>
                         <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
                     </div>
                 </section>
@@ -130,9 +128,7 @@
                             </div>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
-                        <div class="timeline-items" data-timeline-items>
-                            ${(group.items || []).map(renderTimelineItem).join("")}
-                        </div>
+                        <div class="timeline-items" data-timeline-items>${(group.items || []).map(renderTimelineItem).join("")}</div>
                         <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
                     </div>
                 </section>
