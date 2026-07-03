@@ -54,6 +54,28 @@ body {
     white-space: nowrap;
 }
 
+.offline-indicator {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    height: 2rem;
+    padding: 0 0.7rem;
+    margin-right: 0.5rem;
+    border: 1px solid rgba(220, 53, 69, 0.6);
+    border-radius: 999px;
+    background: rgba(220, 53, 69, 0.16);
+    color: #ff8a93;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.offline-indicator.is-visible {
+    display: inline-flex;
+}
+
+
 .empty-state {
     border: 1px dashed #ced4da;
 }

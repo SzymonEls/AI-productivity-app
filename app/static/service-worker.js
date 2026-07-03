@@ -62,6 +62,27 @@ self.addEventListener("fetch", (event) => {
   }
 });
 
+const NAVIGATION_TIMEOUT_MS = 2500;
+
+// Races a fetch against a timeout so a server that's down but not actively
+// refusing connections (e.g. hung, or silently dropping packets) doesn't
+// leave the browser waiting indefinitely before falling back to the cache.
+function fetchWithTimeout(request, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("navigation-timeout")), timeoutMs);
+    fetch(request).then(
+      (response) => {
+        clearTimeout(timer);
+        resolve(response);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 // Navigations: network-first. Online the page is always fresh; the cache is
 // only an offline safety net, so you never see a stale dashboard. Redirects
 // (e.g. an expired session sending you to /login) are passed through untouched
@@ -71,7 +92,7 @@ async function handleNavigation(event) {
 
   try {
     const preloadedResponse = await event.preloadResponse;
-    const response = preloadedResponse || await fetch(request);
+    const response = preloadedResponse || await fetchWithTimeout(request, NAVIGATION_TIMEOUT_MS);
 
     // Cache only clean, non-redirected success pages as the offline fallback.
     // This keeps login redirects and error pages out of the shell cache.
@@ -94,11 +115,12 @@ async function handleNavigation(event) {
       (await caches.match("/"));
 
     if (cachedResponse) {
-      return cachedResponse;
+      return markAsServedOffline(cachedResponse);
     }
 
     return new Response(
       "<!doctype html><meta charset=\"utf-8\"><title>Offline</title>" +
+        "<script>window.__appOffline = true;</script>" +
         "<body style=\"font-family:system-ui,sans-serif;padding:2rem;text-align:center\">" +
         "<h1>You're offline</h1><p>Reconnect and try again.</p>",
       {
@@ -107,6 +129,27 @@ async function handleNavigation(event) {
       }
     );
   }
+}
+
+// Stamps a flag into the served-from-cache page so it can light up the
+// offline indicator immediately on load, instead of the page having to make
+// its own request to find out the network already failed.
+async function markAsServedOffline(response) {
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!contentType.includes("text/html")) {
+    return response;
+  }
+
+  const html = await response.text();
+  const flaggedHtml = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, "<head$1><script>window.__appOffline = true;</script>")
+    : `<script>window.__appOffline = true;</script>${html}`;
+
+  return new Response(flaggedHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
 
 // Static assets: network-first as well, so a new deploy is picked up on the

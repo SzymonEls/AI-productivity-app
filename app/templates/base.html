@@ -71,6 +71,15 @@
                     {% endif %}
                 </div>
                 <div class="navbar-nav ms-auto align-items-center">
+                <span
+                    class="offline-indicator"
+                    data-offline-indicator
+                    role="status"
+                    title="You're offline"
+                    aria-label="You're offline"
+                >
+                    <span aria-hidden="true">Offline</span>
+                </span>
                 {% if current_user.is_authenticated %}
                     <div class="nav-item dropdown ms-2">
                         <button
@@ -195,6 +204,18 @@
         };
 
         document.querySelectorAll("[data-active-timer]").forEach(initializeActiveTimerLink);
+
+        const offlineIndicator = document.querySelector("[data-offline-indicator]");
+        const setOfflineState = (isOffline) => {
+            offlineIndicator?.classList.toggle("is-visible", isOffline);
+        };
+
+        // The service worker already knows the network failed the moment it
+        // falls back to a cached page, and flags that page via __appOffline.
+        // The online/offline events are free (browser-native, no request).
+        setOfflineState(window.__appOffline === true || !navigator.onLine);
+        window.addEventListener("online", () => setOfflineState(false));
+        window.addEventListener("offline", () => setOfflineState(true));
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>
