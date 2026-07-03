@@ -15,6 +15,7 @@ from .service import (
     ensure_utc,
     entry_elapsed_seconds,
     entry_overlap_seconds,
+    first_plan_section_title,
     format_duration,
     local_datetime_value,
     parse_local_date,
@@ -178,7 +179,15 @@ def start_project_timer(project_id):
         ), 409
 
     if not active_entry:
-        db.session.add(ProjectTimeEntry(owner=current_user, project=project, started_at=utc_now()))
+        default_description = first_plan_section_title(project.long_goal)
+        db.session.add(
+            ProjectTimeEntry(
+                owner=current_user,
+                project=project,
+                started_at=utc_now(),
+                description=default_description or None,
+            )
+        )
 
     try:
         db.session.commit()

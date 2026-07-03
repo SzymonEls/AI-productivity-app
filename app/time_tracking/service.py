@@ -99,6 +99,14 @@ def entries_for_range(user_id, range_start, range_end, project_id=None):
     return query.order_by(ProjectTimeEntry.started_at.desc()).all()
 
 
+def first_plan_section_title(markdown):
+    for line in (markdown or "").splitlines():
+        stripped = line.strip()
+        if line.startswith("# ") and stripped[2:].strip():
+            return stripped[2:].strip()
+    return ""
+
+
 def active_entry_for_user(user_id):
     return (
         ProjectTimeEntry.query.filter_by(user_id=user_id, ended_at=None)
