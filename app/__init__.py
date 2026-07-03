@@ -295,3 +295,76 @@ def initialize_database(app):
 
         if "project_time_entries" not in table_names:
             ProjectTimeEntry.__table__.create(bind=db.engine)
+        else:
+            time_entry_columns = inspector.get_columns("project_time_entries")
+            time_entry_column_names = {column["name"] for column in time_entry_columns}
+            if "project_title_snapshot" not in time_entry_column_names:
+                db.session.execute(
+                    text("ALTER TABLE project_time_entries ADD COLUMN project_title_snapshot VARCHAR(150)")
+                )
+                db.session.execute(
+                    text(
+                        "UPDATE project_time_entries SET project_title_snapshot = ("
+                        "SELECT title FROM projects WHERE projects.id = project_time_entries.project_id"
+                        ") WHERE project_title_snapshot IS NULL AND project_id IS NOT NULL"
+                    )
+                )
+                db.session.commit()
+
+            project_id_column = next(
+                column for column in time_entry_columns if column["name"] == "project_id"
+            )
+            if not project_id_column["nullable"]:
+                _allow_null_time_entry_project_id(db)
+
+
+def _allow_null_time_entry_project_id(db):
+    """
+    Relax project_time_entries.project_id to nullable so deleting a project
+    orphans its time entries instead of failing/cascading. SQLite has no
+    ALTER COLUMN, so the table is rebuilt; other dialects can alter in place.
+    """
+    if db.engine.dialect.name == "sqlite":
+        db.session.execute(text("ALTER TABLE project_time_entries RENAME TO project_time_entries_old"))
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE project_time_entries (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    project_id INTEGER,
+                    started_at DATETIME NOT NULL,
+                    ended_at DATETIME,
+                    description TEXT,
+                    project_title_snapshot VARCHAR(150),
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    FOREIGN KEY(project_id) REFERENCES projects (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                "INSERT INTO project_time_entries "
+                "(id, user_id, project_id, started_at, ended_at, description, "
+                "project_title_snapshot, created_at, updated_at) "
+                "SELECT id, user_id, project_id, started_at, ended_at, description, "
+                "project_title_snapshot, created_at, updated_at "
+                "FROM project_time_entries_old"
+            )
+        )
+        db.session.execute(text("DROP TABLE project_time_entries_old"))
+        db.session.execute(
+            text(
+                "CREATE INDEX ix_project_time_entries_user_project_started "
+                "ON project_time_entries (user_id, project_id, started_at)"
+            )
+        )
+        db.session.execute(
+            text("CREATE INDEX ix_project_time_entries_user_ended ON project_time_entries (user_id, ended_at)")
+        )
+    else:
+        db.session.execute(text("ALTER TABLE project_time_entries ALTER COLUMN project_id DROP NOT NULL"))
+    db.session.commit()

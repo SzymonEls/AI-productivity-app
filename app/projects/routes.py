@@ -7,7 +7,7 @@ from ..ai.service import is_openai_configured
 from ..extensions import db
 from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
-from ..time_tracking.service import today_project_summary
+from ..time_tracking.service import today_project_summary, utc_now
 
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
@@ -253,6 +253,9 @@ def restore_project_section(project_id):
 @login_required
 def delete_project(project_id):
     project = _get_user_project_or_404(project_id)
+    for entry in project.time_entries:
+        if entry.ended_at is None:
+            entry.ended_at = utc_now()
     db.session.delete(project)
     db.session.commit()
     flash("Project deleted.", "info")

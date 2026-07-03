@@ -36,7 +36,7 @@ def _entry_payload(entry):
     return {
         "id": entry.id,
         "project_id": entry.project_id,
-        "project_title": entry.project.title,
+        "project_title": entry.display_project_title,
         "started_at": local_datetime_value(entry.started_at),
         "ended_at": local_datetime_value(entry.ended_at),
         "description": entry.description or "",
@@ -91,6 +91,16 @@ def index():
             for project in projects
             if totals_by_project.get(project.id, 0) > 0
         ]
+        unknown_seconds = totals_by_project.get(None, 0)
+        if unknown_seconds > 0:
+            chart_projects.append(
+                {
+                    "id": None,
+                    "title": "Unknown project",
+                    "seconds": unknown_seconds,
+                    "label": format_duration(unknown_seconds),
+                }
+            )
     day_total_seconds = sum(item["seconds"] for item in chart_projects)
     selected_project_day_seconds = 0
     if selected_day and selected_project:
@@ -173,7 +183,7 @@ def start_project_timer(project_id):
         return jsonify(
             {
                 "ok": False,
-                "message": f"Stop the timer for project {active_entry.project.title} first.",
+                "message": f"Stop the timer for project {active_entry.display_project_title} first.",
                 "active_project_url": url_for("projects.project_detail", project_id=active_entry.project_id),
             }
         ), 409
@@ -184,6 +194,7 @@ def start_project_timer(project_id):
             ProjectTimeEntry(
                 owner=current_user,
                 project=project,
+                project_title_snapshot=project.title,
                 started_at=utc_now(),
                 description=default_description or None,
             )
@@ -245,20 +256,24 @@ def save_today_description(project_id):
 @login_required
 def edit_entry(entry_id):
     entry = ProjectTimeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
-    project_id = request.form.get("project_id", type=int) or entry.project_id
-    project = _get_user_project_or_404(project_id)
+    submitted_project_id = request.form.get("project_id", type=int)
+    project = _get_user_project_or_404(submitted_project_id) if submitted_project_id else None
+    redirect_project_id = project.id if project else entry.project_id
+
     started_at = parse_local_datetime(request.form.get("started_at"), entry.started_at)
     is_running = entry.ended_at is None
     ended_at = None if is_running else parse_local_datetime(request.form.get("ended_at"), entry.ended_at)
     if is_running:
         if started_at >= utc_now():
             flash("The start of an active session must be in the past.", "danger")
-            return redirect(_tracking_redirect(project_id))
+            return redirect(_tracking_redirect(redirect_project_id))
     elif ended_at <= started_at:
         flash("The session end must be later than the start.", "danger")
-        return redirect(_tracking_redirect(project_id))
+        return redirect(_tracking_redirect(redirect_project_id))
 
-    entry.project = project
+    if project:
+        entry.project = project
+        entry.project_title_snapshot = project.title
     entry.started_at = started_at
     if not is_running:
         entry.ended_at = ended_at
@@ -271,7 +286,7 @@ def edit_entry(entry_id):
         db.session.rollback()
         flash("Failed to save the time session.", "danger")
 
-    return redirect(_tracking_redirect(project_id))
+    return redirect(_tracking_redirect(redirect_project_id))
 
 
 @time_tracking_bp.route("/entries/<int:entry_id>/delete", methods=["POST"])

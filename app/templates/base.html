@@ -32,12 +32,12 @@
                     <a
                         class="active-timer-link"
                         href="{{ url_for('projects.project_detail', project_id=active_time_entry.project_id, open_timer=1) }}"
-                        title="Timer running: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
-                        aria-label="Timer running: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
+                        title="Timer running: {{ active_time_entry.display_project_title }} ({{ active_time_elapsed_label }})"
+                        aria-label="Timer running: {{ active_time_entry.display_project_title }} ({{ active_time_elapsed_label }})"
                         data-active-timer
                         data-active-timer-project-id="{{ active_time_entry.project_id }}"
                         data-active-timer-seconds="{{ active_time_elapsed_seconds }}"
-                        data-active-timer-title="Timer running: {{ active_time_entry.project.title }}"
+                        data-active-timer-title="Timer running: {{ active_time_entry.display_project_title }}"
                     >
                         <span class="active-timer-dot" aria-hidden="true"></span>
                         <span class="active-timer-label" data-active-timer-label>{{ active_time_elapsed_label }}</span>

@@ -10,7 +10,7 @@
     </div>
     {% if active_entry %}
         <a class="btn btn-outline-success" href="{{ url_for('projects.project_detail', project_id=active_entry.project_id) }}">
-            Active timer: {{ active_entry.project.title }}
+            Active timer: {{ active_entry.display_project_title }}
         </a>
     {% endif %}
 </div>
@@ -184,6 +184,11 @@
                                     <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
                                     <td>
                                         <select class="form-select form-select-sm" name="project_id" aria-label="Project">
+                                            {% if not entry.project_id %}
+                                                <option value="" selected>
+                                                    Unknown project{% if entry.project_title_snapshot %} (was: {{ entry.project_title_snapshot }}){% endif %}
+                                                </option>
+                                            {% endif %}
                                             {% for project in projects %}
                                                 <option value="{{ project.id }}" {% if project.id == entry.project_id %}selected{% endif %}>
                                                     {{ project.title }}

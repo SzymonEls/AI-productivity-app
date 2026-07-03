@@ -103,23 +103,29 @@ class Project(db.Model):
     time_entries = db.relationship(
         "ProjectTimeEntry",
         back_populates="project",
-        cascade="all, delete-orphan",
         lazy=True,
         order_by=lambda: ProjectTimeEntry.started_at.desc(),
     )
 
 
 class ProjectTimeEntry(db.Model):
-    """A server-side work timer session for a project."""
+    """A server-side work timer session for a project.
+
+    ``project_id`` is nullable and has no delete cascade: deleting a project
+    orphans its time entries instead of destroying them, so tracked history
+    survives. ``project_title_snapshot`` preserves the project's name for
+    display once the link is gone (mirrors ``AIPlan.project_title_snapshot``).
+    """
 
     __tablename__ = "project_time_entries"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
     started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
     description = db.Column(db.Text, nullable=True)
+    project_title_snapshot = db.Column(db.String(150), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -130,6 +136,12 @@ class ProjectTimeEntry(db.Model):
 
     owner = db.relationship("User", back_populates="time_entries")
     project = db.relationship("Project", back_populates="time_entries")
+
+    @property
+    def display_project_title(self):
+        if self.project:
+            return self.project.title
+        return self.project_title_snapshot or "Unknown project"
 
 
 class ProjectTimelineGroup(db.Model):
