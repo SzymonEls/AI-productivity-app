@@ -77,6 +77,17 @@
             </button>
         {% endif %}
         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
+        {% if not project.is_archived %}
+            <form method="post" action="{{ url_for('projects.archive_project', project_id=project.id) }}">
+                <button
+                    type="submit"
+                    class="btn btn-outline-secondary"
+                    onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
+                >
+                    Archive Project
+                </button>
+            </form>
+        {% endif %}
         <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
             <button
                 type="submit"
@@ -88,6 +99,16 @@
         </form>
     </div>
 </div>
+
+{% if project.is_archived %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>This project is archived. It's hidden from your dashboard.</span>
+        <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">
+            <input type="hidden" name="next" value="detail">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive Project</button>
+        </form>
+    </div>
+{% endif %}
 
 <div class="d-none mb-3" data-inline-alert></div>
 

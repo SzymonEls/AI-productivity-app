@@ -79,6 +79,7 @@ class Project(db.Model):
     archived_long_goal = db.Column(db.Text, nullable=False, default="")
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,

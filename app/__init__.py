@@ -250,6 +250,14 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+            if "is_archived" not in project_columns:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE projects ADD COLUMN is_archived BOOLEAN "
+                        "DEFAULT 0 NOT NULL"
+                    )
+                )
+                db.session.commit()
 
         if "calendar_subscriptions" not in table_names:
             CalendarSubscription.__table__.create(bind=db.engine)

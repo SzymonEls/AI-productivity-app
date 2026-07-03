@@ -23,7 +23,7 @@ def _get_user_project_or_404(project_id):
 @login_required
 def dashboard():
     projects = (
-        Project.query.filter_by(user_id=current_user.id)
+        Project.query.filter_by(user_id=current_user.id, is_archived=False)
         .order_by(func.lower(Project.title).asc())
         .all()
     )
@@ -35,6 +35,39 @@ def dashboard():
         timeline_groups=timeline_groups,
         timeline_data=timeline_data,
     )
+
+
+@projects_bp.route("/archived")
+@login_required
+def archived_projects():
+    projects = (
+        Project.query.filter_by(user_id=current_user.id, is_archived=True)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    return render_template("projects/archived.html", projects=projects)
+
+
+@projects_bp.route("/<int:project_id>/archive", methods=["POST"])
+@login_required
+def archive_project(project_id):
+    project = _get_user_project_or_404(project_id)
+    project.is_archived = True
+    db.session.commit()
+    flash("Project archived.", "info")
+    return redirect(url_for("projects.dashboard"))
+
+
+@projects_bp.route("/<int:project_id>/unarchive", methods=["POST"])
+@login_required
+def unarchive_project(project_id):
+    project = _get_user_project_or_404(project_id)
+    project.is_archived = False
+    db.session.commit()
+    flash("Project restored.", "info")
+    if request.form.get("next") == "detail":
+        return redirect(url_for("projects.project_detail", project_id=project.id))
+    return redirect(url_for("projects.archived_projects"))
 
 
 @projects_bp.route("/create", methods=["GET", "POST"])
@@ -453,7 +486,11 @@ def _serialize_timeline_group(group):
     return {
         "id": group.id,
         "name": group.name or "",
-        "items": [_serialize_timeline_item(item) for item in group.items],
+        "items": [
+            _serialize_timeline_item(item)
+            for item in group.items
+            if item.item_type != "project" or (item.project and not item.project.is_archived)
+        ],
     }
 
 
