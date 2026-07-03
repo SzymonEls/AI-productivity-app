@@ -914,6 +914,14 @@ body {
 .EasyMDEContainer .editor-toolbar {
     border-color: #ced4da;
     border-radius: 0.375rem 0.375rem 0 0;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #fff;
+}
+
+.EasyMDEContainer .editor-toolbar.fullscreen {
+    position: fixed;
 }
 
 .EasyMDEContainer .CodeMirror-sided {
