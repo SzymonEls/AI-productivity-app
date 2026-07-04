@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timezone
 from zoneinfo import ZoneInfo
 
 from flask import current_app
+from sqlalchemy import func
 
 from ..models import ProjectTimeEntry
 
@@ -99,6 +100,14 @@ def entries_for_range(user_id, range_start, range_end, project_id=None):
     return query.order_by(ProjectTimeEntry.started_at.desc()).all()
 
 
+def first_plan_section_title(markdown):
+    for line in (markdown or "").splitlines():
+        stripped = line.strip()
+        if line.startswith("# ") and stripped[2:].strip():
+            return stripped[2:].strip()
+    return ""
+
+
 def active_entry_for_user(user_id):
     return (
         ProjectTimeEntry.query.filter_by(user_id=user_id, ended_at=None)
@@ -133,3 +142,55 @@ def daily_totals_by_project(user_id, day):
     for entry in entries:
         totals[entry.project_id] += entry_overlap_seconds(entry, range_start, range_end, now)
     return totals
+
+
+def project_last_session_labels(user_id, projects):
+    project_ids = [project.id for project in projects]
+    if not project_ids:
+        return {}
+
+    last_sessions = dict(
+        ProjectTimeEntry.query.with_entities(ProjectTimeEntry.project_id, func.max(ProjectTimeEntry.started_at))
+        .filter(ProjectTimeEntry.user_id == user_id, ProjectTimeEntry.project_id.in_(project_ids))
+        .group_by(ProjectTimeEntry.project_id)
+        .all()
+    )
+
+    now = utc_now()
+    return {
+        project.id: human_last_session_label(last_sessions.get(project.id), now)
+        for project in projects
+    }
+
+
+def human_last_session_label(value, now):
+    if not value:
+        return "Last session: none"
+
+    timestamp = ensure_utc(value)
+    seconds = int(max((now - timestamp).total_seconds(), 0))
+
+    if seconds < 60:
+        return "Last session: just now"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"Last session: {minutes} min ago"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"Last session: {hours} hr ago"
+    if seconds < 172800:
+        return "Last session: yesterday"
+    if seconds < 604800:
+        days = seconds // 86400
+        return f"Last session: {days} days ago"
+    if seconds < 1209600:
+        return "Last session: a week ago"
+    if seconds < 2592000:
+        weeks = seconds // 604800
+        return f"Last session: {weeks} wk ago"
+    if seconds < 31536000:
+        months = seconds // 2592000
+        return f"Last session: {months} mo ago"
+
+    years = seconds // 31536000
+    return "Last session: a year ago" if years == 1 else f"Last session: {years} years ago"

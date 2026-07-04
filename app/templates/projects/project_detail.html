@@ -42,7 +42,7 @@
             aria-controls="projectTimerModal"
         >
             <i class="fa-regular fa-clock" aria-hidden="true"></i>
-            <span>Dzisiejszy czas pracy</span>
+            <span>Today's work time</span>
             <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
         <button
@@ -54,20 +54,29 @@
             Settings
         </button>
         <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
-            Pobierz markdown
+            Download markdown
         </button>
-        {% if ai_enabled %}
-            <button
-                type="button"
-                class="btn btn-primary"
-                data-bs-toggle="modal"
-                data-bs-target="#projectAiModal"
-                {% if not is_openai_ready %}disabled{% endif %}
-            >
-                Uruchom AI
-            </button>
-        {% endif %}
+        <button
+            type="button"
+            class="btn btn-outline-primary"
+            data-bs-toggle="modal"
+            data-bs-target="#projectArchiveModal"
+            data-archive-open-button
+        >
+            Archive
+        </button>
         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
+        {% if not project.is_archived %}
+            <form method="post" action="{{ url_for('projects.archive_project', project_id=project.id) }}">
+                <button
+                    type="submit"
+                    class="btn btn-outline-secondary"
+                    onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
+                >
+                    Archive Project
+                </button>
+            </form>
+        {% endif %}
         <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
             <button
                 type="submit"
@@ -79,6 +88,16 @@
         </form>
     </div>
 </div>
+
+{% if project.is_archived %}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>This project is archived. It's hidden from your dashboard.</span>
+        <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">
+            <input type="hidden" name="next" value="detail">
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive Project</button>
+        </form>
+    </div>
+{% endif %}
 
 <div class="d-none mb-3" data-inline-alert></div>
 
@@ -158,7 +177,11 @@
                         </div>
                     </div>
                     <div data-edit-display="long-goal">
-                        <div class="markdown-content long-goal-preview" data-display-value="long_goal">{{ project.long_goal | project_markdown }}</div>
+                        <div
+                            class="markdown-content long-goal-preview"
+                            data-display-value="long_goal"
+                            data-archive-section-url="{{ url_for('projects.archive_project_section', project_id=project.id) }}"
+                        >{{ project.long_goal | project_markdown }}</div>
                     </div>
                     <div class="d-none" data-edit-form="long-goal">
                         <textarea
@@ -166,7 +189,6 @@
                             name="long_goal"
                             class="form-control inline-edit-textarea long-goal-markdown-field"
                             rows="8"
-                            required
                         >{{ project.long_goal }}</textarea>
                     </div>
                 </div>
@@ -176,6 +198,29 @@
 
     <input type="hidden" name="title" value="{{ project.title }}" data-project-title-hidden>
 </form>
+
+<div class="modal fade" id="projectArchiveModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5">Archived sections</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-0 {% if project.archived_long_goal %}d-none{% endif %}" data-archive-empty>
+                    No archived sections.
+                </p>
+                <div
+                    class="markdown-content {% if not project.archived_long_goal %}d-none{% endif %}"
+                    data-archive-preview
+                    data-restore-section-url="{{ url_for('projects.restore_project_section', project_id=project.id) }}"
+                >
+                    {{ project.archived_long_goal | project_markdown }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div
     class="modal fade"
@@ -194,9 +239,9 @@
         <div class="modal-content project-timer-modal">
             <div class="modal-header project-timer-modal-header">
                 <div class="min-w-0">
-                    <h2 class="modal-title h5">Dzisiejszy czas pracy</h2>
+                    <h2 class="modal-title h5">Today's work time</h2>
                     <span class="small text-muted" data-timer-state>
-                        {% if timer_summary.active_entry %}Timer jest uruchomiony{% else %}Timer jest zatrzymany{% endif %}
+                        {% if timer_summary.active_entry %}Timer is running{% else %}Timer is stopped{% endif %}
                     </span>
                 </div>
                 <strong class="project-timer-clock ms-auto" data-timer-clock>00:00:00</strong>
@@ -204,24 +249,24 @@
             </div>
             <div class="modal-body">
                 <div class="project-timer-actions mb-3">
-                    <button type="button" class="btn btn-success" data-timer-start>Rozpocznij sesję</button>
-                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>Zakończ sesję</button>
+                    <button type="button" class="btn btn-success" data-timer-start>Start session</button>
+                    <button type="button" class="btn btn-outline-secondary" data-timer-pause>End session</button>
                 </div>
-                <label class="form-label" for="projectTimerDescription">Opis bieżącej sesji</label>
+                <label class="form-label" for="projectTimerDescription">Current session description</label>
                 <textarea
                     id="projectTimerDescription"
                     class="form-control timer-description-field"
                     data-timer-description
-                    placeholder="Co zostało zrobione w tej sesji..."
+                    placeholder="What was done in this session..."
                 >{{ timer_summary.active_description }}</textarea>
                 <div class="project-timer-sessions mt-3">
-                    <h3 class="h6 mb-2">Dzisiejsze sesje</h3>
+                    <h3 class="h6 mb-2">Today's sessions</h3>
                     <div class="project-timer-session-list" data-timer-sessions></div>
                 </div>
             </div>
             <div class="modal-footer justify-content-between">
                 <span class="small text-muted" data-timer-description-status></span>
-                <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Zapisz opis</button>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-timer-save-description>Save description</button>
             </div>
         </div>
     </div>
@@ -241,6 +286,18 @@
                     <input type="hidden" name="frequency" value="{{ project.frequency }}" data-settings-frequency>
                     <input type="hidden" name="long_goal" value="{{ project.long_goal }}" data-settings-long-goal>
                     <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-settings-private-input>
+                    <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-settings-starred-input>
+
+                    <div class="form-check form-switch">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="projectStarred"
+                            data-settings-starred-toggle
+                            {% if project.is_starred %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="projectStarred">Starred (context for AI Daily Planning)</label>
+                    </div>
 
                     <div class="form-check form-switch">
                         <input
@@ -250,7 +307,7 @@
                             data-settings-private-toggle
                             {% if project.is_private %}checked{% endif %}
                         >
-                        <label class="form-check-label" for="projectPrivate">Projekt prywatny</label>
+                        <label class="form-check-label" for="projectPrivate">Private project</label>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -262,47 +319,6 @@
     </div>
 </div>
 
-{% if ai_enabled %}
-    <div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-                    <div class="modal-header">
-                        <h2 class="modal-title h5" id="projectAiModalLabel">AI: Uporzadkuj plan projektu</h2>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        {% if not is_openai_ready %}
-                            <div class="alert alert-warning">
-                                AI jest nieaktywne. Dodaj `OPENAI_API_KEY` do `.env`, aby wlaczyc ten formularz.
-                            </div>
-                        {% endif %}
-                        <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
-                        <label class="form-label" for="ai-project-prompt">Prompt</label>
-                        <textarea
-                            class="form-control"
-                            id="ai-project-prompt"
-                            name="prompt"
-                            rows="7"
-                            placeholder="Np. Uporzadkuj ten projekt w konkretny plan markdown z krokami, checklistami i najblizszym rytmem pracy."
-                            {% if not is_openai_ready %}disabled{% endif %}
-                            required
-                        ></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">Historia AI</a>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Zamknij</button>
-                        <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
-                            <span class="submit-label">Uruchom AI</span>
-                            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -328,9 +344,15 @@
         const titleInput = document.querySelector("[data-project-title-input]");
         const titleHiddenInput = form.querySelector("[data-project-title-hidden]");
         const longGoalPreview = form.querySelector("[data-display-value='long_goal']");
+        const archiveSectionUrl = longGoalPreview?.dataset.archiveSectionUrl || "";
+        const archivedPlanPreview = document.querySelector("[data-archive-preview]");
+        const restoreSectionUrl = archivedPlanPreview?.dataset.restoreSectionUrl || "";
+        const archivedPlanEmpty = document.querySelector("[data-archive-empty]");
+        const archiveOpenButton = document.querySelector("[data-archive-open-button]");
         const markdownDownloadButton = document.querySelector("[data-download-project-markdown]");
         const settingsForm = document.querySelector("[data-project-settings-form]");
         let isSaving = false;
+        let leaving = false;
         let longGoalEditor = null;
 
         const getTrackedFields = () => Array.from(form.querySelectorAll("input[name], textarea[name], select[name]"));
@@ -390,6 +412,48 @@
             });
 
             return wrapper.innerHTML.trim() ? wrapper.outerHTML : html;
+        };
+
+        const decorateArchiveSectionButtons = () => {
+            if (!longGoalPreview || !archiveSectionUrl) {
+                return;
+            }
+
+            longGoalPreview.querySelectorAll(".project-markdown-section").forEach((section, index) => {
+                if (section.querySelector("[data-archive-section]")) {
+                    return;
+                }
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "project-section-archive-button";
+                button.dataset.archiveSection = String(index);
+                button.setAttribute("aria-label", "Archive section");
+                button.title = "Archive section";
+                button.innerHTML = '<i class="fa-solid fa-box-archive" aria-hidden="true"></i>';
+                section.querySelector(".project-markdown-section-card")?.appendChild(button);
+            });
+        };
+
+        const decorateRestoreSectionButtons = () => {
+            if (!archivedPlanPreview || !restoreSectionUrl) {
+                return;
+            }
+
+            archivedPlanPreview.querySelectorAll(".project-markdown-section").forEach((section, index) => {
+                if (section.querySelector("[data-restore-section]")) {
+                    return;
+                }
+
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "project-section-archive-button";
+                button.dataset.restoreSection = String(index);
+                button.setAttribute("aria-label", "Restore section from archive");
+                button.title = "Restore section from archive";
+                button.innerHTML = '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i>';
+                section.querySelector(".project-markdown-section-card")?.appendChild(button);
+            });
         };
 
         const escapeHtml = (value) => value
@@ -484,14 +548,96 @@
                 cm.focus();
             };
 
-            const toggleTaskList = (editor) => {
-                updateSelectedLines(editor, (line) => {
-                    if (/^\s*-\s\[( |x|X)\]\s/.test(line)) {
-                        return line.replace(/^(\s*)-\s\[( |x|X)\]\s/, "$1");
-                    }
+            const listMarkerPatterns = {
+                task: /^(\s*)[-*+]\s\[( |x|X)\]\s(.*)$/,
+                ordered: /^(\s*)\d+\.\s(.*)$/,
+                unordered: /^(\s*)[-*+]\s(.*)$/,
+            };
 
-                    return line.replace(/^(\s*)/, "$1- [ ] ");
+            const getLineListType = (line) => {
+                if (listMarkerPatterns.task.test(line)) {
+                    return "task";
+                }
+                if (listMarkerPatterns.ordered.test(line)) {
+                    return "ordered";
+                }
+                if (listMarkerPatterns.unordered.test(line)) {
+                    return "unordered";
+                }
+                return null;
+            };
+
+            const stripListMarker = (line) => {
+                const taskMatch = line.match(listMarkerPatterns.task);
+                if (taskMatch) {
+                    return { indent: taskMatch[1], content: taskMatch[3] };
+                }
+
+                const orderedMatch = line.match(listMarkerPatterns.ordered);
+                if (orderedMatch) {
+                    return { indent: orderedMatch[1], content: orderedMatch[2] };
+                }
+
+                const unorderedMatch = line.match(listMarkerPatterns.unordered);
+                if (unorderedMatch) {
+                    return { indent: unorderedMatch[1], content: unorderedMatch[2] };
+                }
+
+                const indentMatch = line.match(/^(\s*)/);
+                return { indent: indentMatch[1], content: line.slice(indentMatch[1].length) };
+            };
+
+            const setListType = (editor, type) => {
+                const cm = editor.codemirror;
+                const selections = cm.listSelections();
+
+                cm.operation(() => {
+                    selections.forEach((selection) => {
+                        const startLine = Math.min(selection.anchor.line, selection.head.line);
+                        const endLine = Math.max(selection.anchor.line, selection.head.line);
+
+                        const lineNumbers = [];
+                        for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+                            if (cm.getLine(lineNumber).trim()) {
+                                lineNumbers.push(lineNumber);
+                            }
+                        }
+
+                        if (!lineNumbers.length) {
+                            return;
+                        }
+
+                        const alreadyTargetType = lineNumbers.every(
+                            (lineNumber) => getLineListType(cm.getLine(lineNumber)) === type
+                        );
+
+                        let orderedIndex = 1;
+                        lineNumbers.forEach((lineNumber) => {
+                            const lineText = cm.getLine(lineNumber);
+                            const { indent, content } = stripListMarker(lineText);
+
+                            let newLine;
+                            if (alreadyTargetType) {
+                                newLine = `${indent}${content}`;
+                            } else if (type === "ordered") {
+                                newLine = `${indent}${orderedIndex}. ${content}`;
+                                orderedIndex += 1;
+                            } else if (type === "task") {
+                                newLine = `${indent}- [ ] ${content}`;
+                            } else {
+                                newLine = `${indent}- ${content}`;
+                            }
+
+                            cm.replaceRange(
+                                newLine,
+                                { line: lineNumber, ch: 0 },
+                                { line: lineNumber, ch: lineText.length }
+                            );
+                        });
+                    });
                 });
+
+                cm.focus();
             };
 
             longGoalEditor = new EasyMDE({
@@ -513,15 +659,25 @@
                         name: "strikethrough",
                         action: EasyMDE.toggleStrikethrough,
                         className: "fa-solid fa-strikethrough",
-                        title: "Przekreslenie",
+                        title: "Strikethrough",
                     },
                     "heading",
                     "|",
-                    "unordered-list",
-                    "ordered-list",
+                    {
+                        name: "unordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "unordered"),
+                        className: "fa fa-list-ul",
+                        title: "Generic List",
+                    },
+                    {
+                        name: "ordered-list",
+                        action: (activeEditor) => setListType(activeEditor, "ordered"),
+                        className: "fa fa-list-ol",
+                        title: "Numbered List",
+                    },
                     {
                         name: "task-list",
-                        action: toggleTaskList,
+                        action: (activeEditor) => setListType(activeEditor, "task"),
                         className: "fa-regular fa-square-check",
                         title: "Checklist item",
                     },
@@ -581,7 +737,7 @@
                 return response.json();
             }
 
-            throw new Error(response.redirected ? "Sesja wygasla. Zaloguj sie ponownie i sprobuj jeszcze raz." : fallbackMessage);
+            throw new Error(response.redirected ? "Session expired. Please log in again and try again." : fallbackMessage);
         };
 
         const getLongGoalMarkdown = () => {
@@ -626,11 +782,11 @@
                 .replace(/[^a-z0-9]+/g, "-")
                 .replace(/^-+|-+$/g, "");
 
-            return `${normalizedTitle || "projekt"}.md`;
+            return `${normalizedTitle || "project"}.md`;
         };
 
         const buildProjectMarkdown = () => {
-            const title = getSectionCurrentValue("title").trim() || "Projekt";
+            const title = getSectionCurrentValue("title").trim() || "Project";
             const shortGoal = getSectionCurrentValue("short-goal").trim();
             const frequency = getSectionCurrentValue("frequency").trim();
             const longGoal = getSectionCurrentValue("long-goal").trim();
@@ -693,6 +849,7 @@
                 return;
             }
 
+            decorateArchiveSectionButtons();
             longGoalPreview.querySelectorAll(".task-list-checkbox").forEach((checkbox, index) => {
                 checkbox.disabled = false;
                 checkbox.dataset.taskIndex = String(index);
@@ -799,6 +956,13 @@
                 longGoalPreview.innerHTML = project.long_goal_html;
                 enablePreviewTaskCheckboxes();
             }
+            if (archivedPlanPreview && archivedPlanEmpty) {
+                archivedPlanPreview.innerHTML = project.archived_long_goal_html || "";
+                const hasArchivedPlan = Boolean(project.has_archived_long_goal);
+                archivedPlanPreview.classList.toggle("d-none", !hasArchivedPlan);
+                archivedPlanEmpty.classList.toggle("d-none", hasArchivedPlan);
+                decorateRestoreSectionButtons();
+            }
 
             form.querySelector("[name='short_goal']").value = project.short_goal;
             form.querySelector("[name='frequency']").value = project.frequency;
@@ -839,6 +1003,14 @@
                 if (settingsPrivateToggle) {
                     settingsPrivateToggle.checked = project.is_private;
                 }
+                const settingsStarredInput = settingsForm.querySelector("[data-settings-starred-input]");
+                const settingsStarredToggle = settingsForm.querySelector("[data-settings-starred-toggle]");
+                if (settingsStarredInput) {
+                    settingsStarredInput.value = project.is_starred ? "true" : "false";
+                }
+                if (settingsStarredToggle) {
+                    settingsStarredToggle.checked = project.is_starred;
+                }
             }
         };
 
@@ -868,7 +1040,7 @@
                     body: new FormData(form),
                 });
 
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
                     throw new Error(payload.message || "Could not save changes.");
                 }
@@ -890,8 +1062,92 @@
             }
         };
 
+        const archiveProjectSection = async (button) => {
+            if (!archiveSectionUrl) {
+                return;
+            }
+            if (hasUnsavedChanges()) {
+                showAlert("Save or cancel unsaved changes before archiving the section.", "warning");
+                return;
+            }
+            if (!window.confirm("Move this section to the archive?")) {
+                return;
+            }
+
+            hideAlert();
+            isSaving = true;
+            button.disabled = true;
+            const formData = new FormData();
+            formData.append("section_index", button.dataset.archiveSection);
+
+            try {
+                const response = await fetch(archiveSectionUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Failed to archive the section.");
+                }
+
+                updateDisplayValues(payload.project);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            } finally {
+                isSaving = false;
+                button.disabled = false;
+            }
+        };
+
+        const restoreProjectSection = async (button) => {
+            if (!restoreSectionUrl) {
+                return;
+            }
+            if (hasUnsavedChanges()) {
+                showAlert("Save or cancel unsaved changes before restoring the section.", "warning");
+                return;
+            }
+            if (!window.confirm("Restore this section from the archive to the plan?")) {
+                return;
+            }
+
+            hideAlert();
+            isSaving = true;
+            button.disabled = true;
+            const formData = new FormData();
+            formData.append("section_index", button.dataset.restoreSection);
+
+            try {
+                const response = await fetch(restoreSectionUrl, {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Failed to restore the section.");
+                }
+
+                updateDisplayValues(payload.project);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            } finally {
+                isSaving = false;
+                button.disabled = false;
+            }
+        };
+
         window.addEventListener("beforeunload", (event) => {
-            if (!isSaving && hasUnsavedChanges()) {
+            if (!isSaving && !leaving && hasUnsavedChanges()) {
                 event.preventDefault();
                 event.returnValue = "";
             }
@@ -908,6 +1164,8 @@
                 "data-edit-toggle",
                 "data-edit-cancel",
                 "data-save-section",
+                "data-archive-section",
+                "data-restore-section",
             ].some((attribute) => navigable.hasAttribute(attribute));
             const isEditorToolbarControl = Boolean(
                 navigable.closest(".editor-toolbar")
@@ -916,7 +1174,8 @@
             );
             const isMarkdownDownload = Boolean(navigable.closest("[data-download-project-markdown]"));
             const dismissesModal = navigable.dataset.bsDismiss;
-            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal) {
+            const opensModal = navigable.dataset.bsToggle === "modal";
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal || opensModal) {
                 return;
             }
 
@@ -928,11 +1187,17 @@
 
         history.pushState({ formGuard: true }, "", window.location.href);
         window.addEventListener("popstate", () => {
+            // Nothing to protect: skip past the guard entry so a single "back" actually leaves.
             if (isSaving || !hasUnsavedChanges()) {
+                leaving = true;
+                history.back();
                 return;
             }
 
-            if (!window.confirm("You have unsaved changes. Leave this page?")) {
+            if (window.confirm("You have unsaved changes. Leave this page?")) {
+                leaving = true;
+                history.back();
+            } else {
                 history.pushState({ formGuard: true }, "", window.location.href);
             }
         });
@@ -989,9 +1254,15 @@
                 const privateInput = settingsForm.querySelector("[data-settings-private-input]");
                 const privateToggle = settingsForm.querySelector("[data-settings-private-toggle]");
                 const previousPrivate = privateInput?.value === "true";
+                const starredInput = settingsForm.querySelector("[data-settings-starred-input]");
+                const starredToggle = settingsForm.querySelector("[data-settings-starred-toggle]");
+                const previousStarred = starredInput?.value === "true";
 
                 if (privateInput) {
                     privateInput.value = privateToggle?.checked ? "true" : "false";
+                }
+                if (starredInput) {
+                    starredInput.value = starredToggle?.checked ? "true" : "false";
                 }
                 if (submitButton) {
                     submitButton.disabled = true;
@@ -1006,7 +1277,7 @@
                         },
                         body: new FormData(settingsForm),
                     });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                     if (!response.ok || !payload.ok) {
                         throw new Error(payload.message || "Could not save settings.");
                     }
@@ -1021,6 +1292,12 @@
                     if (privateToggle) {
                         privateToggle.checked = previousPrivate;
                     }
+                    if (starredInput) {
+                        starredInput.value = previousStarred ? "true" : "false";
+                    }
+                    if (starredToggle) {
+                        starredToggle.checked = previousStarred;
+                    }
                     showAlert(error.message, "danger");
                 } finally {
                     if (submitButton) {
@@ -1032,7 +1309,31 @@
 
         enablePreviewTaskCheckboxes();
 
+        if (archivedPlanPreview) {
+            decorateRestoreSectionButtons();
+
+            archivedPlanPreview.addEventListener("click", (event) => {
+                const restoreButton = event.target.closest("[data-restore-section]");
+                if (!restoreButton) {
+                    return;
+                }
+
+                restoreProjectSection(restoreButton);
+            });
+        }
+
         if (longGoalPreview) {
+            decorateArchiveSectionButtons();
+
+            longGoalPreview.addEventListener("click", (event) => {
+                const archiveButton = event.target.closest("[data-archive-section]");
+                if (!archiveButton) {
+                    return;
+                }
+
+                archiveProjectSection(archiveButton);
+            });
+
             longGoalPreview.addEventListener("change", (event) => {
                 const checkbox = event.target.closest(".task-list-checkbox");
                 if (!checkbox || checkbox.disabled) {
@@ -1078,11 +1379,11 @@
                     buttonClock.classList.toggle("d-none", !isRunning);
                 }
                 if (stateLabel) {
-                    stateLabel.textContent = isRunning ? "Timer jest uruchomiony" : "Timer jest zatrzymany";
+                    stateLabel.textContent = isRunning ? "Timer is running" : "Timer is stopped";
                 }
                 if (startButton) {
                     startButton.disabled = isRunning;
-                    startButton.textContent = isRunning ? "Sesja trwa" : "Rozpocznij nową sesję";
+                    startButton.textContent = isRunning ? "Session in progress" : "Start new session";
                 }
                 if (pauseButton) {
                     pauseButton.disabled = !isRunning;
@@ -1090,8 +1391,8 @@
                 if (descriptionField) {
                     descriptionField.disabled = !isRunning;
                     descriptionField.placeholder = isRunning
-                        ? "Co zostało zrobione w tej sesji..."
-                        : "Rozpocznij nową sesję, żeby dodać jej opis.";
+                        ? "What was done in this session..."
+                        : "Start a new session to add its description.";
                 }
                 if (saveDescriptionButton) {
                     saveDescriptionButton.disabled = !isRunning;
@@ -1103,7 +1404,7 @@
                     return;
                 }
                 if (!Array.isArray(sessions) || sessions.length === 0) {
-                    sessionsList.innerHTML = `<p class="text-muted small mb-0">Brak zapisanych sesji dzisiaj.</p>`;
+                    sessionsList.innerHTML = `<p class="text-muted small mb-0">No sessions recorded today.</p>`;
                     return;
                 }
                 sessionsList.innerHTML = sessions.map((session) => `
@@ -1111,9 +1412,9 @@
                         <div class="project-timer-session-meta">
                             <span>${escapeHtml(session.started_label)}-${escapeHtml(session.ended_label)}</span>
                             <strong>${escapeHtml(session.duration_label)}</strong>
-                            ${session.is_running ? `<span class="badge text-bg-success">teraz</span>` : ""}
+                            ${session.is_running ? `<span class="badge text-bg-success">now</span>` : ""}
                         </div>
-                        <p class="project-timer-session-description">${escapeHtml(session.description || "Bez opisu")}</p>
+                        <p class="project-timer-session-description">${escapeHtml(session.description || "No description")}</p>
                     </article>
                 `).join("");
             };
@@ -1139,9 +1440,9 @@
                     },
                     body: formData,
                 });
-                const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                 if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Nie udalo sie zaktualizowac timera.");
+                    throw new Error(payload.message || "Failed to update the timer.");
                 }
                 applyTimerPayload(payload);
             };
@@ -1162,7 +1463,7 @@
                     "X-Requested-With": "XMLHttpRequest",
                 },
             })
-                .then((response) => readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON."))
+                .then((response) => readJsonResponse(response, "The server did not return a valid JSON response."))
                 .then(applyTimerPayload)
                 .catch(() => renderTimer());
 
@@ -1207,12 +1508,12 @@
                         },
                         body: formData,
                     });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
+                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
                     if (!response.ok || !payload.ok) {
-                        throw new Error(payload.message || "Nie udalo sie zapisac opisu.");
+                        throw new Error(payload.message || "Failed to save the description.");
                     }
                     applyTimerPayload(payload);
-                    descriptionStatus.textContent = "Zapisano.";
+                    descriptionStatus.textContent = "Saved.";
                 } catch (error) {
                     descriptionStatus.textContent = error.message;
                 } finally {
@@ -1280,51 +1581,6 @@
             });
         }
 
-        const projectAiForm = document.getElementById("project-ai-form");
-        if (projectAiForm) {
-            const projectAiSubmit = document.getElementById("project-ai-submit");
-            const projectAiLabel = projectAiSubmit.querySelector(".submit-label");
-            const projectAiSpinner = projectAiSubmit.querySelector(".spinner-border");
-            const projectAiError = document.getElementById("project-ai-error");
-            const projectAiModalElement = document.getElementById("projectAiModal");
-            const projectAiModal = bootstrap.Modal.getOrCreateInstance(projectAiModalElement);
-
-            projectAiForm.addEventListener("submit", async (event) => {
-                event.preventDefault();
-                projectAiError.classList.add("d-none");
-                projectAiSubmit.disabled = true;
-                projectAiLabel.textContent = "Pracuje...";
-                projectAiSpinner.classList.remove("d-none");
-
-                try {
-                    const response = await fetch(projectAiForm.action, {
-                        method: "POST",
-                        headers: {
-                            "Accept": "application/json",
-                            "X-Requested-With": "fetch",
-                        },
-                        body: new FormData(projectAiForm),
-                    });
-                    const payload = await readJsonResponse(response, "Serwer nie zwrocil poprawnej odpowiedzi JSON.");
-                    if (!response.ok || !payload.ok) {
-                        throw new Error(payload.error || "Nie udalo sie uruchomic AI dla projektu.");
-                    }
-
-                    updateDisplayValues(payload.project);
-                    Object.keys(fieldNames).forEach((sectionName) => toggleSection(sectionName, false));
-                    showAlert(payload.message, "success");
-                    projectAiForm.reset();
-                    projectAiModal.hide();
-                } catch (error) {
-                    projectAiError.textContent = error.message;
-                    projectAiError.classList.remove("d-none");
-                } finally {
-                    projectAiSubmit.disabled = false;
-                    projectAiLabel.textContent = "Uruchom AI";
-                    projectAiSpinner.classList.add("d-none");
-                }
-            });
-        }
     })();
 </script>
 {% endblock %}

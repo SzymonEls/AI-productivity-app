@@ -15,6 +15,7 @@ from .service import (
     ensure_utc,
     entry_elapsed_seconds,
     entry_overlap_seconds,
+    first_plan_section_title,
     format_duration,
     local_datetime_value,
     parse_local_date,
@@ -35,7 +36,7 @@ def _entry_payload(entry):
     return {
         "id": entry.id,
         "project_id": entry.project_id,
-        "project_title": entry.project.title,
+        "project_title": entry.display_project_title,
         "started_at": local_datetime_value(entry.started_at),
         "ended_at": local_datetime_value(entry.ended_at),
         "description": entry.description or "",
@@ -90,6 +91,16 @@ def index():
             for project in projects
             if totals_by_project.get(project.id, 0) > 0
         ]
+        unknown_seconds = totals_by_project.get(None, 0)
+        if unknown_seconds > 0:
+            chart_projects.append(
+                {
+                    "id": None,
+                    "title": "Unknown project",
+                    "seconds": unknown_seconds,
+                    "label": format_duration(unknown_seconds),
+                }
+            )
     day_total_seconds = sum(item["seconds"] for item in chart_projects)
     selected_project_day_seconds = 0
     if selected_day and selected_project:
@@ -172,19 +183,28 @@ def start_project_timer(project_id):
         return jsonify(
             {
                 "ok": False,
-                "message": f"Zatrzymaj najpierw timer projektu: {active_entry.project.title}.",
+                "message": f"Stop the timer for project {active_entry.display_project_title} first.",
                 "active_project_url": url_for("projects.project_detail", project_id=active_entry.project_id),
             }
         ), 409
 
     if not active_entry:
-        db.session.add(ProjectTimeEntry(owner=current_user, project=project, started_at=utc_now()))
+        default_description = first_plan_section_title(project.long_goal)
+        db.session.add(
+            ProjectTimeEntry(
+                owner=current_user,
+                project=project,
+                project_title_snapshot=project.title,
+                started_at=utc_now(),
+                description=default_description or None,
+            )
+        )
 
     try:
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie uruchomic timera."}), 500
+        return jsonify({"ok": False, "message": "Failed to start the timer."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -207,7 +227,7 @@ def pause_project_timer(project_id):
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zatrzymac timera."}), 500
+        return jsonify({"ok": False, "message": "Failed to stop the timer."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -220,14 +240,14 @@ def save_today_description(project_id):
     summary = today_project_summary(current_user.id, project.id)
     entry = summary["active_entry"]
     if entry is None:
-        return jsonify({"ok": False, "message": "Rozpocznij nowa sesje, zeby zapisac jej opis."}), 409
+        return jsonify({"ok": False, "message": "Start a new session to save its description."}), 409
     entry.description = description or None
 
     try:
         db.session.commit()
     except SQLAlchemyError:
         db.session.rollback()
-        return jsonify({"ok": False, "message": "Nie udalo sie zapisac opisu."}), 500
+        return jsonify({"ok": False, "message": "Failed to save the description."}), 500
 
     return jsonify(_project_timer_payload(project, today_project_summary(current_user.id, project.id)))
 
@@ -236,20 +256,24 @@ def save_today_description(project_id):
 @login_required
 def edit_entry(entry_id):
     entry = ProjectTimeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
-    project_id = request.form.get("project_id", type=int) or entry.project_id
-    project = _get_user_project_or_404(project_id)
+    submitted_project_id = request.form.get("project_id", type=int)
+    project = _get_user_project_or_404(submitted_project_id) if submitted_project_id else None
+    redirect_project_id = project.id if project else entry.project_id
+
     started_at = parse_local_datetime(request.form.get("started_at"), entry.started_at)
     is_running = entry.ended_at is None
     ended_at = None if is_running else parse_local_datetime(request.form.get("ended_at"), entry.ended_at)
     if is_running:
         if started_at >= utc_now():
-            flash("Start aktywnej sesji musi byc w przeszlosci.", "danger")
-            return redirect(_tracking_redirect(project_id))
+            flash("The start of an active session must be in the past.", "danger")
+            return redirect(_tracking_redirect(redirect_project_id))
     elif ended_at <= started_at:
-        flash("Koniec sesji musi byc pozniejszy niz start.", "danger")
-        return redirect(_tracking_redirect(project_id))
+        flash("The session end must be later than the start.", "danger")
+        return redirect(_tracking_redirect(redirect_project_id))
 
-    entry.project = project
+    if project:
+        entry.project = project
+        entry.project_title_snapshot = project.title
     entry.started_at = started_at
     if not is_running:
         entry.ended_at = ended_at
@@ -257,12 +281,12 @@ def edit_entry(entry_id):
 
     try:
         db.session.commit()
-        flash("Sesja czasu zostala zaktualizowana.", "success")
+        flash("The time session was updated.", "success")
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie zapisac sesji czasu.", "danger")
+        flash("Failed to save the time session.", "danger")
 
-    return redirect(_tracking_redirect(project_id))
+    return redirect(_tracking_redirect(redirect_project_id))
 
 
 @time_tracking_bp.route("/entries/<int:entry_id>/delete", methods=["POST"])
@@ -273,10 +297,10 @@ def delete_entry(entry_id):
     db.session.delete(entry)
     try:
         db.session.commit()
-        flash("Sesja czasu zostala usunieta.", "info")
+        flash("The time session was deleted.", "info")
     except SQLAlchemyError:
         db.session.rollback()
-        flash("Nie udalo sie usunac sesji czasu.", "danger")
+        flash("Failed to delete the time session.", "danger")
     return redirect(_tracking_redirect(project_id))
 
 
@@ -305,7 +329,7 @@ def _timer_session_payload(entry):
     return {
         "id": entry.id,
         "started_label": started_at.strftime("%H:%M"),
-        "ended_label": ended_at.strftime("%H:%M") if ended_at else "teraz",
+        "ended_label": ended_at.strftime("%H:%M") if ended_at else "now",
         "duration_label": format_duration(entry_elapsed_seconds(entry)),
         "description": entry.description or "",
         "is_running": entry.ended_at is None,

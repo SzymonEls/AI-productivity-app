@@ -23,19 +23,11 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
-    calendar_subscriptions = db.relationship(
-        "CalendarSubscription",
+    daily_plan = db.relationship(
+        "DailyPlan",
         back_populates="owner",
+        uselist=False,
         cascade="all, delete-orphan",
-        lazy=True,
-        order_by="CalendarSubscription.name",
-    )
-    ai_plans = db.relationship(
-        "AIPlan",
-        back_populates="owner",
-        cascade="all, delete-orphan",
-        lazy=True,
-        order_by=lambda: AIPlan.created_at.desc(),
     )
     timeline_groups = db.relationship(
         "ProjectTimelineGroup",
@@ -76,8 +68,10 @@ class Project(db.Model):
     short_goal = db.Column(db.Text, nullable=False)
     frequency = db.Column(db.String(255), nullable=False)
     long_goal = db.Column(db.Text, nullable=False)
+    archived_long_goal = db.Column(db.Text, nullable=False, default="")
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
+    is_archived = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -87,12 +81,6 @@ class Project(db.Model):
     )
 
     owner = db.relationship("User", back_populates="projects")
-    ai_plans = db.relationship(
-        "AIPlan",
-        back_populates="project",
-        lazy=True,
-        order_by=lambda: AIPlan.created_at.desc(),
-    )
     timeline_items = db.relationship(
         "ProjectTimelineItem",
         back_populates="project",
@@ -102,23 +90,29 @@ class Project(db.Model):
     time_entries = db.relationship(
         "ProjectTimeEntry",
         back_populates="project",
-        cascade="all, delete-orphan",
         lazy=True,
         order_by=lambda: ProjectTimeEntry.started_at.desc(),
     )
 
 
 class ProjectTimeEntry(db.Model):
-    """A server-side work timer session for a project."""
+    """A server-side work timer session for a project.
+
+    ``project_id`` is nullable and has no delete cascade: deleting a project
+    orphans its time entries instead of destroying them, so tracked history
+    survives. ``project_title_snapshot`` preserves the project's name for
+    display once the link is gone.
+    """
 
     __tablename__ = "project_time_entries"
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
     started_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
     description = db.Column(db.Text, nullable=True)
+    project_title_snapshot = db.Column(db.String(150), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -129,6 +123,12 @@ class ProjectTimeEntry(db.Model):
 
     owner = db.relationship("User", back_populates="time_entries")
     project = db.relationship("Project", back_populates="time_entries")
+
+    @property
+    def display_project_title(self):
+        if self.project:
+            return self.project.title
+        return self.project_title_snapshot or "Unknown project"
 
 
 class ProjectTimelineGroup(db.Model):
@@ -185,41 +185,25 @@ class ProjectTimelineItem(db.Model):
     project = db.relationship("Project", back_populates="timeline_items")
 
 
-class AIPlan(db.Model):
-    """Saved AI-generated markdown or project organization result."""
+class DailyPlan(db.Model):
+    """The single saved daily plan for a user; replaced each time a new one is saved."""
 
-    __tablename__ = "ai_plans"
+    __tablename__ = "daily_plans"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
-    plan_type = db.Column(db.String(50), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
     title = db.Column(db.String(200), nullable=False)
-    user_prompt = db.Column(db.Text, nullable=False)
     target_date = db.Column(db.Date, nullable=True)
-    project_title_snapshot = db.Column(db.String(150), nullable=True)
     content = db.Column(db.Text, nullable=False)
-    request_payload = db.Column(db.Text, nullable=True)
-    response_payload = db.Column(db.Text, nullable=False)
-    is_pinned = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
 
-    owner = db.relationship("User", back_populates="ai_plans")
-    project = db.relationship("Project", back_populates="ai_plans")
-
-
-class CalendarSubscription(db.Model):
-    """User-owned iCal subscription used to build the daily plan view."""
-
-    __tablename__ = "calendar_subscriptions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    name = db.Column(db.String(120), nullable=False)
-    ical_url = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-
-    owner = db.relationship("User", back_populates="calendar_subscriptions")
+    owner = db.relationship("User", back_populates="daily_plan")
 
 
 @login_manager.user_loader

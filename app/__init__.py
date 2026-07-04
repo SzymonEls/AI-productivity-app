@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, url_for
 from flask_login import current_user
+from flask_migrate import stamp as stamp_migrations, upgrade as apply_migrations
 from sqlalchemy import inspect, text
 
 from config import Config
@@ -27,10 +28,9 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import AIPlan, CalendarSubscription, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import DailyPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
-    from .calendar.routes import calendar_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
     from .time_tracking.routes import time_tracking_bp
@@ -38,7 +38,6 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(calendar_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
     register_template_context(app)
@@ -46,6 +45,7 @@ def create_app(config_class=Config):
     register_json_error_handlers(app)
     register_login_handlers(login_manager)
     if should_initialize_database(app):
+        run_database_migrations(app)
         initialize_database(app)
 
     return app
@@ -79,8 +79,6 @@ def register_template_context(app):
         return {
             "app_version": app.config.get("APP_VERSION", "local"),
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
-            "ai_enabled": app.config.get("AI_ENABLED", True),
-            "calendar_enabled": app.config.get("CALENDAR_ENABLED", True),
             "active_time_entry": active_time_entry,
             "active_time_elapsed_seconds": active_time_elapsed_seconds,
             "active_time_elapsed_label": active_time_elapsed_label,
@@ -93,13 +91,13 @@ def register_json_error_handlers(app):
     @app.errorhandler(404)
     def not_found_error(error):
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Nie znaleziono tego zasobu."}), 404
+            return jsonify({"ok": False, "message": "This resource was not found."}), 404
         return error
 
     @app.errorhandler(500)
     def internal_error(error):
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Wystapil blad serwera podczas zapisu."}), 500
+            return jsonify({"ok": False, "message": "A server error occurred while saving."}), 500
         return error
 
 
@@ -107,7 +105,7 @@ def register_login_handlers(manager):
     @manager.unauthorized_handler
     def unauthorized():
         if wants_json_response():
-            return jsonify({"ok": False, "message": "Sesja wygasla. Zaloguj sie ponownie."}), 401
+            return jsonify({"ok": False, "message": "Session expired. Please log in again."}), 401
         return redirect_to_login()
 
 
@@ -197,6 +195,34 @@ def register_template_filters(app):
         return "1 year ago" if years == 1 else f"{years} years ago"
 
 
+def run_database_migrations(app):
+    """
+    Apply pending Alembic migrations automatically so local development
+    (`flask --app run.py run`) doesn't need a manual `flask db upgrade` step.
+
+    Docker already runs `flask db upgrade` once in docker-entrypoint.sh before
+    starting Gunicorn, so this is skipped there via SKIP_DB_BOOTSTRAP to avoid
+    every worker process racing to apply migrations at the same time.
+    """
+    from alembic.migration import MigrationContext
+
+    with app.app_context():
+        table_names = inspect(db.engine).get_table_names()
+
+        with db.engine.connect() as connection:
+            current_revision = MigrationContext.configure(connection).get_current_revision()
+
+        if current_revision is None and table_names:
+            # Existing local database predates Alembic tracking. Its schema is
+            # kept compatible by the ad-hoc bootstrap below, so mark it as
+            # being at the latest migration instead of replaying every
+            # migration's upgrade() against tables that already exist.
+            stamp_migrations()
+            return
+
+        apply_migrations()
+
+
 def initialize_database(app):
     """
     Create tables automatically when the configured database is empty.
@@ -204,7 +230,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import AIPlan, CalendarSubscription, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -242,21 +268,18 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
-
-        if "calendar_subscriptions" not in table_names:
-            CalendarSubscription.__table__.create(bind=db.engine)
-
-        if "ai_plans" not in table_names:
-            AIPlan.__table__.create(bind=db.engine)
-        else:
-            ai_plan_columns = {column["name"] for column in inspector.get_columns("ai_plans")}
-            if "request_payload" not in ai_plan_columns:
-                db.session.execute(text("ALTER TABLE ai_plans ADD COLUMN request_payload TEXT"))
-                db.session.commit()
-            if "is_pinned" not in ai_plan_columns:
+            if "archived_long_goal" not in project_columns:
                 db.session.execute(
                     text(
-                        "ALTER TABLE ai_plans ADD COLUMN is_pinned BOOLEAN "
+                        "ALTER TABLE projects ADD COLUMN archived_long_goal TEXT "
+                        "DEFAULT '' NOT NULL"
+                    )
+                )
+                db.session.commit()
+            if "is_archived" not in project_columns:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE projects ADD COLUMN is_archived BOOLEAN "
                         "DEFAULT 0 NOT NULL"
                     )
                 )
@@ -269,6 +292,7 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
 
@@ -287,3 +311,76 @@ def initialize_database(app):
 
         if "project_time_entries" not in table_names:
             ProjectTimeEntry.__table__.create(bind=db.engine)
+        else:
+            time_entry_columns = inspector.get_columns("project_time_entries")
+            time_entry_column_names = {column["name"] for column in time_entry_columns}
+            if "project_title_snapshot" not in time_entry_column_names:
+                db.session.execute(
+                    text("ALTER TABLE project_time_entries ADD COLUMN project_title_snapshot VARCHAR(150)")
+                )
+                db.session.execute(
+                    text(
+                        "UPDATE project_time_entries SET project_title_snapshot = ("
+                        "SELECT title FROM projects WHERE projects.id = project_time_entries.project_id"
+                        ") WHERE project_title_snapshot IS NULL AND project_id IS NOT NULL"
+                    )
+                )
+                db.session.commit()
+
+            project_id_column = next(
+                column for column in time_entry_columns if column["name"] == "project_id"
+            )
+            if not project_id_column["nullable"]:
+                _allow_null_time_entry_project_id(db)
+
+
+def _allow_null_time_entry_project_id(db):
+    """
+    Relax project_time_entries.project_id to nullable so deleting a project
+    orphans its time entries instead of failing/cascading. SQLite has no
+    ALTER COLUMN, so the table is rebuilt; other dialects can alter in place.
+    """
+    if db.engine.dialect.name == "sqlite":
+        db.session.execute(text("ALTER TABLE project_time_entries RENAME TO project_time_entries_old"))
+        db.session.execute(
+            text(
+                """
+                CREATE TABLE project_time_entries (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    project_id INTEGER,
+                    started_at DATETIME NOT NULL,
+                    ended_at DATETIME,
+                    description TEXT,
+                    project_title_snapshot VARCHAR(150),
+                    created_at DATETIME NOT NULL,
+                    updated_at DATETIME NOT NULL,
+                    FOREIGN KEY(project_id) REFERENCES projects (id),
+                    FOREIGN KEY(user_id) REFERENCES users (id)
+                )
+                """
+            )
+        )
+        db.session.execute(
+            text(
+                "INSERT INTO project_time_entries "
+                "(id, user_id, project_id, started_at, ended_at, description, "
+                "project_title_snapshot, created_at, updated_at) "
+                "SELECT id, user_id, project_id, started_at, ended_at, description, "
+                "project_title_snapshot, created_at, updated_at "
+                "FROM project_time_entries_old"
+            )
+        )
+        db.session.execute(text("DROP TABLE project_time_entries_old"))
+        db.session.execute(
+            text(
+                "CREATE INDEX ix_project_time_entries_user_project_started "
+                "ON project_time_entries (user_id, project_id, started_at)"
+            )
+        )
+        db.session.execute(
+            text("CREATE INDEX ix_project_time_entries_user_ended ON project_time_entries (user_id, ended_at)")
+        )
+    else:
+        db.session.execute(text("ALTER TABLE project_time_entries ALTER COLUMN project_id DROP NOT NULL"))
+    db.session.commit()

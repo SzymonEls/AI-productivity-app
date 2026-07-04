@@ -27,17 +27,17 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
         <div class="container">
             <div class="d-flex align-items-center gap-2" data-navbar-brand-group>
-                <a class="navbar-brand me-0" href="{{ url_for('projects.dashboard', view='timeline') }}">Productivity App</a>
+                <a class="navbar-brand me-0" href="{{ url_for('projects.dashboard') }}">Productivity App</a>
                 {% if current_user.is_authenticated and active_time_entry %}
                     <a
                         class="active-timer-link"
                         href="{{ url_for('projects.project_detail', project_id=active_time_entry.project_id, open_timer=1) }}"
-                        title="Timer dziala: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
-                        aria-label="Timer dziala: {{ active_time_entry.project.title }} ({{ active_time_elapsed_label }})"
+                        title="Timer running: {{ active_time_entry.display_project_title }} ({{ active_time_elapsed_label }})"
+                        aria-label="Timer running: {{ active_time_entry.display_project_title }} ({{ active_time_elapsed_label }})"
                         data-active-timer
                         data-active-timer-project-id="{{ active_time_entry.project_id }}"
                         data-active-timer-seconds="{{ active_time_elapsed_seconds }}"
-                        data-active-timer-title="Timer dziala: {{ active_time_entry.project.title }}"
+                        data-active-timer-title="Timer running: {{ active_time_entry.display_project_title }}"
                     >
                         <span class="active-timer-dot" aria-hidden="true"></span>
                         <span class="active-timer-label" data-active-timer-label>{{ active_time_elapsed_label }}</span>
@@ -62,15 +62,24 @@
                         Home
                     </a>
                     {% if current_user.is_authenticated %}
-                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' and request.args.get('view') == 'timeline' %}active{% endif %}" href="{{ url_for('projects.dashboard', view='timeline') }}">
-                            Projekty
+                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
+                            Projects
                         </a>
                         <a class="nav-link {% if request.endpoint and request.endpoint.startswith('time_tracking.') %}active{% endif %}" href="{{ url_for('time_tracking.index') }}">
-                            Śledzenie czasu
+                            Time tracking
                         </a>
                     {% endif %}
                 </div>
                 <div class="navbar-nav ms-auto align-items-center">
+                <span
+                    class="offline-indicator"
+                    data-offline-indicator
+                    role="status"
+                    title="You're offline"
+                    aria-label="You're offline"
+                >
+                    <span aria-hidden="true">Offline</span>
+                </span>
                 {% if current_user.is_authenticated %}
                     <div class="nav-item dropdown ms-2">
                         <button
@@ -143,7 +152,7 @@
                 }
                 const elapsedSeconds = initialSeconds + Math.floor((Date.now() - startedAt) / 1000);
                 const value = formatActiveTimerDuration(elapsedSeconds);
-                const baseLabel = timerLink.dataset.activeTimerTitle || "Timer dziala";
+                const baseLabel = timerLink.dataset.activeTimerTitle || "Timer running";
                 label.textContent = value;
                 timerLink.setAttribute("aria-label", `${baseLabel} (${value})`);
                 timerLink.setAttribute("title", `${baseLabel} (${value})`);
@@ -180,7 +189,7 @@
             timerLink.dataset.activeTimer = "";
             timerLink.dataset.activeTimerProjectId = String(payload.project_id || "");
             timerLink.dataset.activeTimerSeconds = String(payload.today_seconds || 0);
-            timerLink.dataset.activeTimerTitle = `Timer dziala: ${payload.project_title || "Projekt"}`;
+            timerLink.dataset.activeTimerTitle = `Timer running: ${payload.project_title || "Project"}`;
             timerLink.dataset.activeTimerInitialized = "0";
             timerLink.innerHTML = `
                 <span class="active-timer-dot" aria-hidden="true"></span>
@@ -195,6 +204,18 @@
         };
 
         document.querySelectorAll("[data-active-timer]").forEach(initializeActiveTimerLink);
+
+        const offlineIndicator = document.querySelector("[data-offline-indicator]");
+        const setOfflineState = (isOffline) => {
+            offlineIndicator?.classList.toggle("is-visible", isOffline);
+        };
+
+        // The service worker already knows the network failed the moment it
+        // falls back to a cached page, and flags that page via __appOffline.
+        // The online/offline events are free (browser-native, no request).
+        setOfflineState(window.__appOffline === true || !navigator.onLine);
+        window.addEventListener("online", () => setOfflineState(false));
+        window.addEventListener("offline", () => setOfflineState(true));
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>

@@ -6,8 +6,7 @@ from functools import lru_cache
 from flask import Blueprint, abort, current_app, render_template, send_from_directory
 from flask_login import current_user
 
-from ..ai.service import MARKDOWN_RESPONSE, is_openai_configured
-from ..models import AIPlan
+from ..models import DailyPlan
 
 
 main_bp = Blueprint("main", __name__)
@@ -15,33 +14,15 @@ main_bp = Blueprint("main", __name__)
 
 @main_bp.route("/")
 def home():
-    """Home page with the pinned daily AI markdown response."""
+    """Home page with the user's single saved daily plan."""
 
-    latest_plan = None
+    daily_plan = None
     if current_user.is_authenticated:
-        plan_types = [MARKDOWN_RESPONSE, "daily_plan", "manual_daily_plan"]
-        if not current_app.config.get("AI_ENABLED", True):
-            plan_types = ["manual_daily_plan"]
-
-        latest_plan = (
-            AIPlan.query.filter_by(user_id=current_user.id)
-            .filter(AIPlan.plan_type.in_(plan_types))
-            .filter_by(is_pinned=True)
-            .order_by(AIPlan.created_at.desc())
-            .first()
-        )
-        if latest_plan is None:
-            latest_plan = (
-                AIPlan.query.filter_by(user_id=current_user.id)
-                .filter(AIPlan.plan_type.in_(plan_types))
-                .order_by(AIPlan.created_at.desc())
-                .first()
-            )
+        daily_plan = DailyPlan.query.filter_by(user_id=current_user.id).first()
 
     return render_template(
         "home.html",
-        latest_plan=latest_plan,
-        is_openai_ready=current_user.is_authenticated and is_openai_configured(),
+        daily_plan=daily_plan,
         today=date.today(),
     )
 
