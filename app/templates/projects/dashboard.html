@@ -21,6 +21,10 @@
                 <input class="form-check-input" type="checkbox" id="hidePrivateTimelineItems" data-hide-private-timeline>
                 <label class="form-check-label small" for="hidePrivateTimelineItems">Hide private projects</label>
             </div>
+            <div class="form-check form-switch timeline-stats-toggle">
+                <input class="form-check-input" type="checkbox" id="showProjectStatsTimelineItems" data-show-project-stats-timeline>
+                <label class="form-check-label small" for="showProjectStatsTimelineItems">Show last session &amp; frequency</label>
+            </div>
             <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>Add group</button>
             <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>Edit timeline</button>
             <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>Save timeline</button>
@@ -53,6 +57,10 @@
                                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                                         <div class="timeline-item-main">
                                             <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}" data-private-mask-title>{{ item.project.title }}</a>
+                                            <div class="timeline-item-meta d-none" data-project-meta>
+                                                {% if item.project.frequency %}<span class="timeline-item-text preserve-lines">{{ item.project.frequency }}</span>{% endif %}
+                                                <span class="manual-last-session">{{ project_last_session_labels.get(item.project_id, "Last session: none") }}</span>
+                                            </div>
                                         </div>
                                     </article>
                                 {% elif item.item_type == "note" %}
@@ -103,6 +111,7 @@
         const cancelButton = document.querySelector("[data-timeline-cancel]");
         const addGroupButton = document.querySelector("[data-timeline-add-group]");
         const hidePrivateToggle = document.querySelector("[data-hide-private-timeline]");
+        const showProjectStatsToggle = document.querySelector("[data-show-project-stats-timeline]");
 
         if (!timelinePanel || !timelineRoot || !timelineDataNode) {
             return;
@@ -144,6 +153,7 @@
             `).join("");
             setEditMode(editMode);
             updatePrivacyMask();
+            updateProjectStatsVisibility();
         };
 
         const renderTimelineItem = (item) => {
@@ -153,6 +163,10 @@
                         <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
                         <div class="timeline-item-main">
                             <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}" data-private-mask-title>${escapeHtml(item.title || "Project")}</a>
+                            <div class="timeline-item-meta d-none" data-project-meta>
+                                ${item.frequency ? `<span class="timeline-item-text preserve-lines">${escapeHtml(item.frequency)}</span>` : ""}
+                                <span class="manual-last-session">${escapeHtml(item.last_session_label || "Last session: none")}</span>
+                            </div>
                         </div>
                     </article>
                 `;
@@ -200,6 +214,13 @@
                     }
                     bodyNode.textContent = shouldMask && isPrivate ? "" : bodyNode.dataset.originalText;
                 }
+            });
+        };
+
+        const updateProjectStatsVisibility = () => {
+            const shouldShow = Boolean(showProjectStatsToggle?.checked);
+            timelineRoot.querySelectorAll("[data-project-meta]").forEach((meta) => {
+                meta.classList.toggle("d-none", !shouldShow);
             });
         };
 
@@ -489,6 +510,7 @@
         });
 
         hidePrivateToggle?.addEventListener("change", updatePrivacyMask);
+        showProjectStatsToggle?.addEventListener("change", updateProjectStatsVisibility);
 
         editToggle?.addEventListener("click", () => setEditMode(true));
         cancelButton?.addEventListener("click", () => {

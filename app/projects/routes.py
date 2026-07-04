@@ -6,7 +6,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from ..extensions import db
 from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
-from ..time_tracking.service import today_project_summary, utc_now
+from ..time_tracking.service import project_last_session_labels, today_project_summary, utc_now
 
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
@@ -27,12 +27,14 @@ def dashboard():
         .all()
     )
     timeline_groups = _get_or_create_timeline(projects)
-    timeline_data = [_serialize_timeline_group(group) for group in timeline_groups]
+    last_session_labels = project_last_session_labels(current_user.id, projects)
+    timeline_data = [_serialize_timeline_group(group, last_session_labels) for group in timeline_groups]
     return render_template(
         "projects/dashboard.html",
         projects=projects,
         timeline_groups=timeline_groups,
         timeline_data=timeline_data,
+        project_last_session_labels=last_session_labels,
     )
 
 
@@ -420,7 +422,13 @@ def save_timeline():
         return jsonify({"ok": False, "message": "Failed to save the timeline."}), 500
 
     timeline_groups = _get_or_create_timeline(projects)
-    return jsonify({"ok": True, "groups": [_serialize_timeline_group(group) for group in timeline_groups]})
+    last_session_labels = project_last_session_labels(current_user.id, projects)
+    return jsonify(
+        {
+            "ok": True,
+            "groups": [_serialize_timeline_group(group, last_session_labels) for group in timeline_groups],
+        }
+    )
 
 
 def _wants_json_response():
@@ -480,20 +488,21 @@ def _get_or_create_timeline(projects):
     )
 
 
-def _serialize_timeline_group(group):
+def _serialize_timeline_group(group, last_session_labels=None):
     return {
         "id": group.id,
         "name": group.name or "",
         "items": [
-            _serialize_timeline_item(item)
+            _serialize_timeline_item(item, last_session_labels)
             for item in group.items
             if item.item_type != "project" or (item.project and not item.project.is_archived)
         ],
     }
 
 
-def _serialize_timeline_item(item):
+def _serialize_timeline_item(item, last_session_labels=None):
     if item.item_type == "project":
+        last_session_labels = last_session_labels or {}
         return {
             "id": item.id,
             "type": "project",
@@ -501,6 +510,8 @@ def _serialize_timeline_item(item):
             "title": item.project.title if item.project else "Project",
             "url": url_for("projects.project_detail", project_id=item.project_id) if item.project_id else "#",
             "is_private": bool(item.project.is_private) if item.project else False,
+            "frequency": item.project.frequency if item.project else "",
+            "last_session_label": last_session_labels.get(item.project_id, "Last session: none"),
         }
 
     return {
