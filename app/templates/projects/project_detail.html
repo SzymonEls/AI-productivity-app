@@ -65,17 +65,6 @@
         >
             Archive
         </button>
-        {% if ai_enabled %}
-            <button
-                type="button"
-                class="btn btn-primary"
-                data-bs-toggle="modal"
-                data-bs-target="#projectAiModal"
-                {% if not is_openai_ready %}disabled{% endif %}
-            >
-                Run AI
-            </button>
-        {% endif %}
         <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
         {% if not project.is_archived %}
             <form method="post" action="{{ url_for('projects.archive_project', project_id=project.id) }}">
@@ -330,47 +319,6 @@
     </div>
 </div>
 
-{% if ai_enabled %}
-    <div class="modal fade" id="projectAiModal" tabindex="-1" aria-labelledby="projectAiModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content">
-                <form id="project-ai-form" method="post" action="{{ url_for('ai.generate_project_plan') }}">
-                    <input type="hidden" name="project_id" value="{{ project.id }}">
-                    <div class="modal-header">
-                        <h2 class="modal-title h5" id="projectAiModalLabel">AI: Organize project plan</h2>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        {% if not is_openai_ready %}
-                            <div class="alert alert-warning">
-                                AI is inactive. Add `OPENAI_API_KEY` to `.env` to enable this form.
-                            </div>
-                        {% endif %}
-                        <div id="project-ai-error" class="alert alert-danger d-none" role="alert"></div>
-                        <label class="form-label" for="ai-project-prompt">Prompt</label>
-                        <textarea
-                            class="form-control"
-                            id="ai-project-prompt"
-                            name="prompt"
-                            rows="7"
-                            placeholder="E.g. Organize this project into a concrete markdown plan with steps, checklists, and a near-term work rhythm."
-                            {% if not is_openai_ready %}disabled{% endif %}
-                            required
-                        ></textarea>
-                    </div>
-                    <div class="modal-footer">
-                        <a class="btn btn-outline-secondary me-auto" href="{{ url_for('ai.history') }}">AI History</a>
-                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
-                        <button id="project-ai-submit" type="submit" class="btn btn-primary" {% if not is_openai_ready %}disabled{% endif %}>
-                            <span class="submit-label">Run AI</span>
-                            <span class="spinner-border spinner-border-sm d-none" aria-hidden="true"></span>
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-{% endif %}
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1633,51 +1581,6 @@
             });
         }
 
-        const projectAiForm = document.getElementById("project-ai-form");
-        if (projectAiForm) {
-            const projectAiSubmit = document.getElementById("project-ai-submit");
-            const projectAiLabel = projectAiSubmit.querySelector(".submit-label");
-            const projectAiSpinner = projectAiSubmit.querySelector(".spinner-border");
-            const projectAiError = document.getElementById("project-ai-error");
-            const projectAiModalElement = document.getElementById("projectAiModal");
-            const projectAiModal = bootstrap.Modal.getOrCreateInstance(projectAiModalElement);
-
-            projectAiForm.addEventListener("submit", async (event) => {
-                event.preventDefault();
-                projectAiError.classList.add("d-none");
-                projectAiSubmit.disabled = true;
-                projectAiLabel.textContent = "Working...";
-                projectAiSpinner.classList.remove("d-none");
-
-                try {
-                    const response = await fetch(projectAiForm.action, {
-                        method: "POST",
-                        headers: {
-                            "Accept": "application/json",
-                            "X-Requested-With": "fetch",
-                        },
-                        body: new FormData(projectAiForm),
-                    });
-                    const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
-                    if (!response.ok || !payload.ok) {
-                        throw new Error(payload.error || "Failed to run AI for the project.");
-                    }
-
-                    updateDisplayValues(payload.project);
-                    Object.keys(fieldNames).forEach((sectionName) => toggleSection(sectionName, false));
-                    showAlert(payload.message, "success");
-                    projectAiForm.reset();
-                    projectAiModal.hide();
-                } catch (error) {
-                    projectAiError.textContent = error.message;
-                    projectAiError.classList.remove("d-none");
-                } finally {
-                    projectAiSubmit.disabled = false;
-                    projectAiLabel.textContent = "Run AI";
-                    projectAiSpinner.classList.add("d-none");
-                }
-            });
-        }
     })();
 </script>
 {% endblock %}

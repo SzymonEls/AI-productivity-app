@@ -67,22 +67,9 @@ class Config:
         days=int(os.environ.get("REMEMBER_COOKIE_DAYS", "30"))
     )
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
-    AI_ENABLED = parse_bool(os.environ.get("AI_ENABLED"), True)
     APP_VERSION = os.environ.get("APP_VERSION", "").strip() or read_app_version()
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
+    # Reserved for a future AI feature; unused by the app today.
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
-    OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4.1-mini").strip()
-    OPENAI_TIMEOUT = int(os.environ.get("OPENAI_TIMEOUT", "30"))
-    OPENAI_PROJECT_TIMEOUT = int(os.environ.get("OPENAI_PROJECT_TIMEOUT", "90"))
-    OPENAI_TEMPERATURE = float(os.environ.get("OPENAI_TEMPERATURE", "0.7"))
-    OPENAI_PROJECT_TEMPERATURE = float(os.environ.get("OPENAI_PROJECT_TEMPERATURE", "0.5"))
-    OPENAI_MARKDOWN_TASK = os.environ.get(
-        "OPENAI_MARKDOWN_TASK",
-        "Answer the user's productivity prompt in Markdown.",
-    ).strip()
-    OPENAI_PROJECT_TASK = os.environ.get(
-        "OPENAI_PROJECT_TASK",
-        "Organize this project using the user's prompt. Treat long_goal as the project plan field.",
-    ).strip()

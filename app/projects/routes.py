@@ -3,7 +3,6 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..ai.service import is_openai_configured
 from ..extensions import db
 from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
@@ -123,7 +122,6 @@ def project_detail(project_id):
     return render_template(
         "projects/project_detail.html",
         project=project,
-        is_openai_ready=is_openai_configured(),
         timer_summary=today_project_summary(current_user.id, project.id),
     )
 

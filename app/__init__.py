@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import AIPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import DailyPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
     from .main.routes import main_bp
@@ -79,7 +79,6 @@ def register_template_context(app):
         return {
             "app_version": app.config.get("APP_VERSION", "local"),
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
-            "ai_enabled": app.config.get("AI_ENABLED", True),
             "active_time_entry": active_time_entry,
             "active_time_elapsed_seconds": active_time_elapsed_seconds,
             "active_time_elapsed_label": active_time_elapsed_label,
@@ -231,7 +230,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import AIPlan, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -285,22 +284,6 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
-
-        if "ai_plans" not in table_names:
-            AIPlan.__table__.create(bind=db.engine)
-        else:
-            ai_plan_columns = {column["name"] for column in inspector.get_columns("ai_plans")}
-            if "request_payload" not in ai_plan_columns:
-                db.session.execute(text("ALTER TABLE ai_plans ADD COLUMN request_payload TEXT"))
-                db.session.commit()
-            if "is_pinned" not in ai_plan_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE ai_plans ADD COLUMN is_pinned BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
             if "is_private" not in project_columns:
                 db.session.execute(
                     text(
@@ -309,6 +292,7 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
 

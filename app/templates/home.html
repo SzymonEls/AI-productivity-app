@@ -8,43 +8,22 @@
         <div class="card shadow-sm h-100">
             <div class="card-body p-4">
                 {% if current_user.is_authenticated %}
-                    {% if ai_enabled and not is_openai_ready %}
-                        <div class="alert alert-warning">
-                            AI is not active yet. Fill in `OPENAI_API_KEY` in `.env`
-                            based on `.env.example`.
-                        </div>
-                    {% endif %}
-
-                    <div id="latest-plan-empty" {% if latest_plan %}class="d-none"{% endif %}>
-                        <p class="text-muted mb-0">There is no pinned daily plan yet.</p>
-                    </div>
-                    <div id="latest-plan-content" {% if not latest_plan %}class="d-none"{% endif %}>
+                    {% if daily_plan %}
                         <div class="plan-chip mb-3">
-                            <span class="badge text-bg-primary">pinned</span>
-                            <span id="latest-plan-type" class="badge text-bg-dark">
-                                {% if latest_plan %}{{ latest_plan.plan_type.replace('_', ' ') }}{% endif %}
-                            </span>
-                            <span id="latest-plan-time" class="text-muted small">
-                                {% if latest_plan %}{{ latest_plan.created_at | naturaltime }}{% endif %}
-                            </span>
+                            <span class="badge text-bg-primary">Today's plan</span>
+                            <span class="text-muted small">{{ daily_plan.updated_at | naturaltime }}</span>
                         </div>
-                        <h2 id="latest-plan-title" class="h4">{% if latest_plan %}{{ latest_plan.title }}{% endif %}</h2>
-                        <div id="latest-plan-markdown" class="markdown-content">
-                            {% if latest_plan %}{{ latest_plan.content | without_repeated_title(latest_plan.title) | markdown }}{% endif %}
+                        <h2 class="h4">{{ daily_plan.title }}</h2>
+                        <div class="markdown-content">
+                            {{ daily_plan.content | without_repeated_title(daily_plan.title) | markdown }}
                         </div>
-                        <a
-                            id="latest-plan-link"
-                            class="btn btn-outline-primary btn-sm mt-3"
-                            href="{% if latest_plan %}{{ url_for('ai.history_detail', plan_id=latest_plan.id) }}{% else %}#{% endif %}"
-                        >
-                            Edit plan
-                        </a>
-                    </div>
+                    {% else %}
+                        <h1 class="h2 mb-3">Daily plan</h1>
+                        <p class="text-muted mb-0">There is no saved daily plan yet.</p>
+                    {% endif %}
                 {% else %}
-                    <h1 class="h2 mb-3">Pinned daily plan</h1>
-                    <p class="text-muted">
-                        Log in to manage projects{% if ai_enabled %}, and AI-generated responses{% endif %}.
-                    </p>
+                    <h1 class="h2 mb-3">Daily plan</h1>
+                    <p class="text-muted">Log in to manage projects and daily plans.</p>
 
                     <div class="d-flex flex-wrap gap-2 mt-4">
                         <a class="btn btn-primary" href="{{ url_for('auth.login') }}">Log in</a>
@@ -66,26 +45,17 @@
                 <div class="d-grid gap-2 mb-4">
                     {% if current_user.is_authenticated %}
                         <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Open Dashboard</a>
-                        <a class="btn btn-primary" href="{{ url_for('ai.daily_planning') }}">Daily plan</a>
-                        {% if ai_enabled %}
-                            <a class="btn btn-outline-secondary" href="{{ url_for('ai.history') }}">AI History</a>
-                        {% endif %}
+                        <a class="btn btn-primary" href="{{ url_for('ai.manual_daily_plan') }}">Daily plan</a>
                     {% endif %}
                 </div>
 
                 {% if current_user.is_authenticated %}
-                    {% if ai_enabled %}
-                        <p class="text-muted mb-0">
-                            A new plan is automatically pinned to home. You can pin older plans manually from the history.
-                        </p>
-                    {% else %}
-                        <p class="text-muted mb-0">You can create a manual daily plan from quick access.</p>
-                    {% endif %}
+                    <p class="text-muted mb-0">Saving a new daily plan replaces the one shown here.</p>
                 {% else %}
-                    <p class="text-muted mb-0">Once logged in, you'll see the latest plans and history here.</p>
+                    <p class="text-muted mb-0">Once logged in, you'll see today's plan here.</p>
                 {% endif %}
                 <br />
-                <p class="text-muted mb-0">v{{ app_version }}</pp>
+                <p class="text-muted mb-0">v{{ app_version }}</p>
             </div>
         </div>
     </div>
