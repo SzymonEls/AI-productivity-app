@@ -375,8 +375,12 @@
     margin: 0 0.25rem 0 0;
 }
 
+.dashboard-page {
+    max-width: 860px;
+}
+
 .project-timeline-panel {
-    max-width: 980px;
+    max-width: 100%;
 }
 
 .project-timeline {

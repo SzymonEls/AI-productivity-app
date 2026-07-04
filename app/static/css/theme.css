@@ -213,6 +213,10 @@ a {
 
 .app-logo:hover .app-brand-mark { transform: scale(1.05); }
 
+.app-navbar .navbar-nav {
+    gap: 0.35rem;
+}
+
 .app-navbar .nav-link {
     position: relative;
     display: inline-flex;
