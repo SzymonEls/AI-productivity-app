@@ -140,6 +140,7 @@ class ProjectTimelineGroup(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     name = db.Column(db.String(150), nullable=True)
     position = db.Column(db.Integer, default=0, nullable=False)
+    is_backlog = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,

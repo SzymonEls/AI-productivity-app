@@ -5,19 +5,16 @@
 
 {% block content %}
 <div class="dashboard-page">
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <h1 class="h2 mb-0">Your Projects</h1>
+<section class="dashboard-section dashboard-header-section">
+    <div class="d-flex justify-content-between align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+            <h1 class="h5 mb-0">Your Projects</h1>
             <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
         </div>
-        <p class="text-muted mb-0">Organize your projects and notes on the timeline below.</p>
+        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
     </div>
-    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
-</div>
-
-{% if projects %}
-    <div class="project-view-toolbar mb-3">
+    {% if projects %}
+    <div class="project-view-toolbar dashboard-header-toolbar">
         <div class="timeline-edit-actions" data-timeline-edit-actions>
             <div class="form-check form-switch timeline-private-toggle">
                 <input class="form-check-input" type="checkbox" id="hidePrivateTimelineItems" data-hide-private-timeline>
@@ -33,12 +30,20 @@
             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-timeline-cancel>{{ icon("x") }}Cancel</button>
         </div>
     </div>
+    {% endif %}
+</section>
 
+{% if projects %}
     <script type="application/json" id="project-timeline-data">
         {{ timeline_data | tojson }}
     </script>
+    <script type="application/json" id="project-backlog-data">
+        {{ backlog_data | tojson }}
+    </script>
 
     <section class="project-timeline-panel" data-save-url="{{ url_for('projects.save_timeline') }}">
+        <div class="project-timeline-layout" data-timeline-layout>
+        <section class="dashboard-section project-timeline-section">
         <div class="project-timeline" data-timeline-groups>
             {% for group in timeline_groups %}
                 <section class="timeline-group" data-timeline-group data-group-id="{{ group.id }}">
@@ -93,6 +98,29 @@
                 </section>
             {% endfor %}
         </div>
+        </section>
+        <aside class="dashboard-section timeline-backlog" data-timeline-backlog>
+            <div class="timeline-backlog-header">
+                <h2 class="timeline-backlog-title">Off timeline</h2>
+                <p class="timeline-backlog-hint">Projects parked outside the timeline. Drag items here while editing.</p>
+            </div>
+            <div class="timeline-items timeline-backlog-items" data-timeline-items data-timeline-backlog-items>{% for item in backlog_group.items %}
+                    {% if item.item_type == "project" and item.project and not item.project.is_archived %}
+                        <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}" data-is-private="{{ 1 if item.project.is_private else 0 }}">
+                            <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
+                            <div class="timeline-item-main">
+                                <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}" data-private-mask-title>{{ item.project.title }}</a>
+                                <div class="timeline-item-meta d-none" data-project-meta>
+                                    {% if item.project.frequency %}<span class="timeline-item-text preserve-lines">{{ item.project.frequency }}</span>{% endif %}
+                                    <span class="manual-last-session">{{ project_last_session_labels.get(item.project_id, "Last session: none") }}</span>
+                                </div>
+                            </div>
+                        </article>
+                    {% endif %}
+                {% endfor %}</div>
+            <p class="timeline-backlog-empty {% if backlog_group.items %}d-none{% endif %}" data-timeline-backlog-empty>No projects off the timeline.</p>
+        </aside>
+        </div>
     </section>
 
 {% else %}
@@ -109,6 +137,9 @@
     (() => {
         const timelinePanel = document.querySelector(".project-timeline-panel");
         const timelineRoot = document.querySelector("[data-timeline-groups]");
+        const backlogRoot = document.querySelector("[data-timeline-backlog-items]");
+        const backlogEmpty = document.querySelector("[data-timeline-backlog-empty]");
+        const backlogDataNode = document.getElementById("project-backlog-data");
         const timelineDataNode = document.getElementById("project-timeline-data");
         const editToggle = document.querySelector("[data-timeline-edit-toggle]");
         const saveButton = document.querySelector("[data-timeline-save]");
@@ -122,6 +153,7 @@
         }
 
         let savedTimeline = JSON.parse(timelineDataNode.textContent);
+        let savedBacklog = backlogDataNode ? (JSON.parse(backlogDataNode.textContent).items || []) : [];
         let editMode = false;
         let draggedItem = null;
 
@@ -158,6 +190,25 @@
             setEditMode(editMode);
             updatePrivacyMask();
             updateProjectStatsVisibility();
+        };
+
+        const renderBacklog = (items) => {
+            if (!backlogRoot) {
+                return;
+            }
+            backlogRoot.innerHTML = (items || []).map(renderTimelineItem).join("");
+            setEditMode(editMode);
+            updatePrivacyMask();
+            updateProjectStatsVisibility();
+            updateBacklogEmpty();
+        };
+
+        const updateBacklogEmpty = () => {
+            if (!backlogEmpty || !backlogRoot) {
+                return;
+            }
+            const hasItems = backlogRoot.querySelector("[data-timeline-item]") !== null;
+            backlogEmpty.classList.toggle("d-none", hasItems);
         };
 
         const renderTimelineItem = (item) => {
@@ -199,7 +250,7 @@
 
         const updatePrivacyMask = () => {
             const shouldMask = Boolean(hidePrivateToggle?.checked);
-            timelineRoot.querySelectorAll("[data-timeline-item]").forEach((item) => {
+            timelinePanel.querySelectorAll("[data-timeline-item]").forEach((item) => {
                 const isPrivate = item.dataset.isPrivate === "1";
                 item.classList.toggle("is-private-masked", shouldMask && isPrivate);
 
@@ -223,7 +274,7 @@
 
         const updateProjectStatsVisibility = () => {
             const shouldShow = Boolean(showProjectStatsToggle?.checked);
-            timelineRoot.querySelectorAll("[data-project-meta]").forEach((meta) => {
+            timelinePanel.querySelectorAll("[data-project-meta]").forEach((meta) => {
                 meta.classList.toggle("d-none", !shouldShow);
             });
         };
@@ -249,8 +300,10 @@
             cancelButton?.classList.toggle("d-none", !enabled);
             addGroupButton?.classList.toggle("d-none", !enabled);
             timelineRoot.classList.toggle("is-editing", enabled);
+            backlogRoot?.classList.toggle("is-editing", enabled);
+            timelinePanel.classList.toggle("is-editing", enabled);
 
-            timelineRoot.querySelectorAll("[data-timeline-item]").forEach((item) => {
+            timelinePanel.querySelectorAll("[data-timeline-item]").forEach((item) => {
                 item.draggable = enabled;
                 item.querySelector("[data-drag-handle]")?.classList.toggle("d-none", !enabled);
             });
@@ -342,8 +395,10 @@
             return closestItem;
         };
 
+        const isBacklogContainer = (container) => container?.hasAttribute("data-timeline-backlog-items");
+
         const setupTimelineControls = () => {
-            timelineRoot.addEventListener("dragstart", (event) => {
+            timelinePanel.addEventListener("dragstart", (event) => {
                 const item = event.target.closest("[data-timeline-item]");
                 if (!editMode || !item) {
                     event.preventDefault();
@@ -354,15 +409,20 @@
                 event.dataTransfer.effectAllowed = "move";
             });
 
-            timelineRoot.addEventListener("dragend", () => {
+            timelinePanel.addEventListener("dragend", () => {
                 draggedItem?.classList.remove("is-dragging");
                 draggedItem = null;
-                timelineRoot.querySelectorAll(".is-drag-over").forEach((node) => node.classList.remove("is-drag-over"));
+                timelinePanel.querySelectorAll(".is-drag-over").forEach((node) => node.classList.remove("is-drag-over"));
+                updateBacklogEmpty();
             });
 
-            timelineRoot.addEventListener("dragover", (event) => {
+            timelinePanel.addEventListener("dragover", (event) => {
                 const container = event.target.closest("[data-timeline-items]");
                 if (!editMode || !draggedItem || !container) {
+                    return;
+                }
+                // Only projects can be parked off the timeline; notes stay on it.
+                if (isBacklogContainer(container) && draggedItem.dataset.itemType !== "project") {
                     return;
                 }
                 event.preventDefault();
@@ -375,18 +435,25 @@
                 }
             });
 
-            timelineRoot.addEventListener("dragleave", (event) => {
+            timelinePanel.addEventListener("dragleave", (event) => {
                 const container = event.target.closest("[data-timeline-items]");
                 if (container && !container.contains(event.relatedTarget)) {
                     container.classList.remove("is-drag-over");
                 }
             });
 
-            timelineRoot.addEventListener("drop", (event) => {
+            timelinePanel.addEventListener("drop", (event) => {
                 const container = event.target.closest("[data-timeline-items]");
                 if (container) {
                     event.preventDefault();
                     container.classList.remove("is-drag-over");
+                    updateBacklogEmpty();
+                }
+            });
+
+            backlogRoot?.addEventListener("click", (event) => {
+                if (editMode && event.target.closest(".timeline-item-title[href]")) {
+                    event.preventDefault();
                 }
             });
 
@@ -511,6 +578,13 @@
                     };
                 }),
             })),
+            backlog: backlogRoot
+                ? Array.from(backlogRoot.querySelectorAll("[data-timeline-item][data-item-type='project']")).map((item) => ({
+                    id: item.dataset.itemId || null,
+                    type: "project",
+                    project_id: item.dataset.projectId,
+                }))
+                : [],
         });
 
         hidePrivateToggle?.addEventListener("change", updatePrivacyMask);
@@ -519,6 +593,7 @@
         editToggle?.addEventListener("click", () => setEditMode(true));
         cancelButton?.addEventListener("click", () => {
             renderTimeline(savedTimeline);
+            renderBacklog(savedBacklog);
             setEditMode(false);
         });
         addGroupButton?.addEventListener("click", () => {
@@ -545,7 +620,9 @@
                 }
 
                 savedTimeline = payload.groups;
+                savedBacklog = (payload.backlog && payload.backlog.items) || [];
                 renderTimeline(savedTimeline);
+                renderBacklog(savedBacklog);
                 setEditMode(false);
             } catch (error) {
                 window.alert(error.message);
@@ -556,6 +633,7 @@
 
         setupTimelineControls();
         renderTimeline(savedTimeline);
+        renderBacklog(savedBacklog);
         addGroupButton?.classList.add("d-none");
     })();
 </script>
