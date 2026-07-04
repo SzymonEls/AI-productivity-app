@@ -43,7 +43,7 @@
                 {% else %}
                     <h1 class="h2 mb-3">Pinned daily plan</h1>
                     <p class="text-muted">
-                        Log in to manage projects{% if calendar_enabled %}, the calendar{% endif %}{% if ai_enabled %}, and AI-generated responses{% endif %}.
+                        Log in to manage projects{% if ai_enabled %}, and AI-generated responses{% endif %}.
                     </p>
 
                     <div class="d-flex flex-wrap gap-2 mt-4">
@@ -64,9 +64,6 @@
                     <h2 class="h4 mb-0">Quick Access</h2>
                 </div>
                 <div class="d-grid gap-2 mb-4">
-                    {% if calendar_enabled %}
-                        <a class="btn btn-outline-primary" href="{{ url_for('calendar.calendar_view') }}">Open Calendar</a>
-                    {% endif %}
                     {% if current_user.is_authenticated %}
                         <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">Open Dashboard</a>
                         <a class="btn btn-primary" href="{{ url_for('ai.daily_planning') }}">Daily plan</a>

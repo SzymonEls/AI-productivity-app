@@ -23,13 +23,6 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
-    calendar_subscriptions = db.relationship(
-        "CalendarSubscription",
-        back_populates="owner",
-        cascade="all, delete-orphan",
-        lazy=True,
-        order_by="CalendarSubscription.name",
-    )
     ai_plans = db.relationship(
         "AIPlan",
         back_populates="owner",
@@ -220,20 +213,6 @@ class AIPlan(db.Model):
 
     owner = db.relationship("User", back_populates="ai_plans")
     project = db.relationship("Project", back_populates="ai_plans")
-
-
-class CalendarSubscription(db.Model):
-    """User-owned iCal subscription used to build the daily plan view."""
-
-    __tablename__ = "calendar_subscriptions"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    name = db.Column(db.String(120), nullable=False)
-    ical_url = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-
-    owner = db.relationship("User", back_populates="calendar_subscriptions")
 
 
 @login_manager.user_loader

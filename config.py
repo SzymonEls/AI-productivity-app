@@ -68,7 +68,6 @@ class Config:
     )
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     AI_ENABLED = parse_bool(os.environ.get("AI_ENABLED"), True)
-    CALENDAR_ENABLED = parse_bool(os.environ.get("CALENDAR_ENABLED"), True)
     APP_VERSION = os.environ.get("APP_VERSION", "").strip() or read_app_version()
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")

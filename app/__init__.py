@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request, url_for
 from flask_login import current_user
+from flask_migrate import stamp as stamp_migrations, upgrade as apply_migrations
 from sqlalchemy import inspect, text
 
 from config import Config
@@ -27,10 +28,9 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import AIPlan, CalendarSubscription, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import AIPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
-    from .calendar.routes import calendar_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
     from .time_tracking.routes import time_tracking_bp
@@ -38,7 +38,6 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(ai_bp)
     app.register_blueprint(auth_bp)
-    app.register_blueprint(calendar_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
     register_template_context(app)
@@ -46,6 +45,7 @@ def create_app(config_class=Config):
     register_json_error_handlers(app)
     register_login_handlers(login_manager)
     if should_initialize_database(app):
+        run_database_migrations(app)
         initialize_database(app)
 
     return app
@@ -80,7 +80,6 @@ def register_template_context(app):
             "app_version": app.config.get("APP_VERSION", "local"),
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
             "ai_enabled": app.config.get("AI_ENABLED", True),
-            "calendar_enabled": app.config.get("CALENDAR_ENABLED", True),
             "active_time_entry": active_time_entry,
             "active_time_elapsed_seconds": active_time_elapsed_seconds,
             "active_time_elapsed_label": active_time_elapsed_label,
@@ -197,6 +196,34 @@ def register_template_filters(app):
         return "1 year ago" if years == 1 else f"{years} years ago"
 
 
+def run_database_migrations(app):
+    """
+    Apply pending Alembic migrations automatically so local development
+    (`flask --app run.py run`) doesn't need a manual `flask db upgrade` step.
+
+    Docker already runs `flask db upgrade` once in docker-entrypoint.sh before
+    starting Gunicorn, so this is skipped there via SKIP_DB_BOOTSTRAP to avoid
+    every worker process racing to apply migrations at the same time.
+    """
+    from alembic.migration import MigrationContext
+
+    with app.app_context():
+        table_names = inspect(db.engine).get_table_names()
+
+        with db.engine.connect() as connection:
+            current_revision = MigrationContext.configure(connection).get_current_revision()
+
+        if current_revision is None and table_names:
+            # Existing local database predates Alembic tracking. Its schema is
+            # kept compatible by the ad-hoc bootstrap below, so mark it as
+            # being at the latest migration instead of replaying every
+            # migration's upgrade() against tables that already exist.
+            stamp_migrations()
+            return
+
+        apply_migrations()
+
+
 def initialize_database(app):
     """
     Create tables automatically when the configured database is empty.
@@ -204,7 +231,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import AIPlan, CalendarSubscription, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import AIPlan, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -258,9 +285,6 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
-
-        if "calendar_subscriptions" not in table_names:
-            CalendarSubscription.__table__.create(bind=db.engine)
 
         if "ai_plans" not in table_names:
             AIPlan.__table__.create(bind=db.engine)
