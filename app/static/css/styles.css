@@ -586,6 +586,10 @@ body {
     background: #fbfcfd;
 }
 
+.timeline-project-draft-item {
+    border-left-color: #0d6efd;
+}
+
 .timeline-item.is-private-masked {
     border-left-color: #495057;
     background: #f8f9fa;
@@ -652,7 +656,11 @@ body {
     margin-top: 0.1rem;
 }
 
-.timeline-add-note {
+.timeline-group-add-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     margin-top: 0.25rem;
 }
 

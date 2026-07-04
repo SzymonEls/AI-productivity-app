@@ -75,7 +75,10 @@
                                     </article>
                                 {% endif %}
                             {% endfor %}</div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                        <div class="timeline-group-add-actions">
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project d-none" data-add-project>Add project</button>
+                        </div>
                     </div>
                 </section>
             {% endfor %}
@@ -132,7 +135,10 @@
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
                         </div>
                         <div class="timeline-items" data-timeline-items>${(group.items || []).map(renderTimelineItem).join("")}</div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                        <div class="timeline-group-add-actions">
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project d-none" data-add-project>Add project</button>
+                        </div>
                     </div>
                 </section>
             `).join("");
@@ -236,6 +242,7 @@
             timelineRoot.querySelectorAll("[data-group-move-controls]").forEach((controls) => controls.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-group]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-add-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
+            timelineRoot.querySelectorAll("[data-add-project]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-convert-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
             timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
@@ -248,6 +255,24 @@
             const wrapper = document.createElement("div");
             wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Note", body: "" }).trim();
             return wrapper.firstElementChild;
+        };
+
+        const createProjectDraftElement = () => {
+            const wrapper = document.createElement("div");
+            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Project", body: "" }).trim();
+            const item = wrapper.firstElementChild;
+            item.classList.add("timeline-project-draft-item");
+            item.dataset.convertToProject = "1";
+            const titleInput = item.querySelector("[data-note-title]");
+            if (titleInput) {
+                titleInput.placeholder = "Project name";
+            }
+            const bodyInput = item.querySelector("[data-note-body]");
+            if (bodyInput) {
+                bodyInput.placeholder = "Short goal / description (optional)";
+            }
+            item.querySelector("[data-convert-note]")?.remove();
+            return item;
         };
 
         const createGroupElement = () => {
@@ -266,7 +291,10 @@
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-delete-group>Remove</button>
                         </div>
                         <div class="timeline-items" data-timeline-items></div>
-                        <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note" data-add-note>Add text block</button>
+                        <div class="timeline-group-add-actions">
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note" data-add-note>Add text block</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project" data-add-project>Add project</button>
+                        </div>
                     </div>
                 </section>
             `.trim();
@@ -360,6 +388,15 @@
                 if (addNoteButton) {
                     const item = createNoteElement();
                     addNoteButton.closest("[data-timeline-group]").querySelector("[data-timeline-items]").appendChild(item);
+                    setEditMode(true);
+                    item.querySelector("[data-note-title]")?.focus();
+                    return;
+                }
+
+                const addProjectButton = event.target.closest("[data-add-project]");
+                if (addProjectButton) {
+                    const item = createProjectDraftElement();
+                    addProjectButton.closest("[data-timeline-group]").querySelector("[data-timeline-items]").appendChild(item);
                     setEditMode(true);
                     item.querySelector("[data-note-title]")?.focus();
                     return;
