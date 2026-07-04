@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#1f2937">
+    <meta name="theme-color" content="#f5f5f7" data-theme-color-meta>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Productivity App">
@@ -12,6 +12,20 @@
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
     <title>{% block title %}Productivity App{% endblock %}</title>
     <script>
+        // Apply the saved theme before first paint to avoid a flash of the wrong theme.
+        (() => {
+            const root = document.documentElement;
+            try {
+                const stored = localStorage.getItem("app-theme");
+                const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+                const theme = stored || (prefersDark ? "dark" : "light");
+                root.setAttribute("data-bs-theme", theme);
+                root.setAttribute("data-project-layout", localStorage.getItem("app-project-layout") || "sidebar");
+            } catch (error) {
+                root.setAttribute("data-bs-theme", "light");
+                root.setAttribute("data-project-layout", "sidebar");
+            }
+        })();
         if ("serviceWorker" in navigator && window.isSecureContext) {
             navigator.serviceWorker.register("{{ url_for('main.service_worker') }}", { scope: "/" });
         }
@@ -20,14 +34,30 @@
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
         rel="stylesheet"
     >
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/theme.css') }}">
     {% block extra_head %}{% endblock %}
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <nav class="navbar navbar-expand-lg app-navbar mb-4">
         <div class="container">
             <div class="d-flex align-items-center gap-2" data-navbar-brand-group>
-                <a class="navbar-brand me-0" href="{{ url_for('projects.dashboard') }}">Productivity App</a>
+                <a class="app-logo" href="{{ url_for('main.home') }}" aria-label="Home" title="Home">
+                    <span class="app-brand-mark" aria-hidden="true">◆</span>
+                </a>
+                {% if current_user.is_authenticated %}
+                    <button
+                        type="button"
+                        class="project-switcher-button"
+                        data-switcher-open
+                        aria-haspopup="dialog"
+                        title="Switch project (Ctrl/⌘ K)"
+                    >
+                        <span class="switcher-label">{{ nav_current_project.title if nav_current_project else "Switch project" }}</span>
+                        <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                        <span class="switcher-kbd" aria-hidden="true">⌘K</span>
+                    </button>
+                {% endif %}
                 {% if current_user.is_authenticated and active_time_entry %}
                     <a
                         class="active-timer-link"
@@ -46,7 +76,7 @@
                 {% endif %}
             </div>
             <button
-                class="navbar-toggler"
+                class="navbar-toggler icon-button border-0"
                 type="button"
                 data-bs-toggle="collapse"
                 data-bs-target="#mainNavbar"
@@ -58,7 +88,7 @@
             </button>
             <div class="collapse navbar-collapse" id="mainNavbar">
                 <div class="navbar-nav me-auto">
-                    <a class="nav-link" href="{{ url_for('main.home') }}">
+                    <a class="nav-link {% if request.endpoint == 'main.home' %}active{% endif %}" href="{{ url_for('main.home') }}">
                         Home
                     </a>
                     {% if current_user.is_authenticated %}
@@ -70,48 +100,135 @@
                         </a>
                     {% endif %}
                 </div>
-                <div class="navbar-nav ms-auto align-items-center">
-                <span
-                    class="offline-indicator"
-                    data-offline-indicator
-                    role="status"
-                    title="You're offline"
-                    aria-label="You're offline"
-                >
-                    <span aria-hidden="true">Offline</span>
-                </span>
-                {% if current_user.is_authenticated %}
-                    <div class="nav-item dropdown ms-2">
-                        <button
-                            class="btn btn-outline-light btn-sm dropdown-toggle"
-                            type="button"
-                            data-bs-toggle="dropdown"
-                            aria-expanded="false"
-                        >
-                            {{ current_user.username }}
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                            <li>
-                                <span class="dropdown-item-text text-muted small">{{ current_user.email }}</span>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('auth.logout') }}">Logout</a>
-                            </li>
-                        </ul>
-                    </div>
-                {% else %}
-                    <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
-                    {% if registration_enabled %}
-                        <a class="nav-link" href="{{ url_for('auth.register') }}">Register</a>
+                <div class="app-nav-actions ms-auto">
+                    <span
+                        class="offline-indicator"
+                        data-offline-indicator
+                        role="status"
+                        title="You're offline"
+                        aria-label="You're offline"
+                    >
+                        <span aria-hidden="true">Offline</span>
+                    </span>
+
+                    <button
+                        type="button"
+                        class="icon-button theme-toggle"
+                        data-theme-toggle
+                        title="Toggle theme"
+                        aria-label="Toggle color theme"
+                    >
+                        <svg class="theme-toggle-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                        <svg class="theme-toggle-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                    </button>
+
+                    {% if current_user.is_authenticated %}
+                        <div class="nav-item dropdown">
+                            <button
+                                class="user-menu-button dropdown-toggle"
+                                type="button"
+                                data-bs-toggle="dropdown"
+                                aria-expanded="false"
+                            >
+                                <span class="user-avatar" aria-hidden="true">{{ current_user.username[:1] }}</span>
+                                <span class="d-none d-md-inline">{{ current_user.username }}</span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li>
+                                    <span class="dropdown-item-text text-muted small">{{ current_user.email }}</span>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#appSettingsModal">App settings</button>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ url_for('auth.logout') }}">Logout</a>
+                                </li>
+                            </ul>
+                        </div>
+                    {% else %}
+                        <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('auth.login') }}">Login</a>
+                        {% if registration_enabled %}
+                            <a class="btn btn-primary btn-sm" href="{{ url_for('auth.register') }}">Register</a>
+                        {% endif %}
                     {% endif %}
-                {% endif %}
                 </div>
             </div>
         </div>
     </nav>
 
-    <main class="container pb-5">
+    {% if current_user.is_authenticated %}
+    <div class="switcher-overlay" data-switcher-overlay role="dialog" aria-modal="true" aria-label="Project switcher" hidden>
+        <div class="switcher-panel" data-switcher-panel>
+            <div class="switcher-search">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" data-switcher-input placeholder="Search projects…" aria-label="Search projects" autocomplete="off">
+            </div>
+            <div class="switcher-results" data-switcher-results>
+                {% for group in nav_project_groups %}
+                    <div class="switcher-group" data-switcher-group>
+                        {% if group.name %}<div class="switcher-group-label">{{ group.name }}</div>{% endif %}
+                        {% for project in group.projects %}
+                            <a
+                                class="switcher-item {% if project.is_current %}is-current{% endif %}"
+                                href="{{ project.url }}"
+                                data-switcher-item
+                                data-switcher-name="{{ project.title | lower }}"
+                            >
+                                <span class="switcher-dot" aria-hidden="true"></span>
+                                <span class="switcher-title">{{ project.title }}</span>
+                                {% if project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
+                                {% if project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                                {% if project.is_current %}<span class="switcher-current-tag">current</span>{% endif %}
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endfor %}
+                <div class="switcher-empty d-none" data-switcher-empty>No projects match your search.</div>
+            </div>
+            <div class="switcher-footer">
+                <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+                <span><kbd>↵</kbd> open</span>
+                <span><kbd>esc</kbd> close</span>
+                <a class="ms-auto" href="{{ url_for('projects.dashboard') }}">All projects →</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.is_authenticated %}
+    <div class="modal fade" id="appSettingsModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title h5">App settings</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-group">
+                        <div class="settings-label">Theme</div>
+                        <p class="settings-hint">How the app looks. “System” follows your device.</p>
+                        <div class="settings-segments" role="group" aria-label="Theme" data-setting="theme">
+                            <button type="button" class="settings-segment" data-value="light">Light</button>
+                            <button type="button" class="settings-segment" data-value="dark">Dark</button>
+                            <button type="button" class="settings-segment" data-value="system">System</button>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-label">Project page layout</div>
+                        <p class="settings-hint">Where “Thoughts” and “Frequency” sit on a project page.</p>
+                        <div class="settings-segments" role="group" aria-label="Project page layout" data-setting="project-layout">
+                            <button type="button" class="settings-segment" data-value="sidebar">Beside the plan</button>
+                            <button type="button" class="settings-segment" data-value="stacked">Above the plan</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <main class="container pb-5 app-main">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}
@@ -128,6 +245,175 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // App settings: theme (light/dark/system) + project page layout
+        (() => {
+            const root = document.documentElement;
+            const themeColorMeta = document.querySelector("[data-theme-color-meta]");
+            const themeColors = { light: "#f5f5f7", dark: "#09090b" };
+            const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+            const store = (key, value) => { try { localStorage.setItem(key, value); } catch (error) { /* ignore */ } };
+            const clear = (key) => { try { localStorage.removeItem(key); } catch (error) { /* ignore */ } };
+            const read = (key) => { try { return localStorage.getItem(key); } catch (error) { return null; } };
+
+            const syncThemeColor = () => {
+                const theme = root.getAttribute("data-bs-theme") || "light";
+                themeColorMeta?.setAttribute("content", themeColors[theme] || themeColors.light);
+            };
+
+            const currentThemeSetting = () => read("app-theme") || "system";
+            const currentLayoutSetting = () => read("app-project-layout") || "sidebar";
+
+            const refreshSegments = () => {
+                document.querySelectorAll('[data-setting="theme"] .settings-segment').forEach((btn) => {
+                    btn.classList.toggle("is-active", btn.dataset.value === currentThemeSetting());
+                });
+                document.querySelectorAll('[data-setting="project-layout"] .settings-segment').forEach((btn) => {
+                    btn.classList.toggle("is-active", btn.dataset.value === currentLayoutSetting());
+                });
+            };
+
+            const applyTheme = (mode) => {
+                if (mode === "system") {
+                    clear("app-theme");
+                    root.setAttribute("data-bs-theme", prefersDark() ? "dark" : "light");
+                } else {
+                    store("app-theme", mode);
+                    root.setAttribute("data-bs-theme", mode);
+                }
+                syncThemeColor();
+                refreshSegments();
+            };
+
+            const applyLayout = (mode) => {
+                const value = mode === "stacked" ? "stacked" : "sidebar";
+                store("app-project-layout", value);
+                root.setAttribute("data-project-layout", value);
+                refreshSegments();
+            };
+
+            syncThemeColor();
+            refreshSegments();
+
+            document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    const current = root.getAttribute("data-bs-theme") || "light";
+                    applyTheme(current === "dark" ? "light" : "dark");
+                });
+            });
+
+            document.querySelectorAll('[data-setting="theme"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => applyTheme(btn.dataset.value));
+            });
+            document.querySelectorAll('[data-setting="project-layout"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => applyLayout(btn.dataset.value));
+            });
+
+            window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
+                if (!read("app-theme")) {
+                    root.setAttribute("data-bs-theme", prefersDark() ? "dark" : "light");
+                    syncThemeColor();
+                }
+            });
+        })();
+
+        // Project switcher (command palette)
+        (() => {
+            const overlay = document.querySelector("[data-switcher-overlay]");
+            if (!overlay) {
+                return;
+            }
+            const input = overlay.querySelector("[data-switcher-input]");
+            const results = overlay.querySelector("[data-switcher-results]");
+            const emptyState = overlay.querySelector("[data-switcher-empty]");
+            const getItems = () => Array.from(overlay.querySelectorAll("[data-switcher-item]"));
+            let activeIndex = -1;
+
+            const visibleItems = () => getItems().filter((item) => !item.classList.contains("d-none"));
+
+            const setActive = (index) => {
+                const items = visibleItems();
+                items.forEach((item) => item.classList.remove("is-active"));
+                if (!items.length) {
+                    activeIndex = -1;
+                    return;
+                }
+                activeIndex = (index + items.length) % items.length;
+                const item = items[activeIndex];
+                item.classList.add("is-active");
+                item.scrollIntoView({ block: "nearest" });
+            };
+
+            const filter = () => {
+                const query = (input.value || "").trim().toLowerCase();
+                let anyVisible = false;
+                getItems().forEach((item) => {
+                    const match = !query || (item.dataset.switcherName || "").includes(query);
+                    item.classList.toggle("d-none", !match);
+                    if (match) { anyVisible = true; }
+                });
+                overlay.querySelectorAll("[data-switcher-group]").forEach((group) => {
+                    const hasVisible = group.querySelector("[data-switcher-item]:not(.d-none)");
+                    group.classList.toggle("d-none", !hasVisible);
+                });
+                emptyState?.classList.toggle("d-none", anyVisible);
+                setActive(0);
+            };
+
+            const open = () => {
+                overlay.hidden = false;
+                overlay.classList.add("is-open");
+                input.value = "";
+                filter();
+                requestAnimationFrame(() => input.focus());
+            };
+
+            const close = () => {
+                overlay.classList.remove("is-open");
+                overlay.hidden = true;
+            };
+
+            document.querySelectorAll("[data-switcher-open]").forEach((button) => {
+                button.addEventListener("click", open);
+            });
+
+            overlay.addEventListener("click", (event) => {
+                if (event.target === overlay) {
+                    close();
+                }
+            });
+
+            input?.addEventListener("input", filter);
+
+            overlay.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    close();
+                } else if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActive(activeIndex + 1);
+                } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActive(activeIndex - 1);
+                } else if (event.key === "Enter") {
+                    const items = visibleItems();
+                    const target = items[activeIndex] || items[0];
+                    if (target) {
+                        event.preventDefault();
+                        window.location.href = target.getAttribute("href");
+                    }
+                }
+            });
+
+            document.addEventListener("keydown", (event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+                    event.preventDefault();
+                    overlay.classList.contains("is-open") ? close() : open();
+                }
+            });
+        })();
+
+        // Active-timer pill
         const formatActiveTimerDuration = (elapsedSeconds) => {
             const totalMinutes = Math.floor(Math.max(elapsedSeconds, 0) / 60);
             const hours = Math.floor(totalMinutes / 60);
