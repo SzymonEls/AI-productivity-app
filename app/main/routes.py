@@ -66,36 +66,30 @@ def pwa_icon(size):
 
 @lru_cache(maxsize=2)
 def _pwa_icon_png(size):
-    background = (248, 250, 252)
-    circle = (31, 41, 55)
+    """Render the brand mark: a full-bleed indigo→violet diagonal gradient with
+    a centred white diamond. Full-bleed so it reads well as a maskable icon; the
+    diamond stays inside the safe zone so platform masks never clip it.
+    """
+    top_left = (79, 70, 229)      # #4f46e5 (indigo)
+    bottom_right = (139, 92, 246)  # #8b5cf6 (violet)
     white = (255, 255, 255)
-    accent = (20, 184, 166)
 
-    pixels = [[background for _ in range(size)] for _ in range(size)]
-    center = size / 2
-    radius = size * 0.4
-    safe_radius = size * 0.47
-
-    for y in range(size):
-        for x in range(size):
-            distance = ((x - center) ** 2 + (y - center) ** 2) ** 0.5
-            if distance <= safe_radius:
-                pixels[y][x] = circle if distance <= radius else background
-
-    thickness = max(8, int(size * 0.055))
-    _draw_line(pixels, size * 0.28, size * 0.62, size * 0.41, size * 0.32, white, thickness)
-    _draw_line(pixels, size * 0.41, size * 0.32, size * 0.54, size * 0.62, white, thickness)
-    _draw_line(pixels, size * 0.34, size * 0.5, size * 0.49, size * 0.5, white, thickness)
-    _draw_line(pixels, size * 0.64, size * 0.34, size * 0.64, size * 0.62, white, thickness)
-    _draw_line(pixels, size * 0.59, size * 0.34, size * 0.69, size * 0.34, white, thickness)
-    _draw_line(pixels, size * 0.59, size * 0.62, size * 0.69, size * 0.62, white, thickness)
-    _draw_line(pixels, size * 0.28, size * 0.74, size * 0.72, size * 0.74, accent, max(8, int(size * 0.04)))
+    center = (size - 1) / 2
+    diamond_radius = size * 0.27  # half-diagonal, within the maskable safe zone
+    max_diagonal = 2 * (size - 1)
 
     raw = bytearray()
-    for row in pixels:
-        raw.append(0)
-        for red, green, blue in row:
-            raw.extend((red, green, blue))
+    for y in range(size):
+        raw.append(0)  # PNG "no filter" byte for this scanline
+        for x in range(size):
+            if abs(x - center) + abs(y - center) <= diamond_radius:
+                raw.extend(white)
+            else:
+                blend = (x + y) / max_diagonal
+                raw.extend(
+                    round(start + (end - start) * blend)
+                    for start, end in zip(top_left, bottom_right)
+                )
 
     return b"".join(
         [
@@ -105,30 +99,6 @@ def _pwa_icon_png(size):
             _png_chunk(b"IEND", b""),
         ]
     )
-
-
-def _draw_line(pixels, x1, y1, x2, y2, color, thickness):
-    size = len(pixels)
-    min_x = max(0, int(min(x1, x2) - thickness))
-    max_x = min(size - 1, int(max(x1, x2) + thickness))
-    min_y = max(0, int(min(y1, y2) - thickness))
-    max_y = min(size - 1, int(max(y1, y2) + thickness))
-    dx = x2 - x1
-    dy = y2 - y1
-    length_squared = dx * dx + dy * dy
-
-    for y in range(min_y, max_y + 1):
-        for x in range(min_x, max_x + 1):
-            if length_squared:
-                position = ((x - x1) * dx + (y - y1) * dy) / length_squared
-                position = min(1, max(0, position))
-                nearest_x = x1 + position * dx
-                nearest_y = y1 + position * dy
-            else:
-                nearest_x = x1
-                nearest_y = y1
-            if ((x - nearest_x) ** 2 + (y - nearest_y) ** 2) ** 0.5 <= thickness / 2:
-                pixels[y][x] = color
 
 
 def _png_chunk(chunk_type, data):

@@ -16,12 +16,16 @@
         (() => {
             const root = document.documentElement;
             try {
+                const ui = localStorage.getItem("app-ui") || "modern";
+                root.setAttribute("data-ui", ui);
                 const stored = localStorage.getItem("app-theme");
                 const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                const theme = stored || (prefersDark ? "dark" : "light");
+                // The classic skin is light-only, like the original UI.
+                const theme = ui === "classic" ? "light" : (stored || (prefersDark ? "dark" : "light"));
                 root.setAttribute("data-bs-theme", theme);
                 root.setAttribute("data-project-layout", localStorage.getItem("app-project-layout") || "sidebar");
             } catch (error) {
+                root.setAttribute("data-ui", "modern");
                 root.setAttribute("data-bs-theme", "light");
                 root.setAttribute("data-project-layout", "sidebar");
             }
@@ -42,7 +46,15 @@
     <nav class="navbar navbar-expand-lg app-navbar mb-4">
         <div class="container">
             <div class="d-flex align-items-center gap-2" data-navbar-brand-group>
-                <a class="app-logo" href="{{ url_for('main.home') }}" aria-label="Home" title="Home">
+                <a
+                    class="app-logo"
+                    data-app-logo
+                    href="{{ url_for('projects.dashboard') if current_user.is_authenticated else url_for('main.home') }}"
+                    data-home-url="{{ url_for('main.home') }}"
+                    data-projects-url="{{ url_for('projects.dashboard') }}"
+                    aria-label="Projects"
+                    title="Projects"
+                >
                     <span class="app-brand-mark" aria-hidden="true">◆</span>
                 </a>
                 {% if current_user.is_authenticated %}
@@ -206,6 +218,14 @@
                 </div>
                 <div class="modal-body">
                     <div class="settings-group">
+                        <div class="settings-label">Interface style</div>
+                        <p class="settings-hint">“Classic” restores the original look. It is light-only.</p>
+                        <div class="settings-segments" role="group" aria-label="Interface style" data-setting="ui">
+                            <button type="button" class="settings-segment" data-value="modern">Modern</button>
+                            <button type="button" class="settings-segment" data-value="classic">Classic</button>
+                        </div>
+                    </div>
+                    <div class="settings-group">
                         <div class="settings-label">Theme</div>
                         <p class="settings-hint">How the app looks. “System” follows your device.</p>
                         <div class="settings-segments" role="group" aria-label="Theme" data-setting="theme">
@@ -220,6 +240,14 @@
                         <div class="settings-segments" role="group" aria-label="Project page layout" data-setting="project-layout">
                             <button type="button" class="settings-segment" data-value="sidebar">Beside the plan</button>
                             <button type="button" class="settings-segment" data-value="stacked">Above the plan</button>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-label">Logo opens</div>
+                        <p class="settings-hint">Where the top-left logo takes you.</p>
+                        <div class="settings-segments" role="group" aria-label="Logo destination" data-setting="logo-target">
+                            <button type="button" class="settings-segment" data-value="projects">Projects</button>
+                            <button type="button" class="settings-segment" data-value="home">Home</button>
                         </div>
                     </div>
                 </div>
@@ -245,72 +273,97 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // App settings: theme (light/dark/system) + project page layout
+        // App settings: interface style (modern/classic) + theme + project layout
         (() => {
             const root = document.documentElement;
             const themeColorMeta = document.querySelector("[data-theme-color-meta]");
             const themeColors = { light: "#f5f5f7", dark: "#09090b" };
+            const classicColor = "#212529";
             const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
 
             const store = (key, value) => { try { localStorage.setItem(key, value); } catch (error) { /* ignore */ } };
             const clear = (key) => { try { localStorage.removeItem(key); } catch (error) { /* ignore */ } };
             const read = (key) => { try { return localStorage.getItem(key); } catch (error) { return null; } };
 
+            const uiSetting = () => (read("app-ui") === "classic" ? "classic" : "modern");
+            const themeSetting = () => read("app-theme") || "system";
+            const layoutSetting = () => (read("app-project-layout") === "stacked" ? "stacked" : "sidebar");
+            const logoTargetSetting = () => (read("app-logo-target") === "home" ? "home" : "projects");
+
+            const effectiveTheme = () => {
+                if (uiSetting() === "classic") { return "light"; }
+                const setting = themeSetting();
+                return setting === "system" ? (prefersDark() ? "dark" : "light") : setting;
+            };
+
             const syncThemeColor = () => {
+                if (uiSetting() === "classic") { themeColorMeta?.setAttribute("content", classicColor); return; }
                 const theme = root.getAttribute("data-bs-theme") || "light";
                 themeColorMeta?.setAttribute("content", themeColors[theme] || themeColors.light);
             };
 
-            const currentThemeSetting = () => read("app-theme") || "system";
-            const currentLayoutSetting = () => read("app-project-layout") || "sidebar";
-
-            const refreshSegments = () => {
-                document.querySelectorAll('[data-setting="theme"] .settings-segment').forEach((btn) => {
-                    btn.classList.toggle("is-active", btn.dataset.value === currentThemeSetting());
-                });
-                document.querySelectorAll('[data-setting="project-layout"] .settings-segment').forEach((btn) => {
-                    btn.classList.toggle("is-active", btn.dataset.value === currentLayoutSetting());
+            const applyLogoTarget = () => {
+                const target = logoTargetSetting();
+                document.querySelectorAll("[data-app-logo]").forEach((logo) => {
+                    const url = target === "home" ? logo.dataset.homeUrl : logo.dataset.projectsUrl;
+                    if (url) { logo.setAttribute("href", url); }
+                    const label = target === "home" ? "Home" : "Projects";
+                    logo.setAttribute("aria-label", label);
+                    logo.setAttribute("title", label);
                 });
             };
 
-            const applyTheme = (mode) => {
-                if (mode === "system") {
-                    clear("app-theme");
-                    root.setAttribute("data-bs-theme", prefersDark() ? "dark" : "light");
-                } else {
-                    store("app-theme", mode);
-                    root.setAttribute("data-bs-theme", mode);
-                }
+            const refreshSegments = () => {
+                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "logo-target": logoTargetSetting() };
+                Object.entries(map).forEach(([name, value]) => {
+                    document.querySelectorAll(`[data-setting="${name}"] .settings-segment`).forEach((btn) => {
+                        btn.classList.toggle("is-active", btn.dataset.value === value);
+                    });
+                });
+                // Theme is locked while the classic (light-only) skin is active.
+                document.querySelectorAll('[data-setting="theme"]').forEach((group) => {
+                    group.classList.toggle("is-locked", uiSetting() === "classic");
+                });
+            };
+
+            const applyAll = () => {
+                root.setAttribute("data-ui", uiSetting());
+                root.setAttribute("data-bs-theme", effectiveTheme());
+                root.setAttribute("data-project-layout", layoutSetting());
+                applyLogoTarget();
                 syncThemeColor();
                 refreshSegments();
             };
 
-            const applyLayout = (mode) => {
-                const value = mode === "stacked" ? "stacked" : "sidebar";
-                store("app-project-layout", value);
-                root.setAttribute("data-project-layout", value);
-                refreshSegments();
-            };
+            const setUi = (mode) => { store("app-ui", mode === "classic" ? "classic" : "modern"); applyAll(); };
+            const setTheme = (mode) => { if (mode === "system") { clear("app-theme"); } else { store("app-theme", mode); } applyAll(); };
+            const setLayout = (mode) => { store("app-project-layout", mode === "stacked" ? "stacked" : "sidebar"); applyAll(); };
+            const setLogoTarget = (mode) => { store("app-logo-target", mode === "home" ? "home" : "projects"); applyAll(); };
 
-            syncThemeColor();
-            refreshSegments();
+            applyAll();
 
             document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
                 button.addEventListener("click", () => {
-                    const current = root.getAttribute("data-bs-theme") || "light";
-                    applyTheme(current === "dark" ? "light" : "dark");
+                    if (uiSetting() === "classic") { return; }
+                    setTheme(effectiveTheme() === "dark" ? "light" : "dark");
                 });
             });
 
+            document.querySelectorAll('[data-setting="ui"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => setUi(btn.dataset.value));
+            });
             document.querySelectorAll('[data-setting="theme"] .settings-segment').forEach((btn) => {
-                btn.addEventListener("click", () => applyTheme(btn.dataset.value));
+                btn.addEventListener("click", () => setTheme(btn.dataset.value));
             });
             document.querySelectorAll('[data-setting="project-layout"] .settings-segment').forEach((btn) => {
-                btn.addEventListener("click", () => applyLayout(btn.dataset.value));
+                btn.addEventListener("click", () => setLayout(btn.dataset.value));
+            });
+            document.querySelectorAll('[data-setting="logo-target"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => setLogoTarget(btn.dataset.value));
             });
 
             window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {
-                if (!read("app-theme")) {
+                if (!read("app-theme") && uiSetting() !== "classic") {
                     root.setAttribute("data-bs-theme", prefersDark() ? "dark" : "light");
                     syncThemeColor();
                 }
