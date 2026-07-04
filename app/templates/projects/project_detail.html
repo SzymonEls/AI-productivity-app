@@ -28,7 +28,7 @@
             {% if project.is_private %}<span class="project-badge">🔒 Private</span>{% endif %}
             {% if project.is_archived %}<span class="project-badge project-badge-archived">Archived</span>{% endif %}
             <div class="inline-section-controls">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title">Rename</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title"><i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Rename</button>
                 <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="title">Save</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="title">Cancel</button>
             </div>
@@ -54,15 +54,15 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li>
-                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectSettingsModal">Settings</button>
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectSettingsModal"><i class="fa-solid fa-gear" aria-hidden="true"></i>Settings</button>
                 </li>
                 <li>
-                    <button type="button" class="dropdown-item" data-download-project-markdown>Download markdown</button>
+                    <button type="button" class="dropdown-item" data-download-project-markdown><i class="fa-solid fa-download" aria-hidden="true"></i>Download markdown</button>
                 </li>
                 <li>
-                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button>Archived sections</button>
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
                 </li>
-                <li><a class="dropdown-item" href="{{ url_for('projects.dashboard') }}">Back to dashboard</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('projects.dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to dashboard</a></li>
                 <li><hr class="dropdown-divider"></li>
                 {% if not project.is_archived %}
                     <li>
@@ -71,7 +71,7 @@
                                 type="submit"
                                 class="dropdown-item"
                                 onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
-                            >Archive project</button>
+                            ><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archive project</button>
                         </form>
                     </li>
                 {% endif %}
@@ -81,7 +81,7 @@
                             type="submit"
                             class="dropdown-item text-danger"
                             onclick="return confirm('Delete this project?');"
-                        >Delete project</button>
+                        ><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete project</button>
                     </form>
                 </li>
             </ul>

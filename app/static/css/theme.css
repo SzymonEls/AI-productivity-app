@@ -122,7 +122,7 @@ body {
 }
 
 .app-main {
-    padding-top: 1.75rem;
+    padding-top: 1.25rem;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -144,6 +144,38 @@ a {
 *:focus-visible {
     outline: 2px solid var(--primary);
     outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ *
+ * Inline icons
+ * ------------------------------------------------------------------ */
+.app-icon {
+    flex: 0 0 auto;
+    vertical-align: -0.15em;
+}
+
+.btn .app-icon { margin-right: 0.4rem; }
+.btn.btn-sm .app-icon { margin-right: 0.3rem; }
+
+.dropdown-item { display: flex; align-items: center; }
+.dropdown-item .app-icon,
+.dropdown-item i.fa-solid,
+.dropdown-item i.fa-regular {
+    width: 1rem;
+    margin-right: 0.6rem;
+    color: var(--muted-foreground);
+    text-align: center;
+}
+.dropdown-item.text-danger .app-icon,
+.dropdown-item.text-danger i { color: inherit; }
+
+.settings-label { display: flex; align-items: center; gap: 0.5rem; }
+.settings-label .app-icon { color: var(--muted-foreground); }
+
+.empty-state .app-icon {
+    color: var(--muted-foreground);
+    opacity: 0.8;
+    margin-bottom: 0.85rem;
 }
 
 /* ------------------------------------------------------------------ *
@@ -183,6 +215,9 @@ a {
 
 .app-navbar .nav-link {
     position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     border-radius: var(--radius-sm);
     padding: 0.4rem 0.7rem;
     color: var(--muted-foreground);
@@ -190,6 +225,8 @@ a {
     font-weight: 500;
     transition: color 0.15s ease, background 0.15s ease;
 }
+
+.app-navbar .nav-link .app-icon { color: inherit; opacity: 0.85; }
 
 .app-navbar .nav-link:hover {
     color: var(--foreground);

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "icons.html" import icon %}
 
 {% block title %}Dashboard{% endblock %}
 
@@ -7,11 +8,11 @@
     <div>
         <div class="d-flex align-items-center gap-2 mb-1">
             <h1 class="h2 mb-0">Your Projects</h1>
-            <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">Archived</a>
+            <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
         </div>
         <p class="text-muted mb-0">Organize your projects and notes on the timeline below.</p>
     </div>
-    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Project</a>
+    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
 </div>
 
 {% if projects %}
@@ -25,10 +26,10 @@
                 <input class="form-check-input" type="checkbox" id="showProjectStatsTimelineItems" data-show-project-stats-timeline>
                 <label class="form-check-label small" for="showProjectStatsTimelineItems">Show last session &amp; frequency</label>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>Add group</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>Edit timeline</button>
-            <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>Save timeline</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-timeline-cancel>Cancel</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>{{ icon("plus") }}Add group</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>{{ icon("pencil") }}Edit timeline</button>
+            <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>{{ icon("check") }}Save timeline</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-timeline-cancel>{{ icon("x") }}Cancel</button>
         </div>
     </div>
 
@@ -95,9 +96,10 @@
 
 {% else %}
     <div class="empty-state text-center p-5 bg-light rounded-3">
+        {{ icon("inbox", 40) }}
         <h2 class="h4">No projects yet</h2>
         <p class="text-muted">Create your first project to start organizing your goals.</p>
-        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">Create Your First Project</a>
+        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Your First Project</a>
     </div>
 {% endif %}
 
