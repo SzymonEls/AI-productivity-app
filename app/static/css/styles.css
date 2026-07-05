@@ -516,6 +516,7 @@
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
+    margin-left: -0.55rem;
     margin-bottom: 0.55rem;
 }
 
@@ -834,6 +835,15 @@
 .pbe-type-h3 > .pbe-marker,
 .pbe-type-quote > .pbe-marker,
 .pbe-type-divider > .pbe-marker { min-width: 0; }
+
+/* Marker-less blocks drop the marker gap so their text sits flush-left,
+   aligned to (or left of) the list/to-do markers rather than indented past them. */
+.pbe-type-paragraph,
+.pbe-type-h1,
+.pbe-type-h2,
+.pbe-type-h3,
+.pbe-type-quote,
+.pbe-type-divider { gap: 0; }
 
 .pbe-bullet { font-size: 1.1rem; line-height: 1.2; }
 .pbe-number { font-variant-numeric: tabular-nums; }
