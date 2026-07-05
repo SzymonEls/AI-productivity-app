@@ -184,7 +184,7 @@
             </div>
             <div class="switcher-results" data-switcher-results>
                 {% for group in nav_project_groups %}
-                    <div class="switcher-group" data-switcher-group>
+                    <div class="switcher-group{% if group.is_backlog %} switcher-group-backlog{% endif %}{% if not group.name %} switcher-group-untitled{% endif %}" data-switcher-group>
                         {% if group.name %}<div class="switcher-group-label">{{ group.name }}</div>{% endif %}
                         {% for project in group.projects %}
                             <a

@@ -130,6 +130,7 @@ def build_project_switcher_context():
 
     nav_groups = []
     seen = set()
+    backlog_entries = []
     for group in groups:
         items = (
             ProjectTimelineItem.query.filter_by(group_id=group.id, item_type="project")
@@ -142,13 +143,26 @@ def build_project_switcher_context():
             if project and project.id not in seen:
                 group_entries.append(entry(project))
                 seen.add(project.id)
-        if group_entries:
-            nav_groups.append({"name": group.name or "", "projects": group_entries})
+        if not group_entries:
+            continue
+        # The backlog group parks projects that were pushed off the timeline; it
+        # is not a real section, so collect it separately instead of rendering it
+        # as an (unlabelled) timeline section.
+        if group.is_backlog:
+            backlog_entries.extend(group_entries)
+        else:
+            nav_groups.append(
+                {"name": group.name or "", "projects": group_entries, "is_backlog": False}
+            )
 
-    # Projects not yet placed on any timeline group still belong in the switcher.
-    unplaced = [entry(project) for project in projects if project.id not in seen]
-    if unplaced:
-        nav_groups.append({"name": "", "projects": unplaced})
+    # Projects not yet placed on any timeline group are off timeline as well.
+    backlog_entries.extend(
+        entry(project) for project in projects if project.id not in seen
+    )
+    if backlog_entries:
+        nav_groups.append(
+            {"name": "Off timeline", "projects": backlog_entries, "is_backlog": True}
+        )
 
     current_project = projects_by_id.get(current_project_id)
     current = (

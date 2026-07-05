@@ -471,6 +471,13 @@ a {
     padding: 0.4rem;
 }
 
+/* Separate consecutive sections so untitled ones don't blend together. */
+.switcher-group:not(.d-none) ~ .switcher-group:not(.d-none) {
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border);
+}
+
 .switcher-group-label {
     padding: 0.6rem 0.75rem 0.3rem;
     color: var(--muted-foreground);
@@ -479,6 +486,9 @@ a {
     letter-spacing: 0.04em;
     text-transform: uppercase;
 }
+
+.switcher-group-backlog .switcher-group-label { color: var(--muted-foreground); opacity: 0.85; }
+.switcher-group-backlog .switcher-item .switcher-dot { background: var(--border); }
 
 .switcher-item {
     display: flex;
