@@ -73,6 +73,31 @@ def login():
     )
 
 
+@auth_bp.route("/change-password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    if request.method == "POST":
+        current_password = request.form.get("current_password", "")
+        new_password = request.form.get("new_password", "")
+        confirm_password = request.form.get("confirm_password", "")
+
+        if not current_password or not new_password:
+            flash("All fields are required.", "danger")
+        elif not current_user.check_password(current_password):
+            flash("Your current password is incorrect.", "danger")
+        elif new_password != confirm_password:
+            flash("New passwords do not match.", "danger")
+        elif current_user.check_password(new_password):
+            flash("The new password must be different from the current one.", "danger")
+        else:
+            current_user.set_password(new_password)
+            db.session.commit()
+            flash("Your password has been updated.", "success")
+            return redirect(url_for("projects.dashboard"))
+
+    return render_template("auth/change_password.html")
+
+
 @auth_bp.route("/logout")
 @login_required
 def logout():

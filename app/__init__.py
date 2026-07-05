@@ -59,6 +59,8 @@ def register_template_context(app):
         active_time_entry = None
         active_time_elapsed_seconds = 0
         active_time_elapsed_label = ""
+        nav_project_groups = []
+        nav_current_project = None
         if current_user.is_authenticated:
             from .time_tracking.service import active_entry_for_user, today_project_summary
 
@@ -76,13 +78,85 @@ def register_template_context(app):
                 else:
                     active_time_elapsed_label = f"{elapsed_minutes}m"
 
+            nav_project_groups, nav_current_project = build_project_switcher_context()
+
         return {
             "app_version": app.config.get("APP_VERSION", "local"),
             "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
             "active_time_entry": active_time_entry,
             "active_time_elapsed_seconds": active_time_elapsed_seconds,
             "active_time_elapsed_label": active_time_elapsed_label,
+            "nav_project_groups": nav_project_groups,
+            "nav_current_project": nav_current_project,
         }
+
+
+def build_project_switcher_context():
+    """Return the user's projects grouped by their timeline sections for the
+    global project switcher, plus the project currently being viewed (if any).
+
+    Read-only: unlike the dashboard timeline it never creates rows, so it is
+    cheap enough to run on every authenticated request.
+    """
+    from .models import Project, ProjectTimelineGroup, ProjectTimelineItem
+
+    try:
+        projects = (
+            Project.query.filter_by(user_id=current_user.id, is_archived=False).all()
+        )
+    except Exception:  # noqa: BLE001 - never let the nav break a page render
+        return [], None
+
+    projects_by_id = {project.id: project for project in projects}
+    current_project_id = None
+    if request.view_args:
+        current_project_id = request.view_args.get("project_id")
+
+    groups = (
+        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
+        .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
+        .all()
+    )
+
+    def entry(project):
+        return {
+            "id": project.id,
+            "title": project.title,
+            "url": url_for("projects.project_detail", project_id=project.id),
+            "is_starred": bool(project.is_starred),
+            "is_private": bool(project.is_private),
+            "is_current": project.id == current_project_id,
+        }
+
+    nav_groups = []
+    seen = set()
+    for group in groups:
+        items = (
+            ProjectTimelineItem.query.filter_by(group_id=group.id, item_type="project")
+            .order_by(ProjectTimelineItem.position.asc(), ProjectTimelineItem.id.asc())
+            .all()
+        )
+        group_entries = []
+        for item in items:
+            project = projects_by_id.get(item.project_id)
+            if project and project.id not in seen:
+                group_entries.append(entry(project))
+                seen.add(project.id)
+        if group_entries:
+            nav_groups.append({"name": group.name or "", "projects": group_entries})
+
+    # Projects not yet placed on any timeline group still belong in the switcher.
+    unplaced = [entry(project) for project in projects if project.id not in seen]
+    if unplaced:
+        nav_groups.append({"name": "", "projects": unplaced})
+
+    current_project = projects_by_id.get(current_project_id)
+    current = (
+        {"id": current_project.id, "title": current_project.title}
+        if current_project
+        else None
+    )
+    return nav_groups, current
 
 
 def register_json_error_handlers(app):
@@ -295,6 +369,16 @@ def initialize_database(app):
 
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
+        else:
+            timeline_group_columns = {column["name"] for column in inspector.get_columns("project_timeline_groups")}
+            if "is_backlog" not in timeline_group_columns:
+                db.session.execute(
+                    text(
+                        "ALTER TABLE project_timeline_groups ADD COLUMN is_backlog BOOLEAN "
+                        "DEFAULT 0 NOT NULL"
+                    )
+                )
+                db.session.commit()
 
         if "project_timeline_items" not in table_names:
             ProjectTimelineItem.__table__.create(bind=db.engine)

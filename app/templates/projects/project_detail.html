@@ -8,11 +8,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
-    <div>
-        <div class="d-flex align-items-start gap-2 flex-wrap mb-1">
+<header class="project-detail-header mb-4">
+    <div class="project-detail-heading min-w-0">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <div data-edit-display="title">
-                <h1 class="h2 mb-0" data-project-title-display>{{ project.title }}</h1>
+                <h1 class="project-detail-title mb-0" data-project-title-display>{{ project.title }}</h1>
             </div>
             <div class="d-none project-title-edit" data-edit-form="title">
                 <input
@@ -24,70 +24,70 @@
                     required
                 >
             </div>
+            {% if project.is_starred %}<span class="project-badge project-badge-star" title="Starred (context for AI Daily Planning)">★ Starred</span>{% endif %}
+            {% if project.is_private %}<span class="project-badge">🔒 Private</span>{% endif %}
+            {% if project.is_archived %}<span class="project-badge project-badge-archived">Archived</span>{% endif %}
             <div class="inline-section-controls">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title">Edit</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title"><i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Rename</button>
                 <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="title">Save</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="title">Cancel</button>
             </div>
         </div>
-        <p class="text-muted mb-0" data-project-updated-label>Last modified {{ project.updated_at | naturaltime }}</p>
+        <p class="text-muted mb-0 mt-1" data-project-updated-label>Last modified {{ project.updated_at | naturaltime }}</p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="project-detail-actions">
         <button
             type="button"
-            class="btn btn-outline-primary project-timer-toggle"
+            class="btn btn-primary project-timer-toggle"
             data-bs-toggle="modal"
             data-bs-target="#projectTimerModal"
             aria-expanded="false"
             aria-controls="projectTimerModal"
         >
             <i class="fa-regular fa-clock" aria-hidden="true"></i>
-            <span>Today's work time</span>
+            <span>Track time</span>
             <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
-        <button
-            type="button"
-            class="btn btn-outline-secondary"
-            data-bs-toggle="modal"
-            data-bs-target="#projectSettingsModal"
-        >
-            Settings
-        </button>
-        <button type="button" class="btn btn-outline-primary" data-download-project-markdown>
-            Download markdown
-        </button>
-        <button
-            type="button"
-            class="btn btn-outline-primary"
-            data-bs-toggle="modal"
-            data-bs-target="#projectArchiveModal"
-            data-archive-open-button
-        >
-            Archive
-        </button>
-        <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
-        {% if not project.is_archived %}
-            <form method="post" action="{{ url_for('projects.archive_project', project_id=project.id) }}">
-                <button
-                    type="submit"
-                    class="btn btn-outline-secondary"
-                    onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
-                >
-                    Archive Project
-                </button>
-            </form>
-        {% endif %}
-        <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
-            <button
-                type="submit"
-                class="btn btn-outline-danger"
-                onclick="return confirm('Delete this project?');"
-            >
-                Delete
+        <div class="dropdown">
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions">
+                <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
             </button>
-        </form>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li>
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectSettingsModal"><i class="fa-solid fa-gear" aria-hidden="true"></i>Settings</button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item" data-download-project-markdown><i class="fa-solid fa-download" aria-hidden="true"></i>Download markdown</button>
+                </li>
+                <li>
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
+                </li>
+                <li><a class="dropdown-item" href="{{ url_for('projects.dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to dashboard</a></li>
+                <li><hr class="dropdown-divider"></li>
+                {% if not project.is_archived %}
+                    <li>
+                        <form method="post" action="{{ url_for('projects.archive_project', project_id=project.id) }}">
+                            <button
+                                type="submit"
+                                class="dropdown-item"
+                                onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
+                            ><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archive project</button>
+                        </form>
+                    </li>
+                {% endif %}
+                <li>
+                    <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}">
+                        <button
+                            type="submit"
+                            class="dropdown-item text-danger"
+                            onclick="return confirm('Delete this project?');"
+                        ><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete project</button>
+                    </form>
+                </li>
+            </ul>
+        </div>
     </div>
-</div>
+</header>
 
 {% if project.is_archived %}
     <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -107,76 +107,23 @@
     id="project-editor"
     data-unsaved-warning="true"
 >
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card shadow-sm h-100 inline-edit-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                        <h2 class="h4 mb-0">Thoughts</h2>
-                        <div class="inline-section-controls">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="short-goal">Edit</button>
-                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
-                        </div>
-                    </div>
-                    <div data-edit-display="short-goal">
-                        <p class="mb-0 preserve-lines" data-display-value="short_goal">{{ project.short_goal }}</p>
-                    </div>
-                    <div class="d-none" data-edit-form="short-goal">
-                        <textarea
-                            id="short_goal"
-                            name="short_goal"
-                            class="form-control inline-edit-textarea"
-                            rows="4"
-                            data-autoresize="true"
-                            required
-                        >{{ project.short_goal }}</textarea>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-6">
-            <div class="card shadow-sm h-100 inline-edit-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                        <h2 class="h4 mb-0">Frequency</h2>
-                        <div class="inline-section-controls">
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="frequency">Edit</button>
-                            <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
-                        </div>
-                    </div>
-                    <div data-edit-display="frequency">
-                        <p class="mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
-                    </div>
-                    <div class="d-none" data-edit-form="frequency">
-                        <input
-                            type="text"
-                            id="frequency"
-                            name="frequency"
-                            class="form-control"
-                            value="{{ project.frequency }}"
-                            required
-                        >
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-4 mt-0">
-        <div class="col-12">
-            <div class="card shadow-sm h-100 inline-edit-card">
+    <div class="project-detail-body">
+        <div class="project-plan-col">
+            <section class="card shadow-sm inline-edit-card project-plan-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
-                        <h2 class="h4 mb-0">Plan</h2>
-                        <div class="inline-section-controls">
+                        <div>
+                            <h2 class="h4 mb-0">Plan</h2>
+                            <p class="text-muted small mb-0">Your working roadmap. Each heading becomes a step on the timeline.</p>
+                        </div>
+                        <div class="inline-section-controls" data-plan-classic>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="long-goal">Edit</button>
                             <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="long-goal">Save</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="long-goal">Cancel</button>
                         </div>
+                        <span class="plan-save-status" data-plan-blocks data-plan-save-status aria-live="polite"></span>
                     </div>
-                    <div data-edit-display="long-goal">
+                    <div data-edit-display="long-goal" data-plan-classic>
                         <div
                             class="markdown-content long-goal-preview"
                             data-display-value="long_goal"
@@ -191,8 +138,61 @@
                             rows="8"
                         >{{ project.long_goal }}</textarea>
                     </div>
+                    <div class="plan-block-editor" data-plan-blocks data-plan-block-editor></div>
                 </div>
-            </div>
+            </section>
+        </div>
+        <div class="project-meta-col">
+                <section class="card shadow-sm inline-edit-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <h2 class="h5 mb-0">Thoughts</h2>
+                            <div class="inline-section-controls">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="short-goal">Edit</button>
+                                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="short-goal">Save</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
+                            </div>
+                        </div>
+                        <div data-edit-display="short-goal">
+                            <p class="mb-0 preserve-lines" data-display-value="short_goal">{{ project.short_goal }}</p>
+                        </div>
+                        <div class="d-none" data-edit-form="short-goal">
+                            <textarea
+                                id="short_goal"
+                                name="short_goal"
+                                class="form-control inline-edit-textarea"
+                                rows="4"
+                                data-autoresize="true"
+                                required
+                            >{{ project.short_goal }}</textarea>
+                        </div>
+                    </div>
+                </section>
+                <section class="card shadow-sm inline-edit-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <h2 class="h5 mb-0">Frequency</h2>
+                            <div class="inline-section-controls">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="frequency">Edit</button>
+                                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
+                            </div>
+                        </div>
+                        <div data-edit-display="frequency">
+                            <p class="mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
+                        </div>
+                        <div class="d-none" data-edit-form="frequency">
+                            <input
+                                type="text"
+                                id="frequency"
+                                name="frequency"
+                                class="form-control"
+                                value="{{ project.frequency }}"
+                                required
+                            >
+                        </div>
+                    </div>
+                </section>
         </div>
     </div>
 
@@ -323,6 +323,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");
@@ -1173,9 +1174,12 @@
                 || navigable.closest(".CodeMirror")
             );
             const isMarkdownDownload = Boolean(navigable.closest("[data-download-project-markdown]"));
+            // Buttons inside the block editor (drag handle, block/slash menu, archive)
+            // are in-page controls, not navigation — they must not trip the leave guard.
+            const isBlockEditorControl = Boolean(navigable.closest(".pbe"));
             const dismissesModal = navigable.dataset.bsDismiss;
-            const opensModal = navigable.dataset.bsToggle === "modal";
-            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal || opensModal) {
+            const opensModal = ["modal", "dropdown"].includes(navigable.dataset.bsToggle);
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || isBlockEditorControl || dismissesModal || opensModal) {
                 return;
             }
 
@@ -1580,6 +1584,156 @@
                 }
             });
         }
+
+        // --- Notion-like block editor (default; switch to Markdown in App settings) ---
+        const planEditorContainer = document.querySelector("[data-plan-block-editor]");
+        const planSaveStatus = document.querySelector("[data-plan-save-status]");
+        let blockEditor = null;
+
+        const planStatusText = {
+            unsaved: "Editing…",
+            saving: "Saving…",
+            saved: "All changes saved",
+            error: "Save failed — retrying…",
+        };
+
+        const renderPlanStatus = (state) => {
+            if (!planSaveStatus) {
+                return;
+            }
+            planSaveStatus.dataset.state = state;
+            planSaveStatus.textContent = planStatusText[state] || "";
+        };
+
+        // Persist the plan through the existing section-save endpoint. The block
+        // editor owns the Markdown, so we push it into the hidden textarea first.
+        const planSave = async (markdown) => {
+            setLongGoalMarkdown(markdown);
+            return saveSection("long-goal", null, { silentSuccess: true });
+        };
+
+        // Archive a whole "# " section straight from a section card in the block editor,
+        // reusing the same endpoint as the classic view. Any pending plan edits are
+        // flushed first so the archive operates on the up-to-date plan.
+        const archivePlanSectionFromEditor = async (index) => {
+            if (!archiveSectionUrl || !blockEditor) {
+                return;
+            }
+            await blockEditor.flush();
+            if (!window.confirm("Move this section to the archive?")) {
+                return;
+            }
+            hideAlert();
+            const formData = new FormData();
+            formData.append("section_index", String(index));
+            try {
+                const response = await fetch(archiveSectionUrl, {
+                    method: "POST",
+                    headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Failed to archive the section.");
+                }
+                updateDisplayValues(payload.project);
+                blockEditor.setMarkdown(payload.project.long_goal);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            }
+        };
+
+        const mountBlockEditor = () => {
+            if (blockEditor || !planEditorContainer || !window.PlanBlockEditor) {
+                return;
+            }
+            blockEditor = window.PlanBlockEditor.mount(planEditorContainer, {
+                initialMarkdown: getLongGoalMarkdown(),
+                onSave: planSave,
+                onChange: (markdown) => setLongGoalMarkdown(markdown),
+                onStatus: renderPlanStatus,
+                onArchiveSection: archivePlanSectionFromEditor,
+            });
+            renderPlanStatus("saved");
+        };
+
+        const destroyBlockEditor = () => {
+            if (blockEditor) {
+                blockEditor.destroy();
+                blockEditor = null;
+            }
+            if (planEditorContainer) {
+                planEditorContainer.innerHTML = "";
+            }
+        };
+
+        const applyPlanEditorMode = (mode) => {
+            if (mode === "markdown") {
+                destroyBlockEditor();
+                // Carry any block-editor edits into the classic editor if it's already open.
+                if (longGoalEditor && longGoalTextarea) {
+                    longGoalEditor.value(longGoalTextarea.value);
+                }
+            } else {
+                mountBlockEditor();
+            }
+        };
+
+        applyPlanEditorMode(
+            document.documentElement.dataset.planEditor === "markdown" ? "markdown" : "blocks"
+        );
+
+        document.addEventListener("plan-editor-change", (event) => {
+            applyPlanEditorMode(event.detail && event.detail.mode === "markdown" ? "markdown" : "blocks");
+        });
+
+        // Last-ditch save when the page is being torn down (tab closed, navigation,
+        // app backgrounded on mobile) before the debounced autosave has run. A normal
+        // fetch is usually killed during unload, so we use a keepalive request — and
+        // fall back to sendBeacon on older browsers — so the plan is never lost.
+        let keepaliveSupported = false;
+        try {
+            keepaliveSupported = "keepalive" in new Request(form.action);
+        } catch (error) {
+            keepaliveSupported = false;
+        }
+
+        const flushPlanOnUnload = () => {
+            if (!blockEditor || !hasUnsavedChanges()) {
+                return;
+            }
+            setLongGoalMarkdown(blockEditor.getMarkdown());
+            const body = new FormData(form);
+
+            if (keepaliveSupported) {
+                try {
+                    fetch(form.action, {
+                        method: "POST",
+                        headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                        body,
+                        keepalive: true,
+                    }).catch(() => {});
+                    return;
+                } catch (error) {
+                    /* fall through to sendBeacon */
+                }
+            }
+            if (navigator.sendBeacon) {
+                body.append("_beacon", "1");
+                navigator.sendBeacon(form.action, body);
+            }
+        };
+
+        window.addEventListener("pagehide", flushPlanOnUnload);
+        window.addEventListener("beforeunload", flushPlanOnUnload);
+        document.addEventListener("visibilitychange", () => {
+            // Tab hidden but the page is still alive (e.g. switching tabs/apps): a
+            // normal flush is reliable here and keeps the UI's saved state in sync.
+            if (document.visibilityState === "hidden" && blockEditor) {
+                blockEditor.flush();
+            }
+        });
 
     })();
 </script>

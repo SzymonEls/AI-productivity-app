@@ -26,14 +26,17 @@ def dashboard():
         .order_by(func.lower(Project.title).asc())
         .all()
     )
-    timeline_groups = _get_or_create_timeline(projects)
+    timeline_groups, backlog_group = _get_or_create_timeline(projects)
     last_session_labels = project_last_session_labels(current_user.id, projects)
     timeline_data = [_serialize_timeline_group(group, last_session_labels) for group in timeline_groups]
+    backlog_data = _serialize_timeline_group(backlog_group, last_session_labels)
     return render_template(
         "projects/dashboard.html",
         projects=projects,
         timeline_groups=timeline_groups,
         timeline_data=timeline_data,
+        backlog_group=backlog_group,
+        backlog_data=backlog_data,
         project_last_session_labels=last_session_labels,
     )
 
@@ -144,10 +147,18 @@ def edit_project(project_id):
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
 
+    # A navigator.sendBeacon() save fired while the page is being closed: it can't
+    # set request headers, so we detect it by a form flag and answer quietly (no
+    # flash, no redirect) since the browser discards the response anyway.
+    wants_json = _wants_json_response()
+    is_beacon = request.form.get("_beacon") == "1"
+
     if not title or not short_goal or not frequency:
         error_message = "Please complete all project fields."
-        if _wants_json_response():
+        if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
+        if is_beacon:
+            return ("", 400)
         flash(error_message, "danger")
     else:
         project.title = title
@@ -161,13 +172,17 @@ def edit_project(project_id):
         except SQLAlchemyError:
             db.session.rollback()
             error_message = "Failed to save the project. The database is unavailable for writing."
-            if _wants_json_response():
+            if wants_json:
                 return jsonify({"ok": False, "message": error_message}), 500
+            if is_beacon:
+                return ("", 500)
             flash(error_message, "danger")
             return redirect(url_for("projects.project_detail", project_id=project.id))
 
         success_message = "Project updated successfully."
-        if _wants_json_response():
+        if is_beacon:
+            return ("", 204)
+        if wants_json:
             return jsonify(
                 {
                     "ok": True,
@@ -347,19 +362,9 @@ def save_timeline():
                 item = existing_items.get(item_id)
 
                 if item_type == "project":
-                    project_id = _coerce_int(item_payload.get("project_id"))
-                    if project_id not in user_projects or project_id in seen_project_ids:
+                    item = _upsert_project_item(item, item_payload, user_projects, seen_project_ids)
+                    if item is None:
                         continue
-                    seen_project_ids.add(project_id)
-
-                    if item is None or item.item_type != "project":
-                        item = ProjectTimelineItem(owner=current_user)
-                        db.session.add(item)
-                    item.item_type = "project"
-                    item.project_id = project_id
-                    item.title = None
-                    item.body = None
-                    item.is_private = False
                 elif item_type == "note":
                     title = (item_payload.get("title") or "").strip()[:180]
                     body = (item_payload.get("body") or "").strip()
@@ -408,6 +413,28 @@ def save_timeline():
                 db.session.flush()
                 saved_item_ids.add(item.id)
 
+        backlog_group = _get_backlog_group()
+        saved_group_ids.add(backlog_group.id)
+
+        incoming_backlog = payload.get("backlog")
+        if isinstance(incoming_backlog, list):
+            for item_position, item_payload in enumerate(incoming_backlog):
+                if not isinstance(item_payload, dict) or item_payload.get("type") != "project":
+                    continue
+                item = existing_items.get(_coerce_int(item_payload.get("id")))
+                item = _upsert_project_item(item, item_payload, user_projects, seen_project_ids)
+                if item is None:
+                    continue
+                item.group = backlog_group
+                item.position = item_position
+                db.session.flush()
+                saved_item_ids.add(item.id)
+        else:
+            # No backlog payload sent: keep whatever is already parked off-timeline.
+            for existing_id, existing_item in existing_items.items():
+                if existing_item.group_id == backlog_group.id:
+                    saved_item_ids.add(existing_id)
+
         for item_id, item in existing_items.items():
             if item_id not in saved_item_ids:
                 db.session.delete(item)
@@ -421,14 +448,34 @@ def save_timeline():
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save the timeline."}), 500
 
-    timeline_groups = _get_or_create_timeline(projects)
+    timeline_groups, backlog_group = _get_or_create_timeline(projects)
     last_session_labels = project_last_session_labels(current_user.id, projects)
     return jsonify(
         {
             "ok": True,
             "groups": [_serialize_timeline_group(group, last_session_labels) for group in timeline_groups],
+            "backlog": _serialize_timeline_group(backlog_group, last_session_labels),
         }
     )
+
+
+def _upsert_project_item(item, item_payload, user_projects, seen_project_ids):
+    """Create or reuse a timeline item that references an existing project."""
+
+    project_id = _coerce_int(item_payload.get("project_id"))
+    if project_id not in user_projects or project_id in seen_project_ids:
+        return None
+    seen_project_ids.add(project_id)
+
+    if item is None or item.item_type != "project":
+        item = ProjectTimelineItem(owner=current_user)
+        db.session.add(item)
+    item.item_type = "project"
+    item.project_id = project_id
+    item.title = None
+    item.body = None
+    item.is_private = False
+    return item
 
 
 def _wants_json_response():
@@ -438,9 +485,22 @@ def _wants_json_response():
     )
 
 
+def _get_backlog_group():
+    """Return (creating if needed) the off-timeline group that parks projects."""
+
+    backlog_group = ProjectTimelineGroup.query.filter_by(
+        user_id=current_user.id, is_backlog=True
+    ).first()
+    if backlog_group is None:
+        backlog_group = ProjectTimelineGroup(owner=current_user, is_backlog=True, position=0)
+        db.session.add(backlog_group)
+        db.session.flush()
+    return backlog_group
+
+
 def _get_or_create_timeline(projects):
     groups = (
-        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
+        ProjectTimelineGroup.query.filter_by(user_id=current_user.id, is_backlog=False)
         .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
         .all()
     )
@@ -451,6 +511,8 @@ def _get_or_create_timeline(projects):
         db.session.add(groups[0])
         db.session.flush()
         changed = True
+
+    backlog_group = _get_backlog_group()
 
     project_ids_on_timeline = {
         item.project_id
@@ -481,11 +543,12 @@ def _get_or_create_timeline(projects):
         except SQLAlchemyError:
             db.session.rollback()
 
-    return (
-        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
+    groups = (
+        ProjectTimelineGroup.query.filter_by(user_id=current_user.id, is_backlog=False)
         .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
         .all()
     )
+    return groups, _get_backlog_group()
 
 
 def _serialize_timeline_group(group, last_session_labels=None):

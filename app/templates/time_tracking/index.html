@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "icons.html" import icon %}
 
 {% block title %}Time tracking{% endblock %}
 
@@ -10,7 +11,7 @@
     </div>
     {% if active_entry %}
         <a class="btn btn-outline-success" href="{{ url_for('projects.project_detail', project_id=active_entry.project_id) }}">
-            Active timer: {{ active_entry.display_project_title }}
+            {{ icon("clock") }}Active timer: {{ active_entry.display_project_title }}
         </a>
     {% endif %}
 </div>
@@ -41,10 +42,10 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <button class="btn btn-primary w-100" type="submit">Show</button>
+                <button class="btn btn-primary w-100" type="submit">{{ icon("search") }}Show</button>
             </div>
             <div class="col-md-2">
-                <a class="btn btn-secondary" href="{{ url_for('time_tracking.index') }}">Reset filters</a>
+                <a class="btn btn-secondary" href="{{ url_for('time_tracking.index') }}">{{ icon("reset") }}Reset filters</a>
             </div>
         </div>
     </div>
