@@ -754,6 +754,17 @@
 .pbe-block.pbe-drop-before { box-shadow: inset 0 2px 0 var(--primary); }
 .pbe-block.pbe-drop-after { box-shadow: inset 0 -2px 0 var(--primary); }
 
+/* Multi-block selection (drag across blocks to select whole sections). */
+.pbe-block.pbe-selected {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+    border-radius: 4px;
+}
+
+/* While drag-selecting blocks, suppress native text selection. */
+.pbe-selecting,
+.pbe-selecting .pbe-content { user-select: none; -webkit-user-select: none; }
+
 /* Consecutive list items of the same kind sit tight, like classic "li + li". */
 .pbe-type-bulleted + .pbe-type-bulleted,
 .pbe-type-numbered + .pbe-type-numbered,

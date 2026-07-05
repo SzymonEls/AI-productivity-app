@@ -198,6 +198,7 @@
             this.slash = null;
             this.drag = null;
             this.blockMenuFor = null;
+            this.selectedIds = [];
 
             this.supportsPlaintextOnly = this._detectPlaintextOnly();
 
@@ -268,6 +269,32 @@
                 this._closeBlockMenu();
             };
             document.addEventListener("pointerdown", this._onDocPointerDown, true);
+
+            // Multi-block selection: copy/cut whole ranges, and delete them. These live
+            // on the document because a block selection has no focused contenteditable.
+            this._onCopy = (event) => {
+                if (!this.selectedIds.length) return;
+                event.preventDefault();
+                event.clipboardData.setData("text/plain", this._selectedMarkdown());
+            };
+            this._onCut = (event) => {
+                if (!this.selectedIds.length) return;
+                event.preventDefault();
+                event.clipboardData.setData("text/plain", this._selectedMarkdown());
+                this._deleteSelected();
+            };
+            this._onDocKeydown = (event) => {
+                if (!this.selectedIds.length) return;
+                if (event.key === "Escape") {
+                    this._clearBlockSelection();
+                } else if (event.key === "Delete" || event.key === "Backspace") {
+                    event.preventDefault();
+                    this._deleteSelected();
+                }
+            };
+            document.addEventListener("copy", this._onCopy);
+            document.addEventListener("cut", this._onCut);
+            document.addEventListener("keydown", this._onDocKeydown);
             // Note: persisting on page unload is the host's responsibility (it can
             // use a keepalive request that survives the page being torn down).
         }
@@ -283,6 +310,9 @@
             this.list.removeEventListener("paste", this._onPaste);
             this.list.removeEventListener("pointerdown", this._onPointerDown);
             document.removeEventListener("pointerdown", this._onDocPointerDown, true);
+            document.removeEventListener("copy", this._onCopy);
+            document.removeEventListener("cut", this._onCut);
+            document.removeEventListener("keydown", this._onDocKeydown);
             this.root.remove();
         }
 
@@ -392,6 +422,9 @@
 
             if (activeId != null && activeOffset != null) {
                 this.focusBlock(activeId, activeOffset);
+            }
+            if (this.selectedIds && this.selectedIds.length) {
+                this._paintSelection();
             }
         }
 
@@ -908,8 +941,15 @@
             const after = block.text.slice(offset);
 
             const pasted = parseMarkdown(text);
+            const wasEmpty = !before && !after;
             block.text = before + (pasted[0].text || "");
-            if (pasted[0].type !== "paragraph") { block.type = pasted[0].type; block.level = pasted[0].level; block.checked = pasted[0].checked; }
+            // Only adopt the pasted block's type when dropping onto an empty line;
+            // pasting into existing text keeps that line's type and just merges text.
+            if (wasEmpty && pasted[0].type !== "paragraph") {
+                block.type = pasted[0].type;
+                block.level = pasted[0].level || 0;
+                block.checked = pasted[0].checked;
+            }
             const rest = pasted.slice(1);
             if (after) rest.push({ id: uid(), type: "paragraph", text: after, level: 0 });
             const index = this.indexOf(block.id);
@@ -924,12 +964,21 @@
 
         _onPointerDown(event) {
             const handle = event.target.closest(".pbe-handle");
-            if (!handle) return;
+            if (!handle) {
+                this._maybeStartBlockSelection(event);
+                return;
+            }
             const el = handle.closest(".pbe-block");
             if (!el) return;
             event.preventDefault();
 
             const blockId = el.dataset.id;
+            // Grabbing the handle of a selected block drags the whole selection.
+            const dragMultiple = this.selectedIds.includes(blockId) && this.selectedIds.length > 1;
+            const dragIds = dragMultiple ? [...this.selectedIds] : [blockId];
+            if (!dragMultiple) this._clearBlockSelection();
+            const idSet = new Set(dragIds);
+
             const startX = event.clientX;
             const startY = event.clientY;
             let started = false;
@@ -941,8 +990,8 @@
                         return; // below the drag threshold: still a potential click
                     }
                     started = true;
-                    this.drag = { id: blockId, el, targetIndex: null };
-                    el.classList.add("pbe-dragging");
+                    this.drag = { idSet, targetIndex: null };
+                    this._blockEls().forEach((b) => { if (idSet.has(b.dataset.id)) b.classList.add("pbe-dragging"); });
                     this._closeBlockMenu();
                 }
                 this._dragMove(moveEvent);
@@ -963,13 +1012,14 @@
 
         _dragMove(event) {
             if (!this.drag) return;
+            const idSet = this.drag.idSet;
             const rows = this._blockEls();
             rows.forEach((row) => row.classList.remove("pbe-drop-before", "pbe-drop-after"));
 
             let targetRow = null;
             let placeAfter = false;
             for (const row of rows) {
-                if (row === this.drag.el) continue;
+                if (idSet.has(row.dataset.id)) continue; // don't target a block being dragged
                 const rect = row.getBoundingClientRect();
                 if (event.clientY >= rect.top) {
                     targetRow = row;
@@ -978,7 +1028,7 @@
             }
 
             if (!targetRow) {
-                const first = rows.find((row) => row !== this.drag.el);
+                const first = rows.find((row) => !idSet.has(row.dataset.id));
                 if (first) { first.classList.add("pbe-drop-before"); this.drag.targetIndex = this.indexOf(first.dataset.id); }
                 return;
             }
@@ -989,21 +1039,104 @@
 
         _dragEnd() {
             if (!this.drag) return;
-            const { id, targetIndex } = this.drag;
+            const { idSet, targetIndex } = this.drag;
             this._blockEls().forEach((row) => row.classList.remove("pbe-drop-before", "pbe-drop-after", "pbe-dragging"));
-
-            if (targetIndex != null) {
-                const from = this.indexOf(id);
-                if (from !== -1) {
-                    const [moved] = this.blocks.splice(from, 1);
-                    let to = targetIndex;
-                    if (from < to) to -= 1;
-                    this.blocks.splice(Math.max(0, Math.min(to, this.blocks.length)), 0, moved);
-                    this.renderAll();
-                    this.scheduleSave();
-                }
-            }
             this.drag = null;
+            if (targetIndex == null) return;
+
+            // Pull out the dragged block(s) in document order and re-insert them as a
+            // contiguous run at the drop point (works for one block or a whole selection).
+            const moved = this.blocks.filter((block) => idSet.has(block.id));
+            if (!moved.length) return;
+            const removedBefore = this.blocks.slice(0, targetIndex).filter((block) => idSet.has(block.id)).length;
+            const remaining = this.blocks.filter((block) => !idSet.has(block.id));
+            const insertAt = Math.max(0, Math.min(targetIndex - removedBefore, remaining.length));
+            remaining.splice(insertAt, 0, ...moved);
+            this.blocks = remaining;
+            this.renderAll(); // repaints the (still-selected) moved blocks
+            this.scheduleSave();
+        }
+
+        // --- multi-block selection (drag across blocks to select a range) ---
+
+        _maybeStartBlockSelection(event) {
+            if (event.button !== 0) return;
+            const content = event.target.closest(".pbe-content");
+            if (!content) { this._clearBlockSelection(); return; }
+            const startEl = content.closest(".pbe-block");
+            if (!startEl) return;
+            const startId = startEl.dataset.id;
+            // A fresh press clears any existing block selection; single-block text
+            // selection stays native until the drag crosses into another block.
+            this._clearBlockSelection();
+
+            let selecting = false;
+            const onMove = (moveEvent) => {
+                const overEl = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
+                const overBlock = overEl && overEl.closest ? overEl.closest(".pbe-block") : null;
+                if (!overBlock || !this.list.contains(overBlock)) return;
+                if (overBlock.dataset.id === startId && !selecting) return; // still within one block
+
+                if (!selecting) {
+                    selecting = true;
+                    this.list.classList.add("pbe-selecting");
+                }
+                window.getSelection()?.removeAllRanges();
+                this._selectBlockRange(startId, overBlock.dataset.id);
+                moveEvent.preventDefault();
+            };
+            const onUp = () => {
+                document.removeEventListener("pointermove", onMove);
+                document.removeEventListener("pointerup", onUp);
+                this.list.classList.remove("pbe-selecting");
+                if (selecting) {
+                    // Drop the caret so the block selection is the only visible one.
+                    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                }
+            };
+            document.addEventListener("pointermove", onMove);
+            document.addEventListener("pointerup", onUp);
+        }
+
+        _selectBlockRange(idA, idB) {
+            const a = this.indexOf(idA);
+            const b = this.indexOf(idB);
+            if (a < 0 || b < 0) return;
+            const lo = Math.min(a, b);
+            const hi = Math.max(a, b);
+            this.selectedIds = this.blocks.slice(lo, hi + 1).map((block) => block.id);
+            this._paintSelection();
+        }
+
+        _paintSelection() {
+            const selected = new Set(this.selectedIds);
+            this._blockEls().forEach((el) => el.classList.toggle("pbe-selected", selected.has(el.dataset.id)));
+        }
+
+        _clearBlockSelection() {
+            if (!this.selectedIds.length) return;
+            this.selectedIds = [];
+            this.list.querySelectorAll(".pbe-selected").forEach((el) => el.classList.remove("pbe-selected"));
+        }
+
+        _selectedMarkdown() {
+            const selected = new Set(this.selectedIds);
+            return serializeBlocks(this.blocks.filter((block) => selected.has(block.id)));
+        }
+
+        _deleteSelected() {
+            if (!this.selectedIds.length) return;
+            const selected = new Set(this.selectedIds);
+            const firstIndex = this.blocks.findIndex((block) => selected.has(block.id));
+            this.blocks = this.blocks.filter((block) => !selected.has(block.id));
+            if (!this.blocks.length) {
+                this.blocks.push({ id: uid(), type: "paragraph", text: "", level: 0 });
+            }
+            this.selectedIds = [];
+            this.renderAll();
+            const focus = this.blocks[Math.min(firstIndex, this.blocks.length - 1)] || this.blocks[0];
+            this.focusBlock(focus.id, 0);
+            this.scheduleSave();
         }
 
         // --- autosave ---
