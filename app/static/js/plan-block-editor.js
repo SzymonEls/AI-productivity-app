@@ -839,7 +839,15 @@
             const block = this.byId(blockId);
             if (!block) return;
             this.blockMenuFor = blockId;
-            const currentKey = block.type === "paragraph" ? "text" : block.type;
+
+            // When the clicked block is part of a multi-block selection, "Turn into"
+            // retypes the whole selection at once. Only badge a type as current when
+            // every targeted block already shares it.
+            const targetIds = this._menuTargetIds(blockId);
+            const multiple = targetIds.length > 1;
+            const typeKeyOf = (b) => (b && b.type === "paragraph" ? "text" : b && b.type);
+            const targetTypes = new Set(targetIds.map((id) => typeKeyOf(this.byId(id))));
+            const currentKey = targetTypes.size === 1 ? [...targetTypes][0] : null;
 
             const turnItems = SLASH_COMMANDS.map((cmd) => `
                 <button type="button" class="pbe-menu-item ${cmd.key === currentKey ? "is-current" : ""}" data-action="turn" data-key="${cmd.key}">
@@ -848,7 +856,7 @@
                 </button>`).join("");
 
             this.blockMenu.innerHTML = `
-                <div class="pbe-menu-heading">Turn into</div>
+                <div class="pbe-menu-heading">${multiple ? `Turn ${targetIds.length} blocks into` : "Turn into"}</div>
                 ${turnItems}
                 <div class="pbe-menu-sep"></div>
                 <button type="button" class="pbe-menu-item" data-action="add-below"><span class="pbe-menu-label">Add block below</span></button>
@@ -907,19 +915,37 @@
             }
         }
 
+        // The blocks a block-menu action targets: the whole block selection when the
+        // clicked block belongs to it, otherwise just that one block.
+        _menuTargetIds(blockId) {
+            if (this.selectedIds.length > 1 && this.selectedIds.includes(blockId)) {
+                const selected = new Set(this.selectedIds);
+                return this.blocks.filter((block) => selected.has(block.id)).map((block) => block.id);
+            }
+            return [blockId];
+        }
+
         _turnInto(blockId, key) {
             const command = SLASH_COMMANDS.find((cmd) => cmd.key === key);
-            const block = this.byId(blockId);
-            if (!command || !block) return;
-            if (command.divider) {
-                block.type = "divider";
-                block.text = "";
-            } else {
-                command.apply(block);
-            }
-            if (!isListType(block.type)) block.level = 0;
+            if (!command) return;
+            const ids = this._menuTargetIds(blockId);
+            ids.forEach((id) => {
+                const block = this.byId(id);
+                if (!block) return;
+                if (command.divider) {
+                    block.type = "divider";
+                    block.text = "";
+                } else {
+                    command.apply(block);
+                }
+                if (!isListType(block.type)) block.level = 0;
+            });
             this.renderAll();
-            this.focusBlock(blockId, "end");
+            // Keep a multi-block selection highlighted (renderAll repaints it);
+            // for a single block, drop the caret back into it.
+            if (this.selectedIds.length <= 1) {
+                this.focusBlock(blockId, "end");
+            }
             this.scheduleSave();
         }
 
