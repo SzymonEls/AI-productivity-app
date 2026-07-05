@@ -199,6 +199,10 @@
             this.drag = null;
             this.blockMenuFor = null;
             this.selectedIds = [];
+            this.undoStack = [];
+            this.redoStack = [];
+            this._lastGroup = null;
+            this._lastCommitTime = 0;
 
             this.supportsPlaintextOnly = this._detectPlaintextOnly();
 
@@ -217,6 +221,7 @@
 
             this._bind();
             this.renderAll();
+            this.undoStack = [this._snapshot()];
         }
 
         _detectPlaintextOnly() {
@@ -284,6 +289,18 @@
                 this._deleteSelected();
             };
             this._onDocKeydown = (event) => {
+                const target = event.target;
+                const inEditor = target && target.closest && target.closest(".pbe") === this.root;
+                if (!inEditor && !this.selectedIds.length) return;
+
+                // Undo / redo for structural changes (reorder, type, delete…) and text.
+                // renderAll() wipes the browser's native per-field undo, so the editor
+                // owns a single consistent history instead.
+                const mod = event.ctrlKey || event.metaKey;
+                const key = event.key.toLowerCase();
+                if (mod && key === "z" && !event.shiftKey) { event.preventDefault(); this.undo(); return; }
+                if (mod && (key === "y" || (key === "z" && event.shiftKey))) { event.preventDefault(); this.redo(); return; }
+
                 if (!this.selectedIds.length) return;
                 if (event.key === "Escape") {
                     this._clearBlockSelection();
@@ -503,13 +520,14 @@
             ctx.block.text = ctx.content.textContent;
 
             if (this._updateSlashMenu(ctx)) {
-                this.scheduleSave();
+                this.scheduleSave(`text:${ctx.block.id}`);
                 return;
             }
             if (this._maybeTransform(ctx)) {
                 return; // re-rendered + saved inside
             }
-            this.scheduleSave();
+            // Coalesce a run of typing in the same block into one undo step.
+            this.scheduleSave(`text:${ctx.block.id}`);
         }
 
         _maybeTransform(ctx) {
@@ -1054,6 +1072,8 @@
             remaining.splice(insertAt, 0, ...moved);
             this.blocks = remaining;
             this.renderAll(); // repaints the (still-selected) moved blocks
+            // Keep focus in the editor after a single-block move so Ctrl+Z reaches it.
+            if (!this.selectedIds.length) this.focusBlock(moved[0].id, "end");
             this.scheduleSave();
         }
 
@@ -1145,15 +1165,84 @@
 
         setMarkdown(markdown) {
             this.blocks = parseMarkdown(markdown);
+            this.selectedIds = [];
             this.renderAll();
+            // A wholesale replacement (mode switch, archive/restore) starts a fresh history.
+            this.undoStack = [this._snapshot()];
+            this.redoStack = [];
+            this._lastGroup = null;
         }
 
-        scheduleSave() {
+        // Called after every change. `group` coalesces rapid same-context edits (e.g.
+        // typing in one block) into a single undo step; `commit` is false when the change
+        // itself came from an undo/redo restore so it doesn't create new history.
+        scheduleSave(group, commit = true) {
+            if (commit) this._commit(group);
             this.dirty = true;
             try { this.onChange(this.getMarkdown()); } catch (error) { /* ignore */ }
             this.onStatus("unsaved");
             clearTimeout(this.saveTimer);
             this.saveTimer = setTimeout(() => this.flush(), this.saveDelay);
+        }
+
+        // --- undo / redo ---
+
+        _snapshot() {
+            let caret = null;
+            const active = document.activeElement;
+            const el = active && active.closest ? active.closest(".pbe-block") : null;
+            if (el && this.list.contains(el)) {
+                const content = el.querySelector(".pbe-content");
+                caret = { id: el.dataset.id, offset: content ? (getCaretOffset(content) ?? 0) : 0 };
+            }
+            return {
+                blocks: this.blocks.map((block) => ({ ...block })),
+                selectedIds: [...this.selectedIds],
+                caret,
+            };
+        }
+
+        _commit(group) {
+            const now = Date.now();
+            const snap = this._snapshot();
+            const coalesce = group && group === this._lastGroup
+                && (now - this._lastCommitTime) < 700 && this.undoStack.length > 0;
+            if (coalesce) {
+                this.undoStack[this.undoStack.length - 1] = snap;
+            } else {
+                this.undoStack.push(snap);
+                if (this.undoStack.length > 200) this.undoStack.shift();
+            }
+            this.redoStack.length = 0;
+            this._lastGroup = group || null;
+            this._lastCommitTime = now;
+        }
+
+        _restore(snap) {
+            this._closeBlockMenu();
+            this.blocks = snap.blocks.map((block) => ({ ...block }));
+            this.selectedIds = [...(snap.selectedIds || [])];
+            this.renderAll();
+            if (snap.caret) {
+                this.focusBlock(snap.caret.id, snap.caret.offset);
+            }
+            this.scheduleSave(null, false); // reflect + autosave, but don't add history
+        }
+
+        undo() {
+            if (this.undoStack.length <= 1) return;
+            const current = this.undoStack.pop();
+            this.redoStack.push(current);
+            this._lastGroup = null;
+            this._restore(this.undoStack[this.undoStack.length - 1]);
+        }
+
+        redo() {
+            if (!this.redoStack.length) return;
+            const next = this.redoStack.pop();
+            this.undoStack.push(next);
+            this._lastGroup = null;
+            this._restore(next);
         }
 
         async flush() {
@@ -1171,7 +1260,7 @@
                 this.dirty = true;
             } finally {
                 this.saving = false;
-                if (this.dirty) this.scheduleSave();
+                if (this.dirty) this.scheduleSave(null, false);
             }
         }
 
