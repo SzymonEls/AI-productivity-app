@@ -25,10 +25,12 @@
                 const theme = ui === "classic" ? "light" : (stored || (prefersDark ? "dark" : "light"));
                 root.setAttribute("data-bs-theme", theme);
                 root.setAttribute("data-project-layout", localStorage.getItem("app-project-layout") || "sidebar");
+                root.setAttribute("data-plan-editor", localStorage.getItem("app-plan-editor") || "blocks");
             } catch (error) {
                 root.setAttribute("data-ui", "modern");
                 root.setAttribute("data-bs-theme", "light");
                 root.setAttribute("data-project-layout", "sidebar");
+                root.setAttribute("data-plan-editor", "blocks");
             }
         })();
         if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -247,6 +249,14 @@
                         </div>
                     </div>
                     <div class="settings-group">
+                        <div class="settings-label">{{ icon("sparkles") }}Plan editor</div>
+                        <p class="settings-hint">“Blocks” is the modern editor with drag-to-reorder and autosave. “Markdown” is the classic editor.</p>
+                        <div class="settings-segments" role="group" aria-label="Plan editor" data-setting="plan-editor">
+                            <button type="button" class="settings-segment" data-value="blocks">Blocks</button>
+                            <button type="button" class="settings-segment" data-value="markdown">Markdown</button>
+                        </div>
+                    </div>
+                    <div class="settings-group">
                         <div class="settings-label">{{ icon("link") }}Logo opens</div>
                         <p class="settings-hint">Where the top-left logo takes you.</p>
                         <div class="settings-segments" role="group" aria-label="Logo destination" data-setting="logo-target">
@@ -293,6 +303,7 @@
             const themeSetting = () => read("app-theme") || "system";
             const layoutSetting = () => (read("app-project-layout") === "stacked" ? "stacked" : "sidebar");
             const logoTargetSetting = () => (read("app-logo-target") === "home" ? "home" : "projects");
+            const planEditorSetting = () => (read("app-plan-editor") === "markdown" ? "markdown" : "blocks");
 
             const effectiveTheme = () => {
                 if (uiSetting() === "classic") { return "light"; }
@@ -318,7 +329,7 @@
             };
 
             const refreshSegments = () => {
-                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "logo-target": logoTargetSetting() };
+                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "logo-target": logoTargetSetting(), "plan-editor": planEditorSetting() };
                 Object.entries(map).forEach(([name, value]) => {
                     document.querySelectorAll(`[data-setting="${name}"] .settings-segment`).forEach((btn) => {
                         btn.classList.toggle("is-active", btn.dataset.value === value);
@@ -334,6 +345,7 @@
                 root.setAttribute("data-ui", uiSetting());
                 root.setAttribute("data-bs-theme", effectiveTheme());
                 root.setAttribute("data-project-layout", layoutSetting());
+                root.setAttribute("data-plan-editor", planEditorSetting());
                 applyLogoTarget();
                 syncThemeColor();
                 refreshSegments();
@@ -343,6 +355,11 @@
             const setTheme = (mode) => { if (mode === "system") { clear("app-theme"); } else { store("app-theme", mode); } applyAll(); };
             const setLayout = (mode) => { store("app-project-layout", mode === "stacked" ? "stacked" : "sidebar"); applyAll(); };
             const setLogoTarget = (mode) => { store("app-logo-target", mode === "home" ? "home" : "projects"); applyAll(); };
+            const setPlanEditor = (mode) => {
+                store("app-plan-editor", mode === "markdown" ? "markdown" : "blocks");
+                applyAll();
+                document.dispatchEvent(new CustomEvent("plan-editor-change", { detail: { mode: planEditorSetting() } }));
+            };
 
             applyAll();
 
@@ -364,6 +381,9 @@
             });
             document.querySelectorAll('[data-setting="logo-target"] .settings-segment').forEach((btn) => {
                 btn.addEventListener("click", () => setLogoTarget(btn.dataset.value));
+            });
+            document.querySelectorAll('[data-setting="plan-editor"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => setPlanEditor(btn.dataset.value));
             });
 
             window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {

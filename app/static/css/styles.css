@@ -710,6 +710,252 @@
     cursor: pointer;
 }
 
+/* --- Plan block editor (Notion-like) --------------------------------- */
+
+/* Show only the editor that matches the current app setting, without a flash. */
+:root[data-plan-editor="blocks"] [data-plan-classic] { display: none !important; }
+:root[data-plan-editor="markdown"] [data-plan-blocks] { display: none !important; }
+
+.plan-block-editor {
+    position: relative;
+}
+
+.pbe {
+    position: relative;
+}
+
+.pbe-flat {
+    display: flex;
+    flex-direction: column;
+    /* Room in the left margin for the drag handle so block text stays flush-left. */
+    padding-left: 1.6rem;
+}
+
+/* Blocks that sit inside a timeline section card (grouped under an H1). */
+/* Heading inside a card matches the classic ".project-markdown-section-card > h1". */
+.project-markdown-section-card .pbe-type-h1 > .pbe-content {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.pbe-block {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-left: calc(var(--pbe-indent, 0) * 1.4rem);
+    /* Match classic markdown rhythm: ~0.8rem between paragraphs/blocks. */
+    margin-top: 0.55rem;
+    border-radius: 6px;
+}
+
+.pbe-block.pbe-dragging { opacity: 0.45; }
+.pbe-block.pbe-drop-before { box-shadow: inset 0 2px 0 var(--primary); }
+.pbe-block.pbe-drop-after { box-shadow: inset 0 -2px 0 var(--primary); }
+
+/* Consecutive list items of the same kind sit tight, like classic "li + li". */
+.pbe-type-bulleted + .pbe-type-bulleted,
+.pbe-type-numbered + .pbe-type-numbered,
+.pbe-type-todo + .pbe-type-todo { margin-top: 0.2rem; }
+
+.pbe-type-h1 { margin-top: 0.9rem; }
+.pbe-type-h2 { margin-top: 0.75rem; }
+.pbe-type-h3 { margin-top: 0.6rem; }
+
+/* The first block in any container hugs the top (no leading gap). */
+.pbe-flat > .pbe-block:first-child,
+.project-section-preface > .pbe-block:first-child,
+.project-markdown-section-card > .pbe-block:first-child { margin-top: 0; }
+
+/* Controls float in the left margin (out of flow) so block text is flush-left. */
+.pbe-controls {
+    position: absolute;
+    top: 0.05rem;
+    left: -1.4rem;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.pbe-block:hover > .pbe-controls,
+.pbe-block.is-focused > .pbe-controls,
+.pbe-block.pbe-menu-open > .pbe-controls { opacity: 1; }
+
+.pbe-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.pbe-handle:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+
+.pbe-marker {
+    flex: 0 0 auto;
+    /* Match the classic list indent (".markdown-content ul { padding-left: 1.2rem }"). */
+    min-width: 1.2rem;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.05rem;
+    color: var(--foreground);
+    user-select: none;
+}
+
+.pbe-type-paragraph > .pbe-marker,
+.pbe-type-h1 > .pbe-marker,
+.pbe-type-h2 > .pbe-marker,
+.pbe-type-h3 > .pbe-marker,
+.pbe-type-quote > .pbe-marker,
+.pbe-type-divider > .pbe-marker { min-width: 0; }
+
+.pbe-bullet { font-size: 1.1rem; line-height: 1.2; }
+.pbe-number { font-variant-numeric: tabular-nums; }
+.pbe-check { margin: 0; display: inline-flex; align-items: center; height: 1.5rem; }
+.pbe-check input { width: 0.95rem; height: 0.95rem; cursor: pointer; }
+
+.pbe-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    outline: none;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.pbe-content.is-checked {
+    text-decoration: line-through;
+    color: var(--muted-foreground);
+}
+
+/* Standalone headings (no card, i.e. a plan without "# " sections). */
+.pbe-type-h1 > .pbe-content { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
+.pbe-type-h2 > .pbe-content { font-size: 1.02rem; font-weight: 700; line-height: 1.25; }
+.pbe-type-h3 > .pbe-content { font-size: 0.96rem; font-weight: 700; line-height: 1.25; }
+
+.pbe-type-quote > .pbe-content {
+    border-left: 3px solid var(--border-strong);
+    padding-left: 0.6rem;
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+.pbe-hr {
+    flex: 1 1 auto;
+    margin: 0.55rem 0;
+    border: 0;
+    border-top: 2px solid var(--border);
+}
+
+.pbe-block.is-focused > .pbe-content:empty::before,
+.pbe-flat > .pbe-block:only-child > .pbe-content:empty::before {
+    content: attr(data-placeholder);
+    color: var(--muted-foreground);
+    pointer-events: none;
+}
+
+.pbe-slash-menu {
+    position: absolute;
+    z-index: 30;
+    min-width: 16rem;
+    max-height: 17rem;
+    overflow-y: auto;
+    padding: 0.3rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.pbe-slash-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pbe-slash-item:hover,
+.pbe-slash-item.is-active { background: var(--surface-hover); }
+.pbe-slash-label { font-weight: 600; font-size: 0.9rem; color: var(--foreground); }
+.pbe-slash-hint { font-size: 0.75rem; color: var(--muted-foreground); }
+
+/* Block menu (opened from the drag handle) */
+.pbe-block-menu {
+    position: absolute;
+    z-index: 31;
+    min-width: 12.5rem;
+    max-height: 20rem;
+    overflow-y: auto;
+    padding: 0.3rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.pbe-menu-heading {
+    padding: 0.35rem 0.55rem 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+}
+
+.pbe-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pbe-menu-item:hover { background: var(--surface-hover); }
+.pbe-menu-item.is-current { background: var(--primary-soft); }
+.pbe-menu-label { font-size: 0.88rem; color: var(--foreground); }
+.pbe-menu-check { color: var(--primary); font-size: 0.8rem; }
+.pbe-menu-danger .pbe-menu-label { color: var(--danger); }
+.pbe-menu-sep { height: 1px; margin: 0.3rem 0.2rem; background: var(--border); }
+
+.plan-save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+.plan-save-status[data-state="error"] { color: var(--danger); }
+
 .project-timer-modal {
     border: 1px solid var(--border);
     border-left: 4px solid var(--success);

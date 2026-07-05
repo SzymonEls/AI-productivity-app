@@ -147,10 +147,18 @@ def edit_project(project_id):
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
 
+    # A navigator.sendBeacon() save fired while the page is being closed: it can't
+    # set request headers, so we detect it by a form flag and answer quietly (no
+    # flash, no redirect) since the browser discards the response anyway.
+    wants_json = _wants_json_response()
+    is_beacon = request.form.get("_beacon") == "1"
+
     if not title or not short_goal or not frequency:
         error_message = "Please complete all project fields."
-        if _wants_json_response():
+        if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
+        if is_beacon:
+            return ("", 400)
         flash(error_message, "danger")
     else:
         project.title = title
@@ -164,13 +172,17 @@ def edit_project(project_id):
         except SQLAlchemyError:
             db.session.rollback()
             error_message = "Failed to save the project. The database is unavailable for writing."
-            if _wants_json_response():
+            if wants_json:
                 return jsonify({"ok": False, "message": error_message}), 500
+            if is_beacon:
+                return ("", 500)
             flash(error_message, "danger")
             return redirect(url_for("projects.project_detail", project_id=project.id))
 
         success_message = "Project updated successfully."
-        if _wants_json_response():
+        if is_beacon:
+            return ("", 204)
+        if wants_json:
             return jsonify(
                 {
                     "ok": True,

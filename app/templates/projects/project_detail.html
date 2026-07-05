@@ -116,13 +116,14 @@
                             <h2 class="h4 mb-0">Plan</h2>
                             <p class="text-muted small mb-0">Your working roadmap. Each heading becomes a step on the timeline.</p>
                         </div>
-                        <div class="inline-section-controls">
+                        <div class="inline-section-controls" data-plan-classic>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="long-goal">Edit</button>
                             <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="long-goal">Save</button>
                             <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="long-goal">Cancel</button>
                         </div>
+                        <span class="plan-save-status" data-plan-blocks data-plan-save-status aria-live="polite"></span>
                     </div>
-                    <div data-edit-display="long-goal">
+                    <div data-edit-display="long-goal" data-plan-classic>
                         <div
                             class="markdown-content long-goal-preview"
                             data-display-value="long_goal"
@@ -137,6 +138,7 @@
                             rows="8"
                         >{{ project.long_goal }}</textarea>
                     </div>
+                    <div class="plan-block-editor" data-plan-blocks data-plan-block-editor></div>
                 </div>
             </section>
         </div>
@@ -321,6 +323,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");
@@ -1171,9 +1174,12 @@
                 || navigable.closest(".CodeMirror")
             );
             const isMarkdownDownload = Boolean(navigable.closest("[data-download-project-markdown]"));
+            // Buttons inside the block editor (drag handle, block/slash menu, archive)
+            // are in-page controls, not navigation — they must not trip the leave guard.
+            const isBlockEditorControl = Boolean(navigable.closest(".pbe"));
             const dismissesModal = navigable.dataset.bsDismiss;
             const opensModal = ["modal", "dropdown"].includes(navigable.dataset.bsToggle);
-            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || dismissesModal || opensModal) {
+            if (isSubmitButton || isInlineEditorControl || isEditorToolbarControl || isMarkdownDownload || isBlockEditorControl || dismissesModal || opensModal) {
                 return;
             }
 
@@ -1578,6 +1584,156 @@
                 }
             });
         }
+
+        // --- Notion-like block editor (default; switch to Markdown in App settings) ---
+        const planEditorContainer = document.querySelector("[data-plan-block-editor]");
+        const planSaveStatus = document.querySelector("[data-plan-save-status]");
+        let blockEditor = null;
+
+        const planStatusText = {
+            unsaved: "Editing…",
+            saving: "Saving…",
+            saved: "All changes saved",
+            error: "Save failed — retrying…",
+        };
+
+        const renderPlanStatus = (state) => {
+            if (!planSaveStatus) {
+                return;
+            }
+            planSaveStatus.dataset.state = state;
+            planSaveStatus.textContent = planStatusText[state] || "";
+        };
+
+        // Persist the plan through the existing section-save endpoint. The block
+        // editor owns the Markdown, so we push it into the hidden textarea first.
+        const planSave = async (markdown) => {
+            setLongGoalMarkdown(markdown);
+            return saveSection("long-goal", null, { silentSuccess: true });
+        };
+
+        // Archive a whole "# " section straight from a section card in the block editor,
+        // reusing the same endpoint as the classic view. Any pending plan edits are
+        // flushed first so the archive operates on the up-to-date plan.
+        const archivePlanSectionFromEditor = async (index) => {
+            if (!archiveSectionUrl || !blockEditor) {
+                return;
+            }
+            await blockEditor.flush();
+            if (!window.confirm("Move this section to the archive?")) {
+                return;
+            }
+            hideAlert();
+            const formData = new FormData();
+            formData.append("section_index", String(index));
+            try {
+                const response = await fetch(archiveSectionUrl, {
+                    method: "POST",
+                    headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                    body: formData,
+                });
+                const payload = await readJsonResponse(response, "The server did not return a valid JSON response.");
+                if (!response.ok || !payload.ok) {
+                    throw new Error(payload.message || "Failed to archive the section.");
+                }
+                updateDisplayValues(payload.project);
+                blockEditor.setMarkdown(payload.project.long_goal);
+                showAlert(payload.message, "success");
+            } catch (error) {
+                showAlert(error.message, "danger");
+            }
+        };
+
+        const mountBlockEditor = () => {
+            if (blockEditor || !planEditorContainer || !window.PlanBlockEditor) {
+                return;
+            }
+            blockEditor = window.PlanBlockEditor.mount(planEditorContainer, {
+                initialMarkdown: getLongGoalMarkdown(),
+                onSave: planSave,
+                onChange: (markdown) => setLongGoalMarkdown(markdown),
+                onStatus: renderPlanStatus,
+                onArchiveSection: archivePlanSectionFromEditor,
+            });
+            renderPlanStatus("saved");
+        };
+
+        const destroyBlockEditor = () => {
+            if (blockEditor) {
+                blockEditor.destroy();
+                blockEditor = null;
+            }
+            if (planEditorContainer) {
+                planEditorContainer.innerHTML = "";
+            }
+        };
+
+        const applyPlanEditorMode = (mode) => {
+            if (mode === "markdown") {
+                destroyBlockEditor();
+                // Carry any block-editor edits into the classic editor if it's already open.
+                if (longGoalEditor && longGoalTextarea) {
+                    longGoalEditor.value(longGoalTextarea.value);
+                }
+            } else {
+                mountBlockEditor();
+            }
+        };
+
+        applyPlanEditorMode(
+            document.documentElement.dataset.planEditor === "markdown" ? "markdown" : "blocks"
+        );
+
+        document.addEventListener("plan-editor-change", (event) => {
+            applyPlanEditorMode(event.detail && event.detail.mode === "markdown" ? "markdown" : "blocks");
+        });
+
+        // Last-ditch save when the page is being torn down (tab closed, navigation,
+        // app backgrounded on mobile) before the debounced autosave has run. A normal
+        // fetch is usually killed during unload, so we use a keepalive request — and
+        // fall back to sendBeacon on older browsers — so the plan is never lost.
+        let keepaliveSupported = false;
+        try {
+            keepaliveSupported = "keepalive" in new Request(form.action);
+        } catch (error) {
+            keepaliveSupported = false;
+        }
+
+        const flushPlanOnUnload = () => {
+            if (!blockEditor || !hasUnsavedChanges()) {
+                return;
+            }
+            setLongGoalMarkdown(blockEditor.getMarkdown());
+            const body = new FormData(form);
+
+            if (keepaliveSupported) {
+                try {
+                    fetch(form.action, {
+                        method: "POST",
+                        headers: { "Accept": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                        body,
+                        keepalive: true,
+                    }).catch(() => {});
+                    return;
+                } catch (error) {
+                    /* fall through to sendBeacon */
+                }
+            }
+            if (navigator.sendBeacon) {
+                body.append("_beacon", "1");
+                navigator.sendBeacon(form.action, body);
+            }
+        };
+
+        window.addEventListener("pagehide", flushPlanOnUnload);
+        window.addEventListener("beforeunload", flushPlanOnUnload);
+        document.addEventListener("visibilitychange", () => {
+            // Tab hidden but the page is still alive (e.g. switching tabs/apps): a
+            // normal flush is reliable here and keeps the UI's saved state in sync.
+            if (document.visibilityState === "hidden" && blockEditor) {
+                blockEditor.flush();
+            }
+        });
 
     })();
 </script>
