@@ -1431,3 +1431,71 @@
         grid-column: 2 / -1;
     }
 }
+
+/* Read-only demo mode (DEMO_MODE); absent from a normal installation. */
+.demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    padding: 0.5rem 1rem;
+    background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+    color: var(--foreground);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.demo-banner-tag {
+    padding: 0.1rem 0.55rem;
+    border-radius: var(--radius-pill);
+    background: var(--warning);
+    color: var(--primary-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.demo-doc {
+    overflow-wrap: anywhere;
+}
+
+.demo-doc > :first-child {
+    margin-top: 0;
+}
+
+.demo-doc > :last-child {
+    margin-bottom: 0;
+}
+
+.demo-doc pre,
+.demo-doc table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.demo-doc pre {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.demo-doc table {
+    border-collapse: collapse;
+}
+
+.demo-doc th,
+.demo-doc td {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.demo-doc th {
+    background: var(--surface-2);
+}

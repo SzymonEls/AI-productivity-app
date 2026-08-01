@@ -1,6 +1,6 @@
 from datetime import date
 
-from flask import Blueprint, current_app, render_template, send_from_directory
+from flask import Blueprint, current_app, redirect, render_template, send_from_directory, url_for
 from flask_login import current_user
 
 from ..models import DailyPlan
@@ -11,11 +11,15 @@ main_bp = Blueprint("main", __name__)
 
 @main_bp.route("/")
 def home():
-    """Home page with the user's single saved daily plan."""
+    """Home page with the user's single saved daily plan.
 
-    daily_plan = None
-    if current_user.is_authenticated:
-        daily_plan = DailyPlan.query.filter_by(user_id=current_user.id).first()
+    There is nothing to show a signed-out visitor, so send them to the login
+    page rather than a page of empty placeholders.
+    """
+    if not current_user.is_authenticated:
+        return redirect(url_for("auth.login"))
+
+    daily_plan = DailyPlan.query.filter_by(user_id=current_user.id).first()
 
     return render_template(
         "home.html",

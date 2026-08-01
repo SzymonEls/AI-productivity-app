@@ -61,10 +61,36 @@ The full list is in [.env.example](.env.example). The most important ones:
 | `DEFAULT_LOGIN_EMAIL` | (empty) | Pre-fills the email in the login form. |
 | `DEFAULT_LOGIN_PASSWORD` | (empty) | Pre-fills the password in the login form. |
 | `CALENDAR_TIMEZONE` | `Europe/Warsaw` | Timezone for "day" boundaries in time tracking. |
+| `DEMO_MODE` | `false` | `true` turns the installation into a read-only demo (see below). |
+| `DEMO_DOC_PATH` | `README.md` | Markdown file rendered on the login page in demo mode. |
+| `DEMO_DOC_BASE_URL` | the GitHub repo | Address that relative links in that file are rewritten to. |
+| `DEMO_BLOCK_MESSAGE` | `Demo mode - changes are disabled.` | Shown when a demo visitor tries to save. |
+| `DEMO_BANNER_MESSAGE` | `Read-only portfolio demo — …` | Banner text above every page; empty hides the banner. |
 | `OPENAI_API_KEY` | (empty) | Read, but **currently unused** (reserved for the future). |
 | `SKIP_DB_BOOTSTRAP` | (unset) | `1` disables the automatic database update at startup (set in Docker). |
 
 Variables used only when running in Docker: `APP_PORT`, `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`.
+
+## Demo mode
+
+`DEMO_MODE=true` turns an installation into a public, read-only demo:
+
+- every `POST`/`PUT`/`PATCH`/`DELETE` is refused, so visitors can open every screen but
+  change nothing (logging in and out still works);
+- the login page becomes a landing page: the credentials from `DEFAULT_LOGIN_EMAIL` /
+  `DEFAULT_LOGIN_PASSWORD` are pre-filled and `DEMO_DOC_PATH` is rendered below the form;
+- a "Demo" banner with the text from `DEMO_BANNER_MESSAGE` sits above every page
+  (set it to an empty value to drop the banner);
+- `flask --app run.py seed-demo` fills the database with sample content
+  (`--reset` rebuilds it). Docker runs this at startup when `DEMO_MODE=1`.
+
+While `DEMO_MODE` is off, none of this is installed: no request hook is registered and no
+file is read, so a normal installation runs exactly as it did before the feature existed
+([app/demo.py](app/demo.py)).
+
+Set `REGISTRATION_ENABLED=false` alongside it, and deploy with
+[docker-compose.demo.yml](docker-compose.demo.yml) — step by step in
+[docs/demo-deployment.md](docs/demo-deployment.md).
 
 ## Database migrations
 

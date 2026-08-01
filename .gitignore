@@ -21,6 +21,9 @@ app/instance/*
 *.db
 *.sqlite3
 
+# ...except the ready-made demo database, which is meant to be shipped.
+!demo/example/app.db
+
 # Environment and local config
 .env
 .env.*
