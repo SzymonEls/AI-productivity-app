@@ -10,13 +10,19 @@ services:
     environment:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
-      DATABASE_URL: sqlite:////app/instance/app.db
+      # Set here as well as in .env, because an .env left over from an older
+      # deployment still names /app/instance - a path nothing mounts any more.
+      # Environment variables win over the file, so this keeps such an instance
+      # pointed at the real database.
+      DATABASE_URL: sqlite:////app/app/instance/app.db
     # No published port: the reverse proxy shares the reverse_proxy network and
     # reaches the container by name on port 8000. Publishing one would only
     # collide with the other instance on the host. Add a mapping such as
     # "8010:8000" if your proxy runs on the host instead of in a container.
     volumes:
-      - ./app/instance:/app/instance
+      # /app is the repository root, so its app/instance is /app/app/instance -
+      # the directory config.py actually reads .env and the database from.
+      - ./app/instance:/app/app/instance
     networks:
       - reverse_proxy
 

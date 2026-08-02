@@ -8,6 +8,32 @@ There is **one** [docker-compose.yml](../docker-compose.yml) for both. An instan
 because of what is in its `app/instance/.env`, not because of a different compose file. Two
 instances are therefore two directories, each with its own database and its own settings.
 
+## 0. Upgrading an instance built before 1.5.0
+
+Older images mounted the instance directory at `/app/instance`, but `config.py` reads
+`/app/app/instance` — the repository root is `/app`, so its `app/instance` is one level deeper.
+The `.env` in that volume was therefore **never read**, and only the `environment:` block in
+`docker-compose.yml` had any effect. The paths line up from 1.5.0 on.
+
+Two consequences when you upgrade:
+
+- **Settings in `app/instance/.env` become live for the first time.** If that file was generated
+  by an older entrypoint it says `REGISTRATION_ENABLED=true`, which will now take effect. Read it
+  before upgrading and set what you actually want.
+- **The generated `SECRET_KEY` becomes live too**, so existing sessions are invalidated once —
+  everyone signs in again. Until now the app silently used the built-in development key.
+
+The database is unaffected: the same host file is simply mounted at the correct path.
+Back it up anyway.
+
+```bash
+cp app/instance/app.db app/instance/app.db.bak
+```
+
+If the file also carries a `DATABASE_URL=sqlite:////app/instance/app.db` line from an old
+deployment, delete it — that path is not mounted any more. The `environment:` block overrides it,
+so nothing breaks while it is there.
+
 ## 1. Tag the release
 
 Compose builds from the repository at a pinned tag. Push it before deploying:

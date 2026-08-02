@@ -70,6 +70,12 @@ The schema in the code matches the latest migration (`20260705_0015`).
 
 ## Non-obvious things
 
+0. **In Docker the instance directory is `/app/app/instance`, not `/app/instance`.**
+   The image puts the repository root at `/app` ([Dockerfile:10](../Dockerfile#L10)), so the
+   repo's own `app/instance` sits one level deeper — and that is where
+   [config.py:8-13](../config.py#L8-L13) looks for `.env` and the database. The volume in
+   [docker-compose.yml](../docker-compose.yml), the entrypoint and `DATABASE_URL` all have to
+   name the same path. Until 1.5.0 they did not, and the mounted `.env` was read by nobody.
 1. **The database updates itself when the app starts.** Importing `app` runs migrations + possibly table creation
    ([app/__init__.py:47-49](../app/__init__.py#L47-L49)). Disabled by `SKIP_DB_BOOTSTRAP=1` (Docker) so workers don't race.
 2. **Two parallel ways of changing the schema.** Besides Alembic migrations, the `initialize_database` function

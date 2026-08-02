@@ -2,13 +2,17 @@
 set -eu
 
 export SKIP_DB_BOOTSTRAP="${SKIP_DB_BOOTSTRAP:-1}"
-ENV_FILE="/app/instance/.env"
 
-mkdir -p /app/instance
+# The repository root is /app, so config.py reads /app/app/instance/.env. Writing
+# anywhere else produces a file the application never looks at.
+INSTANCE_DIR="/app/app/instance"
+ENV_FILE="${INSTANCE_DIR}/.env"
+
+mkdir -p "$INSTANCE_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY="${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(48))')}"
-    DATABASE_URL="${DATABASE_URL:-sqlite:////app/instance/app.db}"
+    DATABASE_URL="${DATABASE_URL:-sqlite:////app/app/instance/app.db}"
     REGISTRATION_ENABLED="${REGISTRATION_ENABLED:-true}"
     CALENDAR_TIMEZONE="${CALENDAR_TIMEZONE:-Europe/Warsaw}"
     OPENAI_API_KEY="${OPENAI_API_KEY:-}"
