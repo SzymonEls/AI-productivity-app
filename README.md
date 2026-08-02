@@ -69,7 +69,7 @@ The full list is in [app/instance/.env.example](app/instance/.env.example). The 
 | `OPENAI_API_KEY` | (empty) | Read, but **currently unused** (reserved for the future). |
 | `SKIP_DB_BOOTSTRAP` | (unset) | `1` disables the automatic database update at startup (set in Docker). |
 
-Variables used only when running in Docker: `APP_PORT`, `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`.
+Variables used only when running in Docker: `GUNICORN_WORKERS`, `GUNICORN_TIMEOUT`.
 
 ## Demo mode
 
@@ -82,15 +82,16 @@ Variables used only when running in Docker: `APP_PORT`, `GUNICORN_WORKERS`, `GUN
 - a "Demo" banner with the text from `DEMO_BANNER_MESSAGE` sits above every page
   (set it to an empty value to drop the banner);
 - `flask --app run.py seed-demo` fills the database with sample content
-  (`--reset` rebuilds it). Docker runs this at startup when `DEMO_MODE=1`.
+  (`--reset` rebuilds it); Docker runs it at startup whenever demo mode is on. A ready-made
+  database is in [demo/example/](demo/example).
 
 While `DEMO_MODE` is off, none of this is installed: no request hook is registered and no
 file is read, so a normal installation runs exactly as it did before the feature existed
 ([app/demo.py](app/demo.py)).
 
-Set `REGISTRATION_ENABLED=false` alongside it, and deploy with
-[docker-compose.demo.yml](docker-compose.demo.yml) — step by step in
-[docs/demo-deployment.md](docs/demo-deployment.md).
+Set `REGISTRATION_ENABLED=false` alongside it. A demo is deployed from the same
+[docker-compose.yml](docker-compose.yml) as any other instance — it is the `app/instance/.env`
+that differs. Step by step in [docs/demo-deployment.md](docs/demo-deployment.md).
 
 ## Database migrations
 

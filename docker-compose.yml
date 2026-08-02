@@ -1,15 +1,20 @@
+# One file for every deployment. What an instance is - private or a public
+# read-only demo - is decided by app/instance/.env, not by this file.
+# Demo setup: docs/demo-deployment.md
 services:
   web:
     build:
-      context: https://github.com/SzymonEls/AI-productivity-app.git#v1.4.2
+      context: https://github.com/SzymonEls/AI-productivity-app.git#v1.5.0
     restart: unless-stopped
     user: "0:0"
     environment:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
       DATABASE_URL: sqlite:////app/instance/app.db
-    ports:
-      - "${APP_PORT:-8000}:8000"
+    # No published port: the reverse proxy shares the reverse_proxy network and
+    # reaches the container by name on port 8000. Publishing one would only
+    # collide with the other instance on the host. Add a mapping such as
+    # "8010:8000" if your proxy runs on the host instead of in a container.
     volumes:
       - ./app/instance:/app/instance
     networks:
