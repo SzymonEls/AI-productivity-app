@@ -31,6 +31,7 @@ def create_app(config_class=Config):
     from .models import DailyPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .ai.routes import ai_bp
     from .auth.routes import auth_bp
+    from .demo import register_demo_mode
     from .main.routes import main_bp
     from .projects.routes import projects_bp
     from .time_tracking.routes import time_tracking_bp
@@ -44,6 +45,8 @@ def create_app(config_class=Config):
     register_template_filters(app)
     register_json_error_handlers(app)
     register_login_handlers(login_manager)
+    # No-op unless DEMO_MODE is set: it registers nothing on the request path.
+    register_demo_mode(app)
     if should_initialize_database(app):
         run_database_migrations(app)
         initialize_database(app)
