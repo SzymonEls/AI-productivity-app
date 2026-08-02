@@ -1,10 +1,21 @@
 # One file for every deployment. What an instance is - private or a public
 # read-only demo - is decided by app/instance/.env, not by this file.
 # Demo setup: docs/demo-deployment.md
+#
+# Two different .env files are involved, and mixing them up is the usual cause
+# of "it ignores my settings":
+#   ./.env               read by Compose, only to fill in ${...} below
+#   ./app/instance/.env  read by the application itself (mounted into it)
 services:
   web:
     build:
-      context: https://github.com/SzymonEls/AI-productivity-app.git#v1.5.0
+      context: https://github.com/SzymonEls/AI-productivity-app.git#main
+    # Fixed name, because it is also the hostname the reverse proxy connects to.
+    # Left to Compose it would be derived from the directory AND the Compose
+    # version - productivity_web_1 on v1, productivity-web-1 on v2 - so an
+    # upgrade of the docker CLI silently breaks the proxy. Override per instance
+    # with INSTANCE_NAME in the .env file next to this one.
+    container_name: ${INSTANCE_NAME:-productivity}
     restart: unless-stopped
     user: "0:0"
     environment:

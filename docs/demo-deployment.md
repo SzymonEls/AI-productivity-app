@@ -34,20 +34,24 @@ If the file also carries a `DATABASE_URL=sqlite:////app/instance/app.db` line fr
 deployment, delete it — that path is not mounted any more. The `environment:` block overrides it,
 so nothing breaks while it is there.
 
-## 1. Tag the release
-
-Compose builds from the repository at a pinned tag. Push it before deploying:
-
-```bash
-git tag v1.5.0 && git push origin v1.5.0
-```
-
-## 2. Set up the demo directory
+## 1. Set up the demo directory
 
 ```bash
 mkdir -p ~/demo/app/instance && cd ~/demo
-curl -O https://raw.githubusercontent.com/SzymonEls/AI-productivity-app/v1.5.0/docker-compose.yml
+curl -O https://raw.githubusercontent.com/SzymonEls/AI-productivity-app/main/docker-compose.yml
 ```
+
+Name the instance in `~/demo/.env` — **this is Compose's own file**, filling in `${...}` in
+`docker-compose.yml`, and is not the same as `app/instance/.env` below:
+
+```ini
+INSTANCE_NAME=demo
+```
+
+That becomes the container's name and therefore the hostname the reverse proxy connects to.
+Pinning it matters: left to Compose, the name is derived from the directory *and* the Compose
+version — `demo_web_1` on v1, `demo-web-1` on v2 — so upgrading the docker CLI renames the
+container and breaks the proxy with a 502.
 
 Write `~/demo/app/instance/.env` — this file is what makes the instance a demo:
 
@@ -70,7 +74,7 @@ DEMO_BANNER_MESSAGE=Read-only portfolio demo — nothing you change here is save
 random one on first boot, so the demo never shares a key with the private instance. Every
 setting is listed in [app/instance/.env.example](../app/instance/.env.example).
 
-## 3. Start it
+## 2. Start it
 
 ```bash
 docker compose up -d --build
@@ -89,13 +93,13 @@ Nothing is published on the host. Check the container answers from inside the pr
 before touching nginx (substitute your nginx container's name):
 
 ```bash
-docker exec nginx curl -sI http://demo_web_1:8000/auth/login | head -1
+docker exec nginx curl -sI http://demo:8000/auth/login | head -1
 ```
 
-`demo_web_1` is Compose's generated name: directory + service + index. Renaming or moving the
-directory renames the container, and nginx then has to be updated to match.
+`demo` is the `INSTANCE_NAME` set above, which is exactly why it was pinned: the hostname stays
+put no matter which Compose version or directory the instance is started from.
 
-## 4. Point nginx at it
+## 3. Point nginx at it
 
 Resolving the upstream through Docker's embedded DNS via a variable keeps nginx from refusing
 to start while the demo container is down.
@@ -119,7 +123,7 @@ server {
 
     resolver 127.0.0.11 valid=10s;
 
-    set $upstream demo_web_1:8000;
+    set $upstream demo:8000;
 
     location /auth/login {
         limit_req zone=demo_login burst=10 nodelay;
@@ -145,7 +149,7 @@ server {
 docker exec nginx nginx -t && docker exec nginx nginx -s reload
 ```
 
-## 5. Check it from outside
+## 4. Check it from outside
 
 Open `https://demo.example.com/` in a private window and confirm:
 
