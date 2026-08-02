@@ -24,7 +24,7 @@ app/instance/*
 # Environment and local config
 .env
 .env.*
-!.env.example
+!app/instance/.env.example
 instance/.env
 instance/secrets/*
 !instance/secrets/.gitkeep

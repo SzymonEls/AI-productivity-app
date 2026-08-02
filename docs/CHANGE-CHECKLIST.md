@@ -105,7 +105,7 @@ Tick off the sections matching your change. Each item is a specific file/command
 
 ### New environment variable
 - [ ] Add the read in [config.py](../config.py), the `Config` class (`os.environ.get(...)` with a sensible default).
-- [ ] Add the variable with a comment and a default value to [.env.example](../.env.example).
+- [ ] Add the variable with a comment and a default value to [app/instance/.env.example](../app/instance/.env.example).
 - [ ] Add a row to the variables table in [README.md](../README.md), the "Environment variables" section.
 - [ ] If used in Docker: add it in [docker-entrypoint.sh](../docker-entrypoint.sh) and/or
       [docker-compose.yml](../docker-compose.yml).

@@ -23,7 +23,7 @@ pip install -r requirements.txt
 Create a local environment file (variables are described below):
 
 ```bash
-cp .env.example app/instance/.env
+cp app/instance/.env.example app/instance/.env
 ```
 
 > The app reads `app/instance/.env` first, then `.env` in the repo root. One of them is enough.
@@ -49,7 +49,7 @@ The app starts at `http://127.0.0.1:5000`.
 
 ## Environment variables
 
-The full list is in [.env.example](.env.example). The most important ones:
+The full list is in [app/instance/.env.example](app/instance/.env.example). The most important ones:
 
 | Variable | Default | Purpose |
 |---|---|---|
