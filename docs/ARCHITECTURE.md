@@ -23,6 +23,7 @@ a manual daily plan, and time tracking. Data lives in SQLite (a single file).
 | [app/extensions.py](../app/extensions.py) | Shared Flask extension objects. |
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
+| [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page + PWA files (manifest, service worker). |
 | [app/ai/](../app/ai/) | **Manual** daily-plan builder (despite the name — no AI). |
@@ -87,6 +88,14 @@ The schema in the code matches the latest migration (`20260705_0015`).
    (204/400/500 without `flash`/redirect, [app/projects/routes.py:150-184](../app/projects/routes.py#L150-L184)).
 8. **Time is stored in UTC (naive)**, converted to `CALENDAR_TIMEZONE` only at display time
    ([app/time_tracking/service.py](../app/time_tracking/service.py)). Sensitive — easy to get wrong when changing things.
+9. **Demo mode installs nothing when it is off.** `register_demo_mode` ([app/demo.py](../app/demo.py)),
+   called once from `create_app`, returns straight after setting `demo_mode = False` in `app.jinja_env.globals`
+   unless `DEMO_MODE` is set. Only then does it register the `before_request` write guard, render
+   `DEMO_DOC_PATH` (once, at startup) and add the `seed-demo` command. It deliberately stays out of
+   `inject_feature_flags` — that context processor runs on every render and already queries the database,
+   so the flag is a Jinja global instead. Point 5 still applies in demo mode: the guard only stops writes
+   on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
+   timeline up front, which makes that a no-op.
 
 Things not determined (literally "I don't know"):
 - [app/templates/icons.html](../app/templates/icons.html) is not rendered by anything — purpose unknown.

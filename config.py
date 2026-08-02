@@ -27,6 +27,17 @@ def parse_bool(value, default=False):
     return default
 
 
+def env_text(name, default):
+    """
+    Read a text setting, telling "not set" apart from "set to nothing".
+
+    Unlike the usual `os.environ.get(...) or default`, an empty value here means
+    the empty string, so a setting can be switched off from the environment.
+    """
+    value = os.environ.get(name)
+    return default if value is None else value.strip()
+
+
 def normalize_database_url(database_url):
     """Resolve local SQLite database paths relative to the project root."""
     url = make_url(database_url)
@@ -71,5 +82,19 @@ class Config:
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
+    # Read-only public demo. Off by default; see app/demo.py.
+    DEMO_MODE = parse_bool(os.environ.get("DEMO_MODE"), False)
+    DEMO_DOC_PATH = os.environ.get("DEMO_DOC_PATH", "README.md").strip() or "README.md"
+    DEMO_DOC_BASE_URL = os.environ.get(
+        "DEMO_DOC_BASE_URL", "https://github.com/SzymonEls/AI-productivity-app/blob/main/"
+    ).strip()
+    DEMO_BLOCK_MESSAGE = (
+        os.environ.get("DEMO_BLOCK_MESSAGE", "").strip()
+        or "Demo mode - changes are disabled."
+    )
+    # Empty on purpose means "no banner", so this one distinguishes unset from blank.
+    DEMO_BANNER_MESSAGE = env_text(
+        "DEMO_BANNER_MESSAGE", "Read-only portfolio demo — nothing you change here is saved."
+    )
     # Reserved for a future AI feature; unused by the app today.
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()

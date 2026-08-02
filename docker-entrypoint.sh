@@ -23,4 +23,11 @@ EOF
 fi
 
 flask --app run.py db upgrade
+
+# Demo instances start with sample content. The command is idempotent, so a
+# restart never overwrites the demo database; pass --reset to rebuild it.
+if [ "${DEMO_MODE:-}" = "1" ]; then
+    flask --app run.py seed-demo
+fi
+
 exec "$@"

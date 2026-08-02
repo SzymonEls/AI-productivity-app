@@ -270,6 +270,13 @@
     </div>
     {% endif %}
 
+    {% if demo_mode and demo_banner_message %}
+    <div class="demo-banner" role="status">
+        <span class="demo-banner-tag">Demo</span>
+        <span>{{ demo_banner_message }}</span>
+    </div>
+    {% endif %}
+
     <main class="container pb-5 app-main">
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
