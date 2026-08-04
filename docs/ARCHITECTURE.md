@@ -103,6 +103,22 @@ The schema in the code matches the latest migration (`20260705_0015`).
    on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
    timeline up front, which makes that a no-op.
 
+## What not to touch (and why)
+
+- **The raw `ALTER TABLE` in `initialize_database`** ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) —
+  an older backward-compatibility mechanism for local databases. Change the schema with an
+  Alembic MIGRATION, not here.
+- **The database auto-bootstrap at startup** ([app/__init__.py:47-49](../app/__init__.py#L47-L49)) and the
+  `SKIP_DB_BOOTSTRAP` switch — deliberately disabled in Docker so workers don't race.
+  Don't change this logic in passing.
+- **`OPENAI_API_KEY` and the `requests` package** — present but unused. Don't build assumptions
+  on them; don't remove them without confirming with the repo owner.
+- **The `ai` module name** — despite the name it has no AI integration; it's a manual daily-plan
+  builder. Don't "fix" the name.
+- **UTC time handling** in [app/time_tracking/service.py](../app/time_tracking/service.py) — dates are stored
+  naive as UTC and converted only at display time. Keep this pattern (`ensure_utc`); don't mix
+  timezones in the database.
+
 Things not determined (literally "I don't know"):
 - [app/templates/icons.html](../app/templates/icons.html) is not rendered by anything — purpose unknown.
 - `app.config.get("SKIP_DB_BOOTSTRAP")` in [app/__init__.py:221](../app/__init__.py#L221) references a key

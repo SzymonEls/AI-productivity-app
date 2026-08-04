@@ -1,6 +1,5 @@
 # One file for every deployment. What an instance is - private or a public
 # read-only demo - is decided by app/instance/.env, not by this file.
-# Demo setup: docs/demo-deployment.md
 #
 # Two different .env files are involved, and mixing them up is the usual cause
 # of "it ignores my settings":

@@ -2,6 +2,15 @@
 
 Two parts: **A. Conventions** of this repo (how things are written here) and **B. Definition of done**
 (what to tick off for a given change type). Imperative mood — do exactly what it says.
+The structure and flow of the app are described in [ARCHITECTURE.md](ARCHITECTURE.md), including
+the list of things not to touch.
+
+## Hard rule
+
+Before finishing ANY change, go through the matching section of part B below and tick off every
+item. Follow the conventions in part A — verify them in the referenced example files, do not
+guess from general Flask knowledge. When something can't be determined from the code, write
+plainly "I don't know" / "TODO: to be confirmed" instead of guessing.
 
 ---
 
@@ -100,13 +109,12 @@ Tick off the sections matching your change. Each item is a specific file/command
 - [ ] Wrap the save in `try/except SQLAlchemyError` with `rollback()` if it can fail.
 - [ ] If it's a NEW module: register the blueprint in [app/__init__.py:38-42](../app/__init__.py#L38-L42) and add the import in [app/__init__.py:32-36](../app/__init__.py#L32-L36).
 - [ ] Wire the action into a template in [app/templates/](../app/templates/).
-- [ ] Add the endpoint to the table in [ARCHITECTURE.md](ARCHITECTURE.md) (if you keep the list there) and check it fits
-      [adding-a-feature.md](adding-a-feature.md).
+- [ ] Add the endpoint to the table in [ARCHITECTURE.md](ARCHITECTURE.md) (if you keep the list there).
 
 ### New environment variable
 - [ ] Add the read in [config.py](../config.py), the `Config` class (`os.environ.get(...)` with a sensible default).
-- [ ] Add the variable with a comment and a default value to [app/instance/.env.example](../app/instance/.env.example).
-- [ ] Add a row to the variables table in [README.md](../README.md), the "Environment variables" section.
+- [ ] Add the variable with a comment and a default value to [app/instance/.env.example](../app/instance/.env.example)
+      — that file is the reference list the README points at, so it has to stay complete.
 - [ ] If used in Docker: add it in [docker-entrypoint.sh](../docker-entrypoint.sh) and/or
       [docker-compose.yml](../docker-compose.yml).
 
