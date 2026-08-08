@@ -67,7 +67,7 @@ Manual, inside the handler function. You read `request.form.get("field", "").str
 check conditions with `if/elif`, and on error `flash(..., "danger")` (HTML) or
 `jsonify({"ok": False, ...}), 400` (JSON). **The repo has NO** WTForms/marshmallow/pydantic — don't add them.
 **Reference (HTML):** [app/projects/routes.py:80-88](../app/projects/routes.py#L80-L88) (`create_project`),
-**(JSON):** [app/ai/routes.py:34-44](../app/ai/routes.py#L34-L44).
+**(JSON):** `assign_project_slot` in [app/projects/routes.py](../app/projects/routes.py).
 Parse booleans from the form with the `_form_bool` helper ([app/projects/routes.py:633](../app/projects/routes.py#L633)).
 
 ### Business logic vs. database access
@@ -75,17 +75,15 @@ By default everything sits in `routes.py` (`Model.query...` queries directly in 
 Create a separate `service.py` file only for time/timezone/aggregation logic — like in
 [app/time_tracking/service.py](../app/time_tracking/service.py). Don't introduce a service layer for the rest.
 
-### ⚠️ Two conflicting conventions in the repo (resolution)
+### ⚠️ Conflicting convention in the repo (resolution)
 
-1. **Schema evolution.** Two mechanisms exist: Alembic migrations in [migrations/](../migrations/)
-   **and** raw `ALTER TABLE` in `initialize_database` ([app/__init__.py:314-484](../app/__init__.py#L314-L484)).
-   **The authoritative one: Alembic migrations.** The block in `__init__.py` is backward compatibility for old databases —
-   treat it as frozen and don't add new columns there.
+**Schema evolution.** Two mechanisms exist: Alembic migrations in [migrations/](../migrations/)
+**and** raw `ALTER TABLE` in `initialize_database` ([app/__init__.py:314-484](../app/__init__.py#L314-L484)).
+**The authoritative one: Alembic migrations.** The block in `__init__.py` is backward compatibility for old databases —
+treat it as frozen and don't add new columns there.
 
-2. **`_get_or_create_timeline` exists in two versions** ([app/ai/routes.py:107](../app/ai/routes.py#L107)
-   and [app/projects/routes.py:501](../app/projects/routes.py#L501)), with a different return shape.
-   **The authoritative one: the version in [app/projects/routes.py:501](../app/projects/routes.py#L501)** (handles the backlog).
-   When changing the timeline logic, change both copies or deliberately leave the `ai` version untouched.
+(The second conflict listed here — two copies of `_get_or_create_timeline` — went away in 1.6.0
+when the `ai` blueprint was removed. Only the version in `app/projects/routes.py` remains.)
 
 ---
 
@@ -120,7 +118,7 @@ Tick off the sections matching your change. Each item is a specific file/command
 
 ### User-visible behavior change
 - [ ] Update the relevant template in [app/templates/](../app/templates/) and/or the style in [app/static/css/](../app/static/css/).
-- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.5.0`) — it's shown in the UI.
+- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.6.0`) — it's shown in the UI.
 - [ ] Check whether the change requires updating the feature description in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### New dependency

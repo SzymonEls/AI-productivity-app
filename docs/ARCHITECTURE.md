@@ -1,7 +1,7 @@
 # Architecture
 
-A Flask web app for managing productivity: projects with goals (Markdown), a timeline,
-a manual daily plan, and time tracking. Data lives in SQLite (a single file).
+A Flask web app for managing productivity: projects with goals (Markdown), three project slots
+per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 
 ## Startup
 
@@ -26,8 +26,7 @@ a manual daily plan, and time tracking. Data lives in SQLite (a single file).
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
-| [app/main/](../app/main/) | Home page + PWA files (manifest, service worker). |
-| [app/ai/](../app/ai/) | **Manual** daily-plan builder (despite the name — no AI). |
+| [app/main/](../app/main/) | Home page (today's A/B/C slots) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
@@ -63,9 +62,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
-- **DailyPlan** — **one plan per user** (`user_id` unique), overwritten on every save.
 
-The schema in the code matches the latest migration (`20260705_0015`).
+The schema in the code matches the latest migration (`20260809_0017`).
 
 ## Responsibility boundaries
 
@@ -87,13 +85,14 @@ The schema in the code matches the latest migration (`20260705_0015`).
 2. **Two parallel ways of changing the schema.** Besides Alembic migrations, the `initialize_database` function
    ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) adds missing columns with raw `ALTER TABLE`.
    This duplicates migrations — it exists so that old local SQLite files keep working. **Do not extend this block** — make new changes with a migration.
-3. **The `ai` folder contains no AI.** The daily plan is built manually ([app/ai/routes.py](../app/ai/routes.py)).
-   `OPENAI_API_KEY` ([config.py:75](../config.py#L75)) and the `requests` library ([requirements.txt:7](../requirements.txt#L7)) are present but unused.
+3. **`OPENAI_API_KEY` and the `requests` library are read but unused** ([config.py](../config.py),
+   [requirements.txt](../requirements.txt)). The `ai` blueprint they were named after is gone as of 1.6.0;
+   the variables stay until the repo owner decides otherwise.
 4. **The plan-section "archive" is not a table.** When you archive a project plan section, the text is cut out of `long_goal` and appended to `archived_long_goal`
    via character offsets ([app/projects/routes.py:596-630](../app/projects/routes.py#L596-L630)).
-5. **`_get_or_create_timeline` exists in two files** and behaves differently
-   ([app/ai/routes.py:107](../app/ai/routes.py#L107) vs [app/projects/routes.py:501](../app/projects/routes.py#L501)).
-   Both **write to the database during a GET** (they seed the timeline). When changing one, check the other.
+5. **`_get_or_create_timeline` writes to the database during a GET** — it seeds the timeline when
+   the user has none ([app/projects/routes.py](../app/projects/routes.py)). It used to exist in two
+   copies; removing the `ai` blueprint in 1.6.0 left just this one.
 6. **The side menu queries the database on every render** ([app/__init__.py:57-173](../app/__init__.py#L57-L173)) —
    a few queries added to every HTML page; wrapped in `try/except` so it doesn't break the view.
 7. **Save on tab close** — `edit_project` recognizes the `_beacon=1` field and responds "silently"
@@ -119,8 +118,6 @@ The schema in the code matches the latest migration (`20260705_0015`).
   Don't change this logic in passing.
 - **`OPENAI_API_KEY` and the `requests` package** — present but unused. Don't build assumptions
   on them; don't remove them without confirming with the repo owner.
-- **The `ai` module name** — despite the name it has no AI integration; it's a manual daily-plan
-  builder. Don't "fix" the name.
 - **UTC time handling** in [app/time_tracking/service.py](../app/time_tracking/service.py) — dates are stored
   naive as UTC and converted only at display time. Keep this pattern (`ensure_utc`); don't mix
   timezones in the database.

@@ -2,13 +2,13 @@
 
 `app.db` is a ready-made SQLite database for the read-only demo: one account, six projects
 covering every flag the UI can show, today's A/B/C slots plus two future sessions, a timeline
-with a backlog group and a note, two weeks of tracked work sessions, and a saved daily plan.
+with a backlog group and a note, and two weeks of tracked work sessions.
 
 | | |
 |---|---|
 | Email | `demo@example.com` |
 | Password | `demo` |
-| Schema | at migration `20260808_0016` |
+| Schema | at migration `20260809_0017` |
 
 It is a convenience copy, not the source of truth: it was produced by
 `flask --app run.py seed-demo`, and that command is what a deployed demo runs on first boot

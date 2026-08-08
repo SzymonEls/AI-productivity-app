@@ -1,7 +1,7 @@
-const VERSION = "pwa-network-first-v1";
+const VERSION = "pwa-network-first-v2";
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
-const START_URL = "/projects/dashboard?view=timeline";
+const START_URL = "/";
 const PRECACHE_URLS = [
   START_URL,
   "/manifest.webmanifest",

@@ -1,9 +1,8 @@
 # Productivity app
 
 A self-hosted Flask app for planning the week: projects with a Markdown plan, a drag-and-drop
-timeline, a daily plan and a stopwatch for tracked time. One SQLite file, one container, no
-external services. AI-assisted planning is coming soon — today the daily plan is put together
-by hand.
+timeline, three project slots a day and a stopwatch for tracked time. One SQLite file, one
+container, no external services.
 
 ![The project view: a Markdown plan rendered as colour-coded, checkable sections](https://raw.githubusercontent.com/SzymonEls/AI-productivity-app/main/docs/productivity.png)
 
@@ -14,7 +13,9 @@ by hand.
   section can be archived out of the plan without leaving the page.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
-- **Daily plan** — pick today's projects and their tasks, get one plan document you can tick off.
+- **Day slots** — every day has slots A, B and an optional C, one project each. The home page
+  shows what is in them, the first heading of each plan and today's tracked time against a target.
+- **Schedule** — a calendar card per day that has something booked, seven days ahead in the planner.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.

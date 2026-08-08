@@ -28,8 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import DailyPlan, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
-    from .ai.routes import ai_bp
+    from .models import Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
@@ -37,7 +36,6 @@ def create_app(config_class=Config):
     from .time_tracking.routes import time_tracking_bp
 
     app.register_blueprint(main_bp)
-    app.register_blueprint(ai_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)

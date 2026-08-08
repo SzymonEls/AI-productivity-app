@@ -11,7 +11,7 @@ auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
 @auth_bp.route("/register", methods=["GET", "POST"])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for("projects.dashboard"))
+        return redirect(url_for("main.home"))
     if not current_app.config.get("REGISTRATION_ENABLED", True):
         flash("Registration is currently disabled.", "warning")
         return redirect(url_for("auth.login"))
@@ -44,7 +44,7 @@ def register():
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("projects.dashboard"))
+        return redirect(url_for("main.home"))
 
     default_login_email = current_app.config.get("DEFAULT_LOGIN_EMAIL", "")
     default_login_password = current_app.config.get("DEFAULT_LOGIN_PASSWORD", "")
@@ -60,7 +60,7 @@ def login():
             flash("Welcome back.", "success")
 
             next_page = request.args.get("next")
-            return redirect(next_page or url_for("projects.dashboard"))
+            return redirect(next_page or url_for("main.home"))
 
         flash("Invalid email or password.", "danger")
         default_login_email = email
@@ -93,7 +93,7 @@ def change_password():
             current_user.set_password(new_password)
             db.session.commit()
             flash("Your password has been updated.", "success")
-            return redirect(url_for("projects.dashboard"))
+            return redirect(url_for("main.home"))
 
     return render_template("auth/change_password.html")
 

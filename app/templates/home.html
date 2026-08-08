@@ -4,44 +4,95 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="card shadow-sm h-100">
-            <div class="card-body p-4">
-                {% if daily_plan %}
-                    <div class="plan-chip mb-3">
-                        <span class="badge text-bg-primary">Today's plan</span>
-                        <span class="text-muted small">{{ daily_plan.updated_at | naturaltime }}</span>
+<div class="dashboard-page day-slots-page">
+    <section class="dashboard-section dashboard-header-section">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h5 mb-0">Today</h1>
+                <span class="text-muted small">{{ today.strftime("%A, %d %B") }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
+                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="day-slots-layout">
+        <section class="day-slots-main">
+            {% for card in slot_cards %}
+                {% set is_optional = card.slot not in timed_slots %}
+                <article class="slot-card{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}">
+                    <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
+                    <div class="slot-card-body">
+                        {% if card.project %}
+                            <div class="slot-card-heading">
+                                <a class="slot-card-title" href="{{ url_for('projects.project_detail', project_id=card.project.id) }}">
+                                    {{ card.project.title }}
+                                </a>
+                                {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
+                                {% if card.project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                            </div>
+                            {% if card.plan_heading %}
+                                <p class="slot-card-step mb-0">{{ card.plan_heading }}</p>
+                            {% else %}
+                                <p class="slot-card-step slot-card-step-empty mb-0">No <code>#</code> section in the plan yet</p>
+                            {% endif %}
+                        {% else %}
+                            <p class="slot-card-step mb-0">Nothing planned for slot {{ card.slot }}.</p>
+                        {% endif %}
                     </div>
-                    <h2 class="h4">{{ daily_plan.title }}</h2>
-                    <div class="markdown-content">
-                        {{ daily_plan.content | without_repeated_title(daily_plan.title) | markdown }}
+                    <div class="slot-card-side">
+                        {% if card.project and card.shows_time %}
+                            <span class="slot-card-time">
+                                {{ card.tracked_label }}{% if card.target_label %} <span class="slot-card-target">/ {{ card.target_label }}</span>{% endif %}
+                            </span>
+                        {% endif %}
+                        {% if card.project %}
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                data-plan-session
+                                data-project-id="{{ card.project.id }}"
+                                data-project-title="{{ card.project.title }}"
+                            >{{ icon("calendar") }}Plan</button>
+                        {% endif %}
                     </div>
+                </article>
+            {% endfor %}
+        </section>
+
+        <aside class="day-slots-aside">
+            <div class="dashboard-section">
+                <h2 class="h6 mb-1">Not scheduled</h2>
+                <p class="text-muted small mb-3">No session planned after today.</p>
+                {% if unplanned_projects %}
+                    <ul class="unplanned-list">
+                        {% for project in unplanned_projects %}
+                            <li class="unplanned-item">
+                                <div class="unplanned-item-text">
+                                    <a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a>
+                                    <span class="text-muted small">{{ project_last_session_labels.get(project.id, "") }}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    data-plan-session
+                                    data-project-id="{{ project.id }}"
+                                    data-project-title="{{ project.title }}"
+                                >Plan</button>
+                            </li>
+                        {% endfor %}
+                    </ul>
                 {% else %}
-                    <h1 class="h2 mb-3">Daily plan</h1>
-                    <p class="text-muted mb-0">There is no saved daily plan yet.</p>
+                    <p class="text-muted small mb-0">Every project has a next session planned.</p>
                 {% endif %}
             </div>
-        </div>
-    </div>
-
-    <div class="col-lg-4">
-        <div class="card shadow-sm h-100">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                    <h2 class="h4 mb-0">Quick Access</h2>
-                </div>
-                <div class="d-grid gap-2 mb-4">
-                    <a class="btn btn-outline-secondary" href="{{ url_for('projects.dashboard') }}">{{ icon("dashboard") }}Open Dashboard</a>
-                    <a class="btn btn-primary" href="{{ url_for('ai.manual_daily_plan') }}">{{ icon("calendar") }}Daily plan</a>
-                </div>
-
-                <p class="text-muted mb-0">Saving a new daily plan replaces the one shown here.</p>
-                <br />
-                <p class="text-muted mb-0">v{{ app_version }}</p>
-            </div>
-        </div>
+        </aside>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 {% endblock %}

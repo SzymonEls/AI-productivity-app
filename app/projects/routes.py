@@ -39,27 +39,17 @@ def _get_user_project_or_404(project_id):
 @projects_bp.route("/dashboard")
 @login_required
 def dashboard():
-    """Today's A/B/C slots, plus the projects with no next session planned."""
+    """
+    Kept only so existing links keep working.
 
-    today = today_local()
-    booked = slots_for_date(current_user.id, today)
-    # One query for every project's time today, rather than one per slot.
-    totals = daily_totals_by_project(current_user.id, today)
-
-    slot_cards = [_serialize_slot_card(slot, booked[slot], totals) for slot in SLOTS]
-    unplanned = unscheduled_projects(current_user.id)
-
-    return render_template(
-        "projects/dashboard.html",
-        today=today,
-        slot_cards=slot_cards,
-        timed_slots=TIMED_SLOTS,
-        unplanned_projects=unplanned,
-        project_last_session_labels=project_last_session_labels(current_user.id, unplanned),
-    )
+    This view moved to the home page in 1.6.0. Bookmarks, the redirects spread
+    around the code, and above all the start_url baked into already-installed
+    PWAs still point here, so the route stays as a redirect rather than a 404.
+    """
+    return redirect(url_for("main.home"))
 
 
-def _serialize_slot_card(slot, booking, totals):
+def serialize_slot_card(slot, booking, totals):
     """One slot for the dashboard. Slot C deliberately carries no time."""
 
     project = booking.project if booking else None
@@ -238,7 +228,7 @@ def archive_project(project_id):
     project.is_archived = True
     db.session.commit()
     flash("Project archived.", "info")
-    return redirect(url_for("projects.dashboard"))
+    return redirect(url_for("main.home"))
 
 
 @projects_bp.route("/<int:project_id>/unarchive", methods=["POST"])
@@ -288,7 +278,7 @@ def create_project():
                     project=None,
                 )
             flash("Project created successfully.", "success")
-            return redirect(url_for("projects.dashboard"))
+            return redirect(url_for("main.home"))
 
     return render_template(
         "projects/project_form.html",
@@ -503,7 +493,7 @@ def delete_project(project_id):
     db.session.delete(project)
     db.session.commit()
     flash("Project deleted.", "info")
-    return redirect(url_for("projects.dashboard"))
+    return redirect(url_for("main.home"))
 
 
 @projects_bp.route("/timeline", methods=["POST"])

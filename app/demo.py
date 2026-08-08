@@ -23,7 +23,6 @@ from config import BASE_DIR
 from .extensions import db
 from .markdown_utils import render_markdown
 from .models import (
-    DailyPlan,
     Project,
     ProjectDaySlot,
     ProjectTimeEntry,
@@ -116,7 +115,7 @@ def _register_write_guard(app):
             return jsonify({"ok": False, "message": message}), 403
 
         flash(message, "warning")
-        return redirect(request.referrer or url_for("projects.dashboard"))
+        return redirect(request.referrer or url_for("main.home"))
 
 
 def _register_seed_command(app):
@@ -160,7 +159,6 @@ def seed_demo_data(app, reset=False):
         _seed_timeline(user, projects)
         _seed_day_slots(user, projects)
         _seed_time_entries(user, projects)
-        _seed_daily_plan(user, projects)
 
         db.session.commit()
     except SQLAlchemyError as error:
@@ -434,35 +432,4 @@ def _seed_time_entries(user, projects):
                 )
             )
 
-    db.session.flush()
-
-
-def _seed_daily_plan(user, projects):
-    """Save the single daily plan so the home page is not empty."""
-    titles = [project.title for project in projects if not project.is_archived][:3]
-    while len(titles) < 3:
-        titles.append("Focus block")
-
-    db.session.add(
-        DailyPlan(
-            owner=user,
-            title=f"Plan for {datetime.now(timezone.utc).date().isoformat()}",
-            target_date=datetime.now(timezone.utc).date(),
-            content=(
-                f"# {titles[0]}\n"
-                "**Short goal:** ship the read-only demo\n\n"
-                "- [x] Block writes behind one environment flag\n"
-                "- [ ] Point the subdomain at the container\n"
-                "\n"
-                f"# {titles[1]}\n"
-                "**Short goal:** one focused hour\n\n"
-                "- [ ] Finish the chapter on lifetimes\n"
-                "- [ ] Write down what did not click\n"
-                "\n"
-                f"# {titles[2]}\n"
-                "**Short goal:** keep it ticking\n\n"
-                "- [ ] Check the backup ran\n"
-            ),
-        )
-    )
     db.session.flush()

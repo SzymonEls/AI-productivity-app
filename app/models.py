@@ -23,12 +23,6 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
         lazy=True,
     )
-    daily_plan = db.relationship(
-        "DailyPlan",
-        back_populates="owner",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
     timeline_groups = db.relationship(
         "ProjectTimelineGroup",
         back_populates="owner",
@@ -234,27 +228,6 @@ class ProjectDaySlot(db.Model):
         db.Index("ix_project_day_slots_user_date", "user_id", "slot_date"),
         db.Index("ix_project_day_slots_project_date", "project_id", "slot_date"),
     )
-
-
-class DailyPlan(db.Model):
-    """The single saved daily plan for a user; replaced each time a new one is saved."""
-
-    __tablename__ = "daily_plans"
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
-    title = db.Column(db.String(200), nullable=False)
-    target_date = db.Column(db.Date, nullable=True)
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    updated_at = db.Column(
-        db.DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
-    )
-
-    owner = db.relationship("User", back_populates="daily_plan")
 
 
 @login_manager.user_loader

@@ -72,7 +72,7 @@
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
                 </li>
-                <li><a class="dropdown-item" href="{{ url_for('projects.dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to dashboard</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.home') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to home</a></li>
                 <li><hr class="dropdown-divider"></li>
                 {% if not project.is_archived %}
                     <li>

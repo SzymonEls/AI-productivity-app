@@ -11,7 +11,7 @@
                 <h1 class="h5 mb-0">Schedule</h1>
                 <span class="text-muted small">Days with something planned, from today on.</span>
             </div>
-            <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary btn-sm">{{ icon("home") }}Today</a>
+            <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary btn-sm">{{ icon("home") }}Today</a>
         </div>
     </section>
 
@@ -61,7 +61,7 @@
         <section class="dashboard-section">
             <p class="text-muted mb-0">
                 Nothing is planned yet. Pick a project on
-                <a href="{{ url_for('projects.dashboard') }}">Today</a> and use &ldquo;Plan&rdquo; to book a session.
+                <a href="{{ url_for('main.home') }}">Today</a> and use &ldquo;Plan&rdquo; to book a session.
             </p>
         </section>
     {% endif %}
