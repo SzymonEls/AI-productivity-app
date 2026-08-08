@@ -24,6 +24,7 @@ a manual daily plan, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page + PWA files (manifest, service worker). |
 | [app/ai/](../app/ai/) | **Manual** daily-plan builder (despite the name — no AI). |
@@ -57,6 +58,11 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
 - **ProjectTimelineGroup** — a group (column) on the timeline; the `is_backlog` flag = "off timeline".
 - **ProjectTimelineItem** — a tile: a project or a note (`item_type` = `"project"`/`"note"`).
+- **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
+  Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
+  `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
+  empty booking, not history. The rule "one slot today plus one in the future" is enforced in
+  [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 - **DailyPlan** — **one plan per user** (`user_id` unique), overwritten on every save.
 
 The schema in the code matches the latest migration (`20260705_0015`).

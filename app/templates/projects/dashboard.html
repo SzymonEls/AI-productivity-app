@@ -1,641 +1,98 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 
-{% block title %}Dashboard{% endblock %}
+{% block title %}Today{% endblock %}
 
 {% block content %}
-<div class="dashboard-page">
-<section class="dashboard-section dashboard-header-section">
-    <div class="d-flex justify-content-between align-items-center gap-3">
-        <div class="d-flex align-items-center gap-2">
-            <h1 class="h5 mb-0">Your Projects</h1>
-            <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
-        </div>
-        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
-    </div>
-    {% if projects %}
-    <div class="project-view-toolbar dashboard-header-toolbar">
-        <div class="timeline-edit-actions" data-timeline-edit-actions>
-            <div class="form-check form-switch timeline-private-toggle">
-                <input class="form-check-input" type="checkbox" id="hidePrivateTimelineItems" data-hide-private-timeline>
-                <label class="form-check-label small" for="hidePrivateTimelineItems">Hide private projects</label>
+<div class="dashboard-page day-slots-page">
+    <section class="dashboard-section dashboard-header-section">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h5 mb-0">Today</h1>
+                <span class="text-muted small">{{ today.strftime("%A, %d %B") }}</span>
             </div>
-            <div class="form-check form-switch timeline-stats-toggle">
-                <input class="form-check-input" type="checkbox" id="showProjectStatsTimelineItems" data-show-project-stats-timeline>
-                <label class="form-check-label small" for="showProjectStatsTimelineItems">Show last session &amp; frequency</label>
+            <div class="d-flex align-items-center gap-2">
+                <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
+                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
             </div>
-            <button type="button" class="btn btn-outline-secondary btn-sm" data-timeline-add-group>{{ icon("plus") }}Add group</button>
-            <button type="button" class="btn btn-outline-primary btn-sm" data-timeline-edit-toggle>{{ icon("pencil") }}Edit timeline</button>
-            <button type="button" class="btn btn-primary btn-sm d-none" data-timeline-save>{{ icon("check") }}Save timeline</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-timeline-cancel>{{ icon("x") }}Cancel</button>
-        </div>
-    </div>
-    {% endif %}
-</section>
-
-{% if projects %}
-    <script type="application/json" id="project-timeline-data">
-        {{ timeline_data | tojson }}
-    </script>
-    <script type="application/json" id="project-backlog-data">
-        {{ backlog_data | tojson }}
-    </script>
-
-    <section class="project-timeline-panel" data-save-url="{{ url_for('projects.save_timeline') }}">
-        <div class="project-timeline-layout" data-timeline-layout>
-        <section class="dashboard-section project-timeline-section">
-        <div class="project-timeline" data-timeline-groups>
-            {% for group in timeline_groups %}
-                <section class="timeline-group" data-timeline-group data-group-id="{{ group.id }}">
-                    <div class="timeline-group-marker"></div>
-                    <div class="timeline-group-content">
-                        <div class="timeline-group-header {% if not group.name %}d-none{% endif %}" data-group-header>
-                            <h2 class="timeline-group-title {% if not group.name %}d-none{% endif %}" data-group-title>{{ group.name or "" }}</h2>
-                            <input class="form-control form-control-sm timeline-group-name d-none" value="{{ group.name or "" }}" data-group-name aria-label="Group name">
-                            <div class="timeline-group-move d-none" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
-                            </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
-                        </div>
-                        <div class="timeline-items" data-timeline-items>{% for item in group.items %}
-                                {% if item.item_type == "project" and item.project and not item.project.is_archived %}
-                                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}" data-is-private="{{ 1 if item.project.is_private else 0 }}">
-                                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
-                                        <div class="timeline-item-main">
-                                            <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}" data-private-mask-title>{{ item.project.title }}</a>
-                                            <div class="timeline-item-meta d-none" data-project-meta>
-                                                {% if item.project.frequency %}<span class="timeline-item-text preserve-lines">{{ item.project.frequency }}</span>{% endif %}
-                                                <span class="manual-last-session">{{ project_last_session_labels.get(item.project_id, "Last session: none") }}</span>
-                                            </div>
-                                        </div>
-                                    </article>
-                                {% elif item.item_type == "note" %}
-                                    <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="note" data-is-private="{{ 1 if item.is_private else 0 }}">
-                                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
-                                        <div class="timeline-item-main">
-                                            <strong class="timeline-item-title" data-note-title-display data-private-mask-title>{{ item.title or "Note" }}</strong>
-                                            <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>{{ item.body }}</p>
-                                            <div class="timeline-note-fields d-none">
-                                                <input class="form-control form-control-sm" value="{{ item.title or "" }}" data-note-title aria-label="Note title">
-                                                <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Note content">{{ item.body or "" }}</textarea>
-                                                <div class="form-check timeline-note-privacy">
-                                                    <input class="form-check-input" type="checkbox" data-note-private aria-label="Mark block as private" {% if item.is_private %}checked{% endif %}>
-                                                    <label class="form-check-label small">Private</label>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <button type="button" class="btn btn-outline-primary btn-sm d-none" data-convert-note>Convert to project</button>
-                                        <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
-                                    </article>
-                                {% endif %}
-                            {% endfor %}</div>
-                        <div class="timeline-group-add-actions">
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project d-none" data-add-project>Add project</button>
-                        </div>
-                    </div>
-                </section>
-            {% endfor %}
-        </div>
-        </section>
-        <aside class="dashboard-section timeline-backlog" data-timeline-backlog>
-            <div class="timeline-backlog-header">
-                <h2 class="timeline-backlog-title">Off timeline</h2>
-                <p class="timeline-backlog-hint">Projects parked outside the timeline. Drag items here while editing.</p>
-            </div>
-            <div class="timeline-items timeline-backlog-items" data-timeline-items data-timeline-backlog-items>{% for item in backlog_group.items %}
-                    {% if item.item_type == "project" and item.project and not item.project.is_archived %}
-                        <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="{{ item.id }}" data-item-type="project" data-project-id="{{ item.project_id }}" data-is-private="{{ 1 if item.project.is_private else 0 }}">
-                            <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
-                            <div class="timeline-item-main">
-                                <a class="timeline-item-title" href="{{ url_for('projects.project_detail', project_id=item.project_id) }}" data-private-mask-title>{{ item.project.title }}</a>
-                                <div class="timeline-item-meta d-none" data-project-meta>
-                                    {% if item.project.frequency %}<span class="timeline-item-text preserve-lines">{{ item.project.frequency }}</span>{% endif %}
-                                    <span class="manual-last-session">{{ project_last_session_labels.get(item.project_id, "Last session: none") }}</span>
-                                </div>
-                            </div>
-                        </article>
-                    {% endif %}
-                {% endfor %}</div>
-            <p class="timeline-backlog-empty {% if backlog_group.items %}d-none{% endif %}" data-timeline-backlog-empty>No projects off the timeline.</p>
-        </aside>
         </div>
     </section>
 
-{% else %}
-    <div class="empty-state text-center p-5 bg-light rounded-3">
-        {{ icon("inbox", 40) }}
-        <h2 class="h4">No projects yet</h2>
-        <p class="text-muted">Create your first project to start organizing your goals.</p>
-        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Your First Project</a>
-    </div>
-{% endif %}
-</div>
-
-<script>
-    (() => {
-        const timelinePanel = document.querySelector(".project-timeline-panel");
-        const timelineRoot = document.querySelector("[data-timeline-groups]");
-        const backlogRoot = document.querySelector("[data-timeline-backlog-items]");
-        const backlogEmpty = document.querySelector("[data-timeline-backlog-empty]");
-        const backlogDataNode = document.getElementById("project-backlog-data");
-        const timelineDataNode = document.getElementById("project-timeline-data");
-        const editToggle = document.querySelector("[data-timeline-edit-toggle]");
-        const saveButton = document.querySelector("[data-timeline-save]");
-        const cancelButton = document.querySelector("[data-timeline-cancel]");
-        const addGroupButton = document.querySelector("[data-timeline-add-group]");
-        const hidePrivateToggle = document.querySelector("[data-hide-private-timeline]");
-        const showProjectStatsToggle = document.querySelector("[data-show-project-stats-timeline]");
-
-        if (!timelinePanel || !timelineRoot || !timelineDataNode) {
-            return;
-        }
-
-        let savedTimeline = JSON.parse(timelineDataNode.textContent);
-        let savedBacklog = backlogDataNode ? (JSON.parse(backlogDataNode.textContent).items || []) : [];
-        let editMode = false;
-        let draggedItem = null;
-
-        const escapeHtml = (value) => String(value ?? "")
-            .replaceAll("&", "&amp;")
-            .replaceAll("<", "&lt;")
-            .replaceAll(">", "&gt;")
-            .replaceAll('"', "&quot;");
-
-        const privateLabel = "(private)";
-
-        const renderTimeline = (groups) => {
-            timelineRoot.innerHTML = groups.map((group) => `
-                <section class="timeline-group" data-timeline-group data-group-id="${escapeHtml(group.id ?? "")}">
-                    <div class="timeline-group-marker"></div>
-                    <div class="timeline-group-content">
-                        <div class="timeline-group-header ${group.name ? "" : "d-none"}" data-group-header>
-                            <h2 class="timeline-group-title ${group.name ? "" : "d-none"}" data-group-title>${escapeHtml(group.name || "")}</h2>
-                            <input class="form-control form-control-sm timeline-group-name d-none" value="${escapeHtml(group.name || "")}" data-group-name aria-label="Group name">
-                            <div class="timeline-group-move d-none" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
+    <div class="day-slots-layout">
+        <section class="day-slots-main">
+            {% for card in slot_cards %}
+                {% set is_optional = card.slot not in timed_slots %}
+                <article class="slot-card{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}">
+                    <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
+                    <div class="slot-card-body">
+                        {% if card.project %}
+                            <div class="slot-card-heading">
+                                <a class="slot-card-title" href="{{ url_for('projects.project_detail', project_id=card.project.id) }}">
+                                    {{ card.project.title }}
+                                </a>
+                                {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
+                                {% if card.project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
                             </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-delete-group>Remove</button>
-                        </div>
-                        <div class="timeline-items" data-timeline-items>${(group.items || []).map(renderTimelineItem).join("")}</div>
-                        <div class="timeline-group-add-actions">
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note d-none" data-add-note>Add text block</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project d-none" data-add-project>Add project</button>
-                        </div>
+                            {% if card.plan_heading %}
+                                <p class="slot-card-step mb-0">{{ card.plan_heading }}</p>
+                            {% else %}
+                                <p class="slot-card-step slot-card-step-empty mb-0">No <code>#</code> section in the plan yet</p>
+                            {% endif %}
+                        {% else %}
+                            <p class="slot-card-step mb-0">Nothing planned for slot {{ card.slot }}.</p>
+                        {% endif %}
                     </div>
-                </section>
-            `).join("");
-            setEditMode(editMode);
-            updatePrivacyMask();
-            updateProjectStatsVisibility();
-        };
-
-        const renderBacklog = (items) => {
-            if (!backlogRoot) {
-                return;
-            }
-            backlogRoot.innerHTML = (items || []).map(renderTimelineItem).join("");
-            setEditMode(editMode);
-            updatePrivacyMask();
-            updateProjectStatsVisibility();
-            updateBacklogEmpty();
-        };
-
-        const updateBacklogEmpty = () => {
-            if (!backlogEmpty || !backlogRoot) {
-                return;
-            }
-            const hasItems = backlogRoot.querySelector("[data-timeline-item]") !== null;
-            backlogEmpty.classList.toggle("d-none", hasItems);
-        };
-
-        const renderTimelineItem = (item) => {
-            if (item.type === "project") {
-                return `
-                    <article class="timeline-item timeline-project-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="project" data-project-id="${escapeHtml(item.project_id ?? "")}" data-is-private="${item.is_private ? "1" : "0"}">
-                        <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
-                        <div class="timeline-item-main">
-                            <a class="timeline-item-title" href="${escapeHtml(item.url || "#")}" data-private-mask-title>${escapeHtml(item.title || "Project")}</a>
-                            <div class="timeline-item-meta d-none" data-project-meta>
-                                ${item.frequency ? `<span class="timeline-item-text preserve-lines">${escapeHtml(item.frequency)}</span>` : ""}
-                                <span class="manual-last-session">${escapeHtml(item.last_session_label || "Last session: none")}</span>
-                            </div>
-                        </div>
-                    </article>
-                `;
-            }
-
-            return `
-                <article class="timeline-item timeline-note-item" draggable="false" data-timeline-item data-item-id="${escapeHtml(item.id ?? "")}" data-item-type="note" data-is-private="${item.is_private ? "1" : "0"}">
-                    <button type="button" class="timeline-drag-handle d-none" data-drag-handle aria-label="Move">::</button>
-                    <div class="timeline-item-main">
-                        <strong class="timeline-item-title" data-note-title-display data-private-mask-title>${escapeHtml(item.title || "Note")}</strong>
-                        <p class="timeline-item-text preserve-lines" data-note-body-display data-private-mask-body>${escapeHtml(item.body || "")}</p>
-                        <div class="timeline-note-fields d-none">
-                            <input class="form-control form-control-sm" value="${escapeHtml(item.title || "")}" data-note-title aria-label="Note title">
-                            <textarea class="form-control form-control-sm" rows="2" data-note-body aria-label="Note content">${escapeHtml(item.body || "")}</textarea>
-                            <div class="form-check timeline-note-privacy">
-                                <input class="form-check-input" type="checkbox" data-note-private aria-label="Mark block as private" ${item.is_private ? "checked" : ""}>
-                                <label class="form-check-label small">Private</label>
-                            </div>
-                        </div>
+                    <div class="slot-card-side">
+                        {% if card.project and card.shows_time %}
+                            <span class="slot-card-time">
+                                {{ card.tracked_label }}{% if card.target_label %} <span class="slot-card-target">/ {{ card.target_label }}</span>{% endif %}
+                            </span>
+                        {% endif %}
+                        {% if card.project %}
+                            <button
+                                type="button"
+                                class="btn btn-outline-secondary btn-sm"
+                                data-plan-session
+                                data-project-id="{{ card.project.id }}"
+                                data-project-title="{{ card.project.title }}"
+                            >{{ icon("calendar") }}Plan</button>
+                        {% endif %}
                     </div>
-                    <button type="button" class="btn btn-outline-primary btn-sm d-none" data-convert-note>Convert to project</button>
-                    <button type="button" class="btn btn-outline-danger btn-sm d-none" data-delete-note>Delete</button>
                 </article>
-            `;
-        };
+            {% endfor %}
+        </section>
 
-        const updatePrivacyMask = () => {
-            const shouldMask = Boolean(hidePrivateToggle?.checked);
-            timelinePanel.querySelectorAll("[data-timeline-item]").forEach((item) => {
-                const isPrivate = item.dataset.isPrivate === "1";
-                item.classList.toggle("is-private-masked", shouldMask && isPrivate);
+        <aside class="day-slots-aside">
+            <div class="dashboard-section">
+                <h2 class="h6 mb-1">Not scheduled</h2>
+                <p class="text-muted small mb-3">No session planned after today.</p>
+                {% if unplanned_projects %}
+                    <ul class="unplanned-list">
+                        {% for project in unplanned_projects %}
+                            <li class="unplanned-item">
+                                <div class="unplanned-item-text">
+                                    <a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a>
+                                    <span class="text-muted small">{{ project_last_session_labels.get(project.id, "") }}</span>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sm"
+                                    data-plan-session
+                                    data-project-id="{{ project.id }}"
+                                    data-project-title="{{ project.title }}"
+                                >Plan</button>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted small mb-0">Every project has a next session planned.</p>
+                {% endif %}
+            </div>
+        </aside>
+    </div>
+</div>
+{% endblock %}
 
-                const titleNode = item.querySelector("[data-private-mask-title]");
-                if (titleNode) {
-                    if (!titleNode.dataset.originalText) {
-                        titleNode.dataset.originalText = titleNode.textContent;
-                    }
-                    titleNode.textContent = shouldMask && isPrivate ? privateLabel : titleNode.dataset.originalText;
-                }
-
-                const bodyNode = item.querySelector("[data-private-mask-body]");
-                if (bodyNode) {
-                    if (!bodyNode.dataset.originalText) {
-                        bodyNode.dataset.originalText = bodyNode.textContent;
-                    }
-                    bodyNode.textContent = shouldMask && isPrivate ? "" : bodyNode.dataset.originalText;
-                }
-            });
-        };
-
-        const updateProjectStatsVisibility = () => {
-            const shouldShow = Boolean(showProjectStatsToggle?.checked);
-            timelinePanel.querySelectorAll("[data-project-meta]").forEach((meta) => {
-                meta.classList.toggle("d-none", !shouldShow);
-            });
-        };
-
-        const updateGroupMoveButtons = () => {
-            const groups = Array.from(timelineRoot.querySelectorAll("[data-timeline-group]"));
-            groups.forEach((group, index) => {
-                const moveUpButton = group.querySelector("[data-move-group='up']");
-                const moveDownButton = group.querySelector("[data-move-group='down']");
-                if (moveUpButton) {
-                    moveUpButton.disabled = !editMode || index === 0;
-                }
-                if (moveDownButton) {
-                    moveDownButton.disabled = !editMode || index === groups.length - 1;
-                }
-            });
-        };
-
-        const setEditMode = (enabled) => {
-            editMode = enabled;
-            editToggle?.classList.toggle("d-none", enabled);
-            saveButton?.classList.toggle("d-none", !enabled);
-            cancelButton?.classList.toggle("d-none", !enabled);
-            addGroupButton?.classList.toggle("d-none", !enabled);
-            timelineRoot.classList.toggle("is-editing", enabled);
-            backlogRoot?.classList.toggle("is-editing", enabled);
-            timelinePanel.classList.toggle("is-editing", enabled);
-
-            timelinePanel.querySelectorAll("[data-timeline-item]").forEach((item) => {
-                item.draggable = enabled;
-                item.querySelector("[data-drag-handle]")?.classList.toggle("d-none", !enabled);
-            });
-            timelineRoot.querySelectorAll("[data-group-header]").forEach((header) => {
-                const title = header.querySelector("[data-group-title]");
-                const hasTitle = Boolean(title?.textContent.trim());
-                header.classList.toggle("d-none", !enabled && !hasTitle);
-            });
-            timelineRoot.querySelectorAll("[data-group-title]").forEach((title) => {
-                const hasTitle = Boolean(title.textContent.trim());
-                title.classList.toggle("d-none", enabled || !hasTitle);
-            });
-            timelineRoot.querySelectorAll("[data-group-name]").forEach((input) => input.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-group-move-controls]").forEach((controls) => controls.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-delete-group]").forEach((button) => button.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-add-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-add-project]").forEach((button) => button.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-convert-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-delete-note]").forEach((button) => button.classList.toggle("d-none", !enabled));
-            timelineRoot.querySelectorAll("[data-note-title-display], [data-note-body-display]").forEach((node) => node.classList.toggle("d-none", enabled));
-            timelineRoot.querySelectorAll(".timeline-note-fields").forEach((fields) => fields.classList.toggle("d-none", !enabled));
-            updateGroupMoveButtons();
-            updatePrivacyMask();
-        };
-
-        const createNoteElement = () => {
-            const wrapper = document.createElement("div");
-            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Note", body: "" }).trim();
-            return wrapper.firstElementChild;
-        };
-
-        const createProjectDraftElement = () => {
-            const wrapper = document.createElement("div");
-            wrapper.innerHTML = renderTimelineItem({ type: "note", title: "Project", body: "" }).trim();
-            const item = wrapper.firstElementChild;
-            item.classList.add("timeline-project-draft-item");
-            item.dataset.convertToProject = "1";
-            const titleInput = item.querySelector("[data-note-title]");
-            if (titleInput) {
-                titleInput.placeholder = "Project name";
-            }
-            const bodyInput = item.querySelector("[data-note-body]");
-            if (bodyInput) {
-                bodyInput.placeholder = "Short goal / description (optional)";
-            }
-            item.querySelector("[data-convert-note]")?.remove();
-            return item;
-        };
-
-        const createGroupElement = () => {
-            const wrapper = document.createElement("div");
-            wrapper.innerHTML = `
-                <section class="timeline-group" data-timeline-group data-group-id="">
-                    <div class="timeline-group-marker"></div>
-                    <div class="timeline-group-content">
-                        <div class="timeline-group-header">
-                            <h2 class="timeline-group-title d-none" data-group-title>Group</h2>
-                            <input class="form-control form-control-sm timeline-group-name" value="" data-group-name aria-label="Group name" placeholder="Group name">
-                            <div class="timeline-group-move" data-group-move-controls>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="up" aria-label="Move section up">↑</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-move-group="down" aria-label="Move section down">↓</button>
-                            </div>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" data-delete-group>Remove</button>
-                        </div>
-                        <div class="timeline-items" data-timeline-items></div>
-                        <div class="timeline-group-add-actions">
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-note" data-add-note>Add text block</button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm timeline-add-project" data-add-project>Add project</button>
-                        </div>
-                    </div>
-                </section>
-            `.trim();
-            return wrapper.firstElementChild;
-        };
-
-        const getDropTarget = (container, x, y) => {
-            let closestItem = null;
-            let closestDistance = Number.POSITIVE_INFINITY;
-
-            container.querySelectorAll("[data-timeline-item]:not(.is-dragging)").forEach((item) => {
-                const rect = item.getBoundingClientRect();
-                const distance = Math.hypot((rect.left + rect.width / 2) - x, (rect.top + rect.height / 2) - y);
-                if (distance < closestDistance) {
-                    closestDistance = distance;
-                    closestItem = item;
-                }
-            });
-
-            return closestItem;
-        };
-
-        const isBacklogContainer = (container) => container?.hasAttribute("data-timeline-backlog-items");
-
-        const setupTimelineControls = () => {
-            timelinePanel.addEventListener("dragstart", (event) => {
-                const item = event.target.closest("[data-timeline-item]");
-                if (!editMode || !item) {
-                    event.preventDefault();
-                    return;
-                }
-                draggedItem = item;
-                item.classList.add("is-dragging");
-                event.dataTransfer.effectAllowed = "move";
-            });
-
-            timelinePanel.addEventListener("dragend", () => {
-                draggedItem?.classList.remove("is-dragging");
-                draggedItem = null;
-                timelinePanel.querySelectorAll(".is-drag-over").forEach((node) => node.classList.remove("is-drag-over"));
-                updateBacklogEmpty();
-            });
-
-            timelinePanel.addEventListener("dragover", (event) => {
-                const container = event.target.closest("[data-timeline-items]");
-                if (!editMode || !draggedItem || !container) {
-                    return;
-                }
-                // Only projects can be parked off the timeline; notes stay on it.
-                if (isBacklogContainer(container) && draggedItem.dataset.itemType !== "project") {
-                    return;
-                }
-                event.preventDefault();
-                container.classList.add("is-drag-over");
-                const dropTarget = getDropTarget(container, event.clientX, event.clientY);
-                if (dropTarget) {
-                    container.insertBefore(draggedItem, dropTarget);
-                } else {
-                    container.appendChild(draggedItem);
-                }
-            });
-
-            timelinePanel.addEventListener("dragleave", (event) => {
-                const container = event.target.closest("[data-timeline-items]");
-                if (container && !container.contains(event.relatedTarget)) {
-                    container.classList.remove("is-drag-over");
-                }
-            });
-
-            timelinePanel.addEventListener("drop", (event) => {
-                const container = event.target.closest("[data-timeline-items]");
-                if (container) {
-                    event.preventDefault();
-                    container.classList.remove("is-drag-over");
-                    updateBacklogEmpty();
-                }
-            });
-
-            backlogRoot?.addEventListener("click", (event) => {
-                if (editMode && event.target.closest(".timeline-item-title[href]")) {
-                    event.preventDefault();
-                }
-            });
-
-            timelineRoot.addEventListener("change", (event) => {
-                const privacyCheckbox = event.target.closest("[data-note-private]");
-                if (!privacyCheckbox) {
-                    return;
-                }
-
-                const item = privacyCheckbox.closest("[data-timeline-item]");
-                if (item) {
-                    item.dataset.isPrivate = privacyCheckbox.checked ? "1" : "0";
-                    updatePrivacyMask();
-                }
-            });
-
-            timelineRoot.addEventListener("click", (event) => {
-                if (editMode && event.target.closest(".timeline-item-title[href]")) {
-                    event.preventDefault();
-                    return;
-                }
-
-                const addNoteButton = event.target.closest("[data-add-note]");
-                if (addNoteButton) {
-                    const item = createNoteElement();
-                    addNoteButton.closest("[data-timeline-group]").querySelector("[data-timeline-items]").appendChild(item);
-                    setEditMode(true);
-                    item.querySelector("[data-note-title]")?.focus();
-                    return;
-                }
-
-                const addProjectButton = event.target.closest("[data-add-project]");
-                if (addProjectButton) {
-                    const item = createProjectDraftElement();
-                    addProjectButton.closest("[data-timeline-group]").querySelector("[data-timeline-items]").appendChild(item);
-                    setEditMode(true);
-                    item.querySelector("[data-note-title]")?.focus();
-                    return;
-                }
-
-                const deleteNoteButton = event.target.closest("[data-delete-note]");
-                if (deleteNoteButton) {
-                    deleteNoteButton.closest("[data-timeline-item]")?.remove();
-                    return;
-                }
-
-                const convertNoteButton = event.target.closest("[data-convert-note]");
-                if (convertNoteButton) {
-                    const item = convertNoteButton.closest("[data-timeline-item]");
-                    if (!item) {
-                        return;
-                    }
-                    item.dataset.convertToProject = "1";
-                    item.classList.add("is-converting-to-project");
-                    convertNoteButton.textContent = "Will become project";
-                    convertNoteButton.disabled = true;
-                    return;
-                }
-
-                const moveGroupButton = event.target.closest("[data-move-group]");
-                if (moveGroupButton) {
-                    const group = moveGroupButton.closest("[data-timeline-group]");
-                    if (!group) {
-                        return;
-                    }
-                    if (moveGroupButton.dataset.moveGroup === "up" && group.previousElementSibling) {
-                        timelineRoot.insertBefore(group, group.previousElementSibling);
-                    }
-                    if (moveGroupButton.dataset.moveGroup === "down" && group.nextElementSibling) {
-                        timelineRoot.insertBefore(group.nextElementSibling, group);
-                    }
-                    updateGroupMoveButtons();
-                    return;
-                }
-
-                const deleteGroupButton = event.target.closest("[data-delete-group]");
-                if (deleteGroupButton) {
-                    const group = deleteGroupButton.closest("[data-timeline-group]");
-                    const groups = Array.from(timelineRoot.querySelectorAll("[data-timeline-group]"));
-                    if (groups.length === 1) {
-                        group.querySelector("[data-group-name]").value = "";
-                        return;
-                    }
-                    const target = groups[groups.indexOf(group) - 1] || groups[groups.indexOf(group) + 1];
-                    const targetItems = target.querySelector("[data-timeline-items]");
-                    group.querySelectorAll("[data-timeline-item]").forEach((item) => targetItems.appendChild(item));
-                    group.remove();
-                    updateGroupMoveButtons();
-                }
-            });
-        };
-
-        const collectTimeline = () => ({
-            groups: Array.from(timelineRoot.querySelectorAll("[data-timeline-group]")).map((group) => ({
-                id: group.dataset.groupId || null,
-                name: group.querySelector("[data-group-name]")?.value.trim() || "",
-                items: Array.from(group.querySelectorAll("[data-timeline-item]")).map((item) => {
-                    if (item.dataset.itemType === "project") {
-                        return {
-                            id: item.dataset.itemId || null,
-                            type: "project",
-                            project_id: item.dataset.projectId,
-                        };
-                    }
-
-                    if (item.dataset.convertToProject === "1") {
-                        return {
-                            id: item.dataset.itemId || null,
-                            type: "project_from_note",
-                            title: item.querySelector("[data-note-title]")?.value.trim() || "",
-                            body: item.querySelector("[data-note-body]")?.value.trim() || "",
-                            is_private: Boolean(item.querySelector("[data-note-private]")?.checked),
-                        };
-                    }
-
-                    return {
-                        id: item.dataset.itemId || null,
-                        type: "note",
-                        title: item.querySelector("[data-note-title]")?.value.trim() || "",
-                        body: item.querySelector("[data-note-body]")?.value.trim() || "",
-                        is_private: Boolean(item.querySelector("[data-note-private]")?.checked),
-                    };
-                }),
-            })),
-            backlog: backlogRoot
-                ? Array.from(backlogRoot.querySelectorAll("[data-timeline-item][data-item-type='project']")).map((item) => ({
-                    id: item.dataset.itemId || null,
-                    type: "project",
-                    project_id: item.dataset.projectId,
-                }))
-                : [],
-        });
-
-        hidePrivateToggle?.addEventListener("change", updatePrivacyMask);
-        showProjectStatsToggle?.addEventListener("change", updateProjectStatsVisibility);
-
-        editToggle?.addEventListener("click", () => setEditMode(true));
-        cancelButton?.addEventListener("click", () => {
-            renderTimeline(savedTimeline);
-            renderBacklog(savedBacklog);
-            setEditMode(false);
-        });
-        addGroupButton?.addEventListener("click", () => {
-            const group = createGroupElement();
-            timelineRoot.appendChild(group);
-            setEditMode(true);
-            group.querySelector("[data-group-name]")?.focus();
-        });
-        saveButton?.addEventListener("click", async () => {
-            saveButton.disabled = true;
-            try {
-                const response = await fetch(timelinePanel.dataset.saveUrl, {
-                    method: "POST",
-                    headers: {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json",
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                    body: JSON.stringify(collectTimeline()),
-                });
-                const payload = await response.json();
-                if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Failed to save timeline.");
-                }
-
-                savedTimeline = payload.groups;
-                savedBacklog = (payload.backlog && payload.backlog.items) || [];
-                renderTimeline(savedTimeline);
-                renderBacklog(savedBacklog);
-                setEditMode(false);
-            } catch (error) {
-                window.alert(error.message);
-            } finally {
-                saveButton.disabled = false;
-            }
-        });
-
-        setupTimelineControls();
-        renderTimeline(savedTimeline);
-        renderBacklog(savedBacklog);
-        addGroupButton?.classList.add("d-none");
-    })();
-</script>
-
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 {% endblock %}

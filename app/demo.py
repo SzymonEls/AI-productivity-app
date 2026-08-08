@@ -25,6 +25,7 @@ from .markdown_utils import render_markdown
 from .models import (
     DailyPlan,
     Project,
+    ProjectDaySlot,
     ProjectTimeEntry,
     ProjectTimelineGroup,
     ProjectTimelineItem,
@@ -157,6 +158,7 @@ def seed_demo_data(app, reset=False):
 
         projects = _seed_projects(user)
         _seed_timeline(user, projects)
+        _seed_day_slots(user, projects)
         _seed_time_entries(user, projects)
         _seed_daily_plan(user, projects)
 
@@ -344,6 +346,41 @@ def _seed_timeline(user, projects):
             position=len(active[:2]),
         )
     )
+    db.session.flush()
+
+
+def _seed_day_slots(user, projects):
+    """
+    Book today's A/B/C and one future session.
+
+    Deliberately leaves several projects without a future slot so the
+    "Not scheduled" list on the dashboard has something in it.
+    """
+    from .projects.slots import today_local
+
+    active = [project for project in projects if not project.is_archived]
+    if len(active) < 3:
+        return
+
+    today = today_local()
+    bookings = [
+        (today, "A", active[0]),
+        (today, "B", active[1]),
+        (today, "C", active[2]),
+        # A project in today's A slot may still hold one future slot.
+        (today + timedelta(days=2), "A", active[0]),
+        (today + timedelta(days=3), "B", active[3] if len(active) > 3 else active[1]),
+    ]
+
+    for day, slot, project in bookings:
+        db.session.add(
+            ProjectDaySlot(owner=user, project=project, slot_date=day, slot=slot)
+        )
+
+    # A target so the dashboard shows "45m / 2h" rather than just the elapsed time.
+    active[0].daily_target_minutes = 120
+    active[1].daily_target_minutes = 45
+
     db.session.flush()
 
 

@@ -49,6 +49,13 @@ class User(UserMixin, db.Model):
         lazy=True,
         order_by=lambda: ProjectTimeEntry.started_at.desc(),
     )
+    day_slots = db.relationship(
+        "ProjectDaySlot",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: (ProjectDaySlot.slot_date, ProjectDaySlot.slot),
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -69,6 +76,8 @@ class Project(db.Model):
     frequency = db.Column(db.String(255), nullable=False)
     long_goal = db.Column(db.Text, nullable=False)
     archived_long_goal = db.Column(db.Text, nullable=False, default="")
+    # Minutes to aim for on a day this project sits in slot A or B. None = no target.
+    daily_target_minutes = db.Column(db.Integer, nullable=True)
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
@@ -92,6 +101,12 @@ class Project(db.Model):
         back_populates="project",
         lazy=True,
         order_by=lambda: ProjectTimeEntry.started_at.desc(),
+    )
+    day_slots = db.relationship(
+        "ProjectDaySlot",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        lazy=True,
     )
 
 
@@ -184,6 +199,41 @@ class ProjectTimelineItem(db.Model):
     owner = db.relationship("User", back_populates="timeline_items")
     group = db.relationship("ProjectTimelineGroup", back_populates="items")
     project = db.relationship("Project", back_populates="timeline_items")
+
+
+class ProjectDaySlot(db.Model):
+    """One project booked into one of a day's three slots.
+
+    Slots are A, B and the optional C. The unique constraint is what actually
+    guarantees "at most one project per slot"; the service layer only adds the
+    rule that a project may hold at most one slot today and one in the future.
+    Unlike ``ProjectTimeEntry``, this cascades from ``Project``: a slot left
+    behind by a deleted project is an empty booking, not history worth keeping.
+    """
+
+    __tablename__ = "project_day_slots"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
+    slot_date = db.Column(db.Date, nullable=False)
+    slot = db.Column(db.String(1), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="day_slots")
+    project = db.relationship("Project", back_populates="day_slots")
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "slot_date", "slot", name="uq_project_day_slot"),
+        db.Index("ix_project_day_slots_user_date", "user_id", "slot_date"),
+        db.Index("ix_project_day_slots_project_date", "project_id", "slot_date"),
+    )
 
 
 class DailyPlan(db.Model):

@@ -110,6 +110,12 @@
                         <a class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
                             {{ icon("folder") }}Projects
                         </a>
+                        <a class="nav-link {% if request.endpoint == 'projects.schedule' %}active{% endif %}" href="{{ url_for('projects.schedule') }}">
+                            {{ icon("calendar") }}Schedule
+                        </a>
+                        <a class="nav-link {% if request.endpoint == 'projects.timeline_view' %}active{% endif %}" href="{{ url_for('projects.timeline_view') }}">
+                            {{ icon("dashboard") }}Timeline
+                        </a>
                         <a class="nav-link {% if request.endpoint and request.endpoint.startswith('time_tracking.') %}active{% endif %}" href="{{ url_for('time_tracking.index') }}">
                             {{ icon("clock") }}Time tracking
                         </a>
@@ -193,7 +199,11 @@
                                 data-switcher-item
                                 data-switcher-name="{{ project.title | lower }}"
                             >
-                                <span class="switcher-dot" aria-hidden="true"></span>
+                                {% if project.slot %}
+                                    <span class="switcher-slot" title="Today's slot {{ project.slot }}">{{ project.slot }}</span>
+                                {% else %}
+                                    <span class="switcher-dot" aria-hidden="true"></span>
+                                {% endif %}
                                 <span class="switcher-title">{{ project.title }}</span>
                                 {% if project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
                                 {% if project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
@@ -208,7 +218,7 @@
                 <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
                 <span><kbd>↵</kbd> open</span>
                 <span><kbd>esc</kbd> close</span>
-                <a class="ms-auto" href="{{ url_for('projects.dashboard') }}">All projects →</a>
+                <a class="ms-auto" href="{{ url_for('projects.timeline_view') }}">All projects →</a>
             </div>
         </div>
     </div>
