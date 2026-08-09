@@ -1,9 +1,8 @@
 # Productivity app
 
 A self-hosted Flask app for planning the week: projects with a Markdown plan, a drag-and-drop
-timeline, a daily plan and a stopwatch for tracked time. One SQLite file, one container, no
-external services. AI-assisted planning is coming soon — today the daily plan is put together
-by hand.
+timeline, three project slots a day and a stopwatch for tracked time. One SQLite file, one
+container, no external services.
 
 ![The project view: a Markdown plan rendered as colour-coded, checkable sections](https://raw.githubusercontent.com/SzymonEls/AI-productivity-app/main/docs/productivity.png)
 
@@ -14,7 +13,12 @@ by hand.
   section can be archived out of the plan without leaving the page.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
-- **Daily plan** — pick today's projects and their tasks, get one plan document you can tick off.
+- **Day slots** — every day has slots A, B and an optional C, one project each. The home page
+  shows what is in them, the first heading of each plan and today's tracked time against a target.
+- **Schedule** — three weeks of day sheets, each showing its A/B/C blocks in the same colours as
+  the home page: dashed grey while free, amber once booked, green when the session is done. Click a
+  free block to fill it, or hit Edit and drag projects between blocks; dropping one on a taken block
+  swaps the two.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.
@@ -33,9 +37,12 @@ cp app/instance/.env.example app/instance/.env      # every setting is documente
 python run.py
 ```
 
-The app starts at `http://127.0.0.1:5000` and creates the SQLite database and its tables on
+The app starts at `http://127.0.0.1:5001` and creates the SQLite database and its tables on
 first run. Register an account, or set `DEFAULT_LOGIN_EMAIL` / `DEFAULT_LOGIN_PASSWORD` to
 pre-fill the login form.
+
+> Port 5001 rather than Flask's usual 5000: on macOS the AirPlay Receiver in Control Center
+> listens on `*:5000` and answers every request with a 403.
 
 ## Deployment
 

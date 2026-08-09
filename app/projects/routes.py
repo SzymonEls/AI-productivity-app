@@ -6,7 +6,29 @@ from sqlalchemy.exc import SQLAlchemyError
 from ..extensions import db
 from ..markdown_utils import render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
-from ..time_tracking.service import project_last_session_labels, today_project_summary, utc_now
+from ..time_tracking.service import (
+    daily_totals_by_project,
+    first_plan_section_title,
+    project_last_session_labels,
+    today_project_summary,
+    utc_now,
+)
+from .slots import (
+    SLOTS,
+    TIMED_SLOTS,
+    assign_slot,
+    booking_note,
+    calendar_weeks,
+    clear_slot,
+    move_booking,
+    parse_slot_date,
+    schedule_window,
+    set_session_done,
+    slot_candidates,
+    slots_for_date,
+    today_local,
+    unscheduled_projects,
+)
 
 
 projects_bp = Blueprint("projects", __name__, url_prefix="/projects")
@@ -21,6 +43,146 @@ def _get_user_project_or_404(project_id):
 @projects_bp.route("/dashboard")
 @login_required
 def dashboard():
+    """
+    Kept only so existing links keep working.
+
+    This view moved to the home page in 1.5.0. Bookmarks, the redirects spread
+    around the code, and above all the start_url baked into already-installed
+    PWAs still point here, so the route stays as a redirect rather than a 404.
+    """
+    return redirect(url_for("main.home"))
+
+
+def serialize_slot_card(slot, booking, totals):
+    """One slot for the dashboard. Slot C deliberately carries no time."""
+
+    project = booking.project if booking else None
+    if project is None:
+        return {"slot": slot, "project": None}
+
+    is_done = bool(booking.is_done)
+
+    shows_time = slot in TIMED_SLOTS
+    tracked_seconds = totals.get(project.id, 0) if shows_time else 0
+    target_minutes = project.daily_target_minutes if shows_time else None
+
+    return {
+        "slot": slot,
+        "project": project,
+        "is_done": is_done,
+        "plan_heading": first_plan_section_title(project.long_goal),
+        "shows_time": shows_time,
+        # Same compact format on both sides of the slash: "45m / 2h", not
+        # "00:45:00 / 2h". format_duration() stays for the time-tracking pages,
+        # where seconds matter.
+        "tracked_label": _minutes_label(tracked_seconds // 60, zero="0m") if shows_time else "",
+        "target_label": _minutes_label(target_minutes),
+        # Raw numbers so the day total can be summed without parsing labels.
+        "tracked_minutes": tracked_seconds // 60 if shows_time else 0,
+        "target_minutes": target_minutes or 0,
+    }
+
+
+def day_progress(slot_cards):
+    """
+    How much of today's planned time is done, as a percentage.
+
+    Only slots with a target count, on both sides of the ratio: time spent on a
+    project you never set a target for is not progress against a plan, and
+    counting it would push the figure past 100% for no clear reason. Returns
+    None when nothing is targeted, so the caller can leave the spot empty.
+    """
+    targeted = [card for card in slot_cards if card.get("target_minutes")]
+    if not targeted:
+        return None
+
+    tracked = sum(card["tracked_minutes"] for card in targeted)
+    target = sum(card["target_minutes"] for card in targeted)
+
+    return {
+        "percent": round(tracked / target * 100),
+        "tracked_label": _minutes_label(tracked, zero="0m"),
+        "target_label": _minutes_label(target),
+    }
+
+
+def _minutes_label(minutes, zero=""):
+    """Render a count of minutes as "45m" / "2h" / "1h 20m"."""
+
+    if not minutes:
+        return zero
+    hours, remaining = divmod(int(minutes), 60)
+    if hours and remaining:
+        return f"{hours}h {remaining:02d}m"
+    if hours:
+        return f"{hours}h"
+    return f"{remaining}m"
+
+
+@projects_bp.route("/schedule")
+@login_required
+def schedule():
+    """Three rolling weeks of calendar sheets, one card per day, from today on."""
+
+    today = today_local()
+    weeks = [
+        {
+            "label": _week_label(index),
+            "range_label": _date_range_label(days[0][0], days[-1][0]),
+            "days": [_serialize_schedule_day(day, booked, today) for day, booked in days],
+        }
+        for index, days in enumerate(calendar_weeks(current_user.id, start_day=today))
+    ]
+    return render_template("projects/schedule.html", weeks=weeks, today=today)
+
+
+# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it.
+_WEEK_LABELS = ("This week", "Next week", "In two weeks")
+
+
+def _week_label(index):
+    return _WEEK_LABELS[index] if index < len(_WEEK_LABELS) else f"In {index} weeks"
+
+
+def _date_range_label(first, last):
+    # The current week can be down to a single day, on a Sunday.
+    if first == last:
+        return first.strftime("%d %b").lstrip("0")
+    if first.month == last.month:
+        return f"{first.day}–{last.day} {last.strftime('%b')}"
+    return f"{first.strftime('%d %b')} – {last.strftime('%d %b')}"
+
+
+def _serialize_schedule_day(day, booked, today):
+    """One calendar sheet: its three slots, plus what the header has to show."""
+
+    slots = [
+        {
+            "slot": slot,
+            "project": booked[slot].project if booked[slot] else None,
+            "plan_heading": (
+                first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
+            ),
+            "is_done": bool(booked[slot].is_done) if booked[slot] else False,
+            # C is the spare slot; it stays visibly secondary once it is filled.
+            "is_optional": slot not in TIMED_SLOTS,
+        }
+        for slot in SLOTS
+    ]
+    return {
+        "date": day,
+        "is_today": day == today,
+        "is_weekend": day.weekday() >= 5,
+        "slots": slots,
+        "booked_count": sum(1 for entry in slots if entry["project"]),
+    }
+
+
+@projects_bp.route("/timeline-view")
+@login_required
+def timeline_view():
+    """The original grouped timeline, kept as a secondary view."""
+
     projects = (
         Project.query.filter_by(user_id=current_user.id, is_archived=False)
         .order_by(func.lower(Project.title).asc())
@@ -31,7 +193,7 @@ def dashboard():
     timeline_data = [_serialize_timeline_group(group, last_session_labels) for group in timeline_groups]
     backlog_data = _serialize_timeline_group(backlog_group, last_session_labels)
     return render_template(
-        "projects/dashboard.html",
+        "projects/timeline.html",
         projects=projects,
         timeline_groups=timeline_groups,
         timeline_data=timeline_data,
@@ -39,6 +201,151 @@ def dashboard():
         backlog_data=backlog_data,
         project_last_session_labels=last_session_labels,
     )
+
+
+@projects_bp.route("/<int:project_id>/schedule-window")
+@login_required
+def project_schedule_window(project_id):
+    """Planner grid for one project: the next seven days and their slots."""
+
+    project = _get_user_project_or_404(project_id)
+    return jsonify(
+        {
+            "ok": True,
+            "project": {"id": project.id, "title": project.title},
+            **_schedule_window_payload(project.id),
+        }
+    )
+
+
+def _schedule_window_payload(project_id):
+    """The planner grid plus the one line saying where the project already is."""
+
+    return {
+        "days": schedule_window(current_user.id, project_id),
+        "note": booking_note(current_user.id, project_id),
+    }
+
+
+@projects_bp.route("/schedule/candidates")
+@login_required
+def slot_candidate_list():
+    """Projects offered for one empty slot, for the picker on the home page."""
+
+    slot = (request.args.get("slot") or "").strip().upper()
+    day = parse_slot_date(request.args.get("date"))
+
+    if day is None or slot not in SLOTS:
+        return jsonify({"ok": False, "message": "Pick a day and a slot."}), 400
+
+    return jsonify(
+        {
+            "ok": True,
+            "date": day.isoformat(),
+            "slot": slot,
+            "projects": slot_candidates(current_user.id, day, slot),
+        }
+    )
+
+
+@projects_bp.route("/<int:project_id>/session-done", methods=["POST"])
+@login_required
+def toggle_session_done(project_id):
+    """Mark today's session for this project as done, or reopen it."""
+
+    project = _get_user_project_or_404(project_id)
+    payload = request.get_json(silent=True) or request.form
+    done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
+
+    ok, message, is_done = set_session_done(current_user.id, project.id, today_local(), done)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    return jsonify({"ok": True, "message": message, "is_done": is_done})
+
+
+@projects_bp.route("/schedule/assign", methods=["POST"])
+@login_required
+def assign_project_slot():
+    payload = request.get_json(silent=True) or request.form
+    project_id = _coerce_int(payload.get("project_id"))
+    slot = (payload.get("slot") or "").strip().upper()
+    day = parse_slot_date(payload.get("date"))
+
+    if project_id is None or day is None:
+        return jsonify({"ok": False, "message": "Pick a project and a day."}), 400
+
+    ok, message = assign_slot(current_user.id, project_id, day, slot)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
+
+    return jsonify({"ok": True, "message": message, **_schedule_window_payload(project_id)})
+
+
+@projects_bp.route("/schedule/move", methods=["POST"])
+@login_required
+def move_project_slot():
+    """Drag and drop on the schedule page: one booking moves onto another block."""
+
+    payload = request.get_json(silent=True) or request.form
+    from_day = parse_slot_date(payload.get("from_date"))
+    to_day = parse_slot_date(payload.get("to_date"))
+    from_slot = (payload.get("from_slot") or "").strip().upper()
+    to_slot = (payload.get("to_slot") or "").strip().upper()
+
+    if from_day is None or to_day is None:
+        return jsonify({"ok": False, "message": "Pick a block to move from and to."}), 400
+
+    ok, message = move_booking(current_user.id, from_day, from_slot, to_day, to_slot)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
+
+    return jsonify({"ok": True, "message": message})
+
+
+@projects_bp.route("/schedule/clear", methods=["POST"])
+@login_required
+def clear_project_slot():
+    payload = request.get_json(silent=True) or request.form
+    slot = (payload.get("slot") or "").strip().upper()
+    day = parse_slot_date(payload.get("date"))
+    project_id = _coerce_int(payload.get("project_id"))
+
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    ok, message = clear_slot(current_user.id, day, slot)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the schedule."}), 500
+
+    response = {"ok": True, "message": message}
+    if project_id is not None:
+        response.update(_schedule_window_payload(project_id))
+    return jsonify(response)
 
 
 @projects_bp.route("/archived")
@@ -59,7 +366,7 @@ def archive_project(project_id):
     project.is_archived = True
     db.session.commit()
     flash("Project archived.", "info")
-    return redirect(url_for("projects.dashboard"))
+    return redirect(url_for("main.home"))
 
 
 @projects_bp.route("/<int:project_id>/unarchive", methods=["POST"])
@@ -109,7 +416,7 @@ def create_project():
                     project=None,
                 )
             flash("Project created successfully.", "success")
-            return redirect(url_for("projects.dashboard"))
+            return redirect(url_for("main.home"))
 
     return render_template(
         "projects/project_form.html",
@@ -124,10 +431,24 @@ def create_project():
 @login_required
 def project_detail(project_id):
     project = _get_user_project_or_404(project_id)
+    # Today's booking, if any - "Done" only means something when there is a
+    # session today to finish.
+    today_booking = next(
+        (
+            booking
+            for booking in slots_for_date(current_user.id, today_local()).values()
+            if booking and booking.project_id == project.id
+        ),
+        None,
+    )
+
     return render_template(
         "projects/project_detail.html",
         project=project,
         timer_summary=today_project_summary(current_user.id, project.id),
+        daily_target_label=_minutes_label(project.daily_target_minutes),
+        today_slot=today_booking.slot if today_booking else "",
+        today_session_done=bool(today_booking and today_booking.is_done),
     )
 
 
@@ -146,6 +467,19 @@ def edit_project(project_id):
     starred_value = request.form.get("is_starred")
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
+    # Absent field: leave the target alone (the beacon save posts a subset).
+    # Present but empty: the user cleared it, so drop the target.
+    if "daily_target_minutes" in request.form:
+        raw_target = request.form.get("daily_target_minutes", "").strip()
+        daily_target_minutes = _coerce_int(raw_target) if raw_target else None
+        if raw_target and (daily_target_minutes is None or daily_target_minutes < 0):
+            error_message = "The daily target must be a number of minutes."
+            if _wants_json_response():
+                return jsonify({"ok": False, "message": error_message}), 400
+            flash(error_message, "danger")
+            return redirect(url_for("projects.project_detail", project_id=project.id))
+    else:
+        daily_target_minutes = project.daily_target_minutes
 
     # A navigator.sendBeacon() save fired while the page is being closed: it can't
     # set request headers, so we detect it by a form flag and answer quietly (no
@@ -167,6 +501,7 @@ def edit_project(project_id):
         project.long_goal = long_goal
         project.is_starred = is_starred
         project.is_private = is_private
+        project.daily_target_minutes = daily_target_minutes
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -198,6 +533,8 @@ def edit_project(project_id):
                         "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
+                        "daily_target_minutes": project.daily_target_minutes,
+                        "daily_target_label": _minutes_label(project.daily_target_minutes),
                         "updated_label": "just now",
                     },
                 }
@@ -307,7 +644,7 @@ def delete_project(project_id):
     db.session.delete(project)
     db.session.commit()
     flash("Project deleted.", "info")
-    return redirect(url_for("projects.dashboard"))
+    return redirect(url_for("main.home"))
 
 
 @projects_bp.route("/timeline", methods=["POST"])

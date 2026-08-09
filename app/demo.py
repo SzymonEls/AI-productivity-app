@@ -23,8 +23,8 @@ from config import BASE_DIR
 from .extensions import db
 from .markdown_utils import render_markdown
 from .models import (
-    DailyPlan,
     Project,
+    ProjectDaySlot,
     ProjectTimeEntry,
     ProjectTimelineGroup,
     ProjectTimelineItem,
@@ -115,7 +115,7 @@ def _register_write_guard(app):
             return jsonify({"ok": False, "message": message}), 403
 
         flash(message, "warning")
-        return redirect(request.referrer or url_for("projects.dashboard"))
+        return redirect(request.referrer or url_for("main.home"))
 
 
 def _register_seed_command(app):
@@ -157,8 +157,8 @@ def seed_demo_data(app, reset=False):
 
         projects = _seed_projects(user)
         _seed_timeline(user, projects)
+        _seed_day_slots(user, projects)
         _seed_time_entries(user, projects)
-        _seed_daily_plan(user, projects)
 
         db.session.commit()
     except SQLAlchemyError as error:
@@ -347,6 +347,48 @@ def _seed_timeline(user, projects):
     db.session.flush()
 
 
+def _seed_day_slots(user, projects):
+    """
+    Book today's A/B/C and one future session.
+
+    Deliberately leaves several projects without a future slot so the
+    "Not scheduled" list on the dashboard has something in it.
+    """
+    from .projects.slots import today_local
+
+    active = [project for project in projects if not project.is_archived]
+    if len(active) < 3:
+        return
+
+    today = today_local()
+    bookings = [
+        (today, "A", active[0]),
+        (today, "B", active[1]),
+        (today, "C", active[2]),
+        # A project in today's A slot may still hold one future slot.
+        (today + timedelta(days=2), "A", active[0]),
+        (today + timedelta(days=3), "B", active[3] if len(active) > 3 else active[1]),
+    ]
+
+    for day, slot, project in bookings:
+        db.session.add(
+            ProjectDaySlot(
+                owner=user,
+                project=project,
+                slot_date=day,
+                slot=slot,
+                # One of today's sessions is finished, so the demo shows that state too.
+                is_done=(day == today and slot == "B"),
+            )
+        )
+
+    # A target so the dashboard shows "45m / 2h" rather than just the elapsed time.
+    active[0].daily_target_minutes = 120
+    active[1].daily_target_minutes = 45
+
+    db.session.flush()
+
+
 def _seed_time_entries(user, projects):
     """
     Spread finished work sessions over the last two weeks so the time-tracking
@@ -397,35 +439,4 @@ def _seed_time_entries(user, projects):
                 )
             )
 
-    db.session.flush()
-
-
-def _seed_daily_plan(user, projects):
-    """Save the single daily plan so the home page is not empty."""
-    titles = [project.title for project in projects if not project.is_archived][:3]
-    while len(titles) < 3:
-        titles.append("Focus block")
-
-    db.session.add(
-        DailyPlan(
-            owner=user,
-            title=f"Plan for {datetime.now(timezone.utc).date().isoformat()}",
-            target_date=datetime.now(timezone.utc).date(),
-            content=(
-                f"# {titles[0]}\n"
-                "**Short goal:** ship the read-only demo\n\n"
-                "- [x] Block writes behind one environment flag\n"
-                "- [ ] Point the subdomain at the container\n"
-                "\n"
-                f"# {titles[1]}\n"
-                "**Short goal:** one focused hour\n\n"
-                "- [ ] Finish the chapter on lifetimes\n"
-                "- [ ] Write down what did not click\n"
-                "\n"
-                f"# {titles[2]}\n"
-                "**Short goal:** keep it ticking\n\n"
-                "- [ ] Check the backup ran\n"
-            ),
-        )
-    )
     db.session.flush()

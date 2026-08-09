@@ -48,6 +48,32 @@
             <span>Track time</span>
             <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
+        <button
+            type="button"
+            class="btn btn-outline-secondary"
+            data-plan-session
+            data-project-id="{{ project.id }}"
+            data-project-title="{{ project.title }}"
+        >
+            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+            <span>Plan next session</span>
+        </button>
+        {% if today_slot %}
+            {# Only shown when the project actually has a session today - there is
+               nothing to finish otherwise. The flag lives on today's slot, so it
+               clears itself tomorrow. #}
+            <button
+                type="button"
+                class="btn {% if today_session_done %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                data-session-done
+                data-project-id="{{ project.id }}"
+                data-done="{{ 1 if today_session_done else 0 }}"
+                title="Today's session is in slot {{ today_slot }}"
+            >
+                <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+                <span data-session-done-label>{{ "Done" if today_session_done else "Mark done" }}</span>
+            </button>
+        {% endif %}
         <div class="dropdown">
             <button type="button" class="btn btn-outline-secondary" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions">
                 <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
@@ -62,7 +88,7 @@
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
                 </li>
-                <li><a class="dropdown-item" href="{{ url_for('projects.dashboard') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to dashboard</a></li>
+                <li><a class="dropdown-item" href="{{ url_for('main.home') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to home</a></li>
                 <li><hr class="dropdown-divider"></li>
                 {% if not project.is_archived %}
                     <li>
@@ -190,6 +216,38 @@
                                 value="{{ project.frequency }}"
                                 required
                             >
+                        </div>
+                    </div>
+                </section>
+                <section class="card shadow-sm inline-edit-card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <h2 class="h5 mb-0">Daily target</h2>
+                            <div class="inline-section-controls">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="daily-target">Edit</button>
+                                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="daily-target">Save</button>
+                                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="daily-target">Cancel</button>
+                            </div>
+                        </div>
+                        <div data-edit-display="daily-target">
+                            <p class="mb-0" data-display-value="daily_target_minutes">
+                                {{ daily_target_label or "No target" }}
+                            </p>
+                        </div>
+                        <div class="d-none" data-edit-form="daily-target">
+                            <input
+                                type="number"
+                                id="daily_target_minutes"
+                                name="daily_target_minutes"
+                                class="form-control"
+                                min="0"
+                                step="5"
+                                placeholder="e.g. 120"
+                                value="{{ project.daily_target_minutes if project.daily_target_minutes else '' }}"
+                            >
+                            <p class="form-text mb-0">
+                                Minutes to aim for on a day this project is in slot A or B. Leave empty for no target.
+                            </p>
                         </div>
                     </div>
                 </section>
@@ -324,6 +382,7 @@
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");
@@ -336,6 +395,7 @@
             "short-goal": "short_goal",
             "frequency": "frequency",
             "long-goal": "long_goal",
+            "daily-target": "daily_target_minutes",
         };
 
         const longGoalTextarea = form.querySelector("#long_goal");
@@ -953,6 +1013,11 @@
             document.title = project.title;
             form.querySelector("[data-display-value='short_goal']").textContent = project.short_goal;
             form.querySelector("[data-display-value='frequency']").textContent = project.frequency;
+            const dailyTargetDisplay = form.querySelector("[data-display-value='daily_target_minutes']");
+            if (dailyTargetDisplay) {
+                // The server formats it ("2h 30m"); the raw minutes stay in the input.
+                dailyTargetDisplay.textContent = project.daily_target_label || "No target";
+            }
             if (longGoalPreview) {
                 longGoalPreview.innerHTML = project.long_goal_html;
                 enablePreviewTaskCheckboxes();

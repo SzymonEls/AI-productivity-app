@@ -35,6 +35,9 @@
     --success: #16a34a;
     --danger: #dc2626;
     --warning: #d97706;
+    /* Accents on a booked day slot: amber for A and B, grey for the optional C. */
+    --slot-accent: #d97706;
+    --slot-optional-accent: #9ca3af;
 
     --radius: 0.7rem;
     --radius-sm: 0.5rem;
@@ -71,6 +74,8 @@
     --success: #22c55e;
     --danger: #f87171;
     --warning: #fbbf24;
+    --slot-accent: #fbbf24;
+    --slot-optional-accent: #71717a;
 
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);

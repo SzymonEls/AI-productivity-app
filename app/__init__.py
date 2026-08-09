@@ -28,8 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import DailyPlan, Project, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
-    from .ai.routes import ai_bp
+    from .models import Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
@@ -37,7 +36,6 @@ def create_app(config_class=Config):
     from .time_tracking.routes import time_tracking_bp
 
     app.register_blueprint(main_bp)
-    app.register_blueprint(ai_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
@@ -95,17 +93,26 @@ def register_template_context(app):
 
 
 def build_project_switcher_context():
-    """Return the user's projects grouped by their timeline sections for the
-    global project switcher, plus the project currently being viewed (if any).
+    """Today's slotted projects first, then everything else alphabetically.
 
-    Read-only: unlike the dashboard timeline it never creates rows, so it is
-    cheap enough to run on every authenticated request.
+    Runs on every authenticated render, so it stays at two queries with a fixed
+    cost - projects, then today's slots. The previous timeline-grouped version
+    queried the items of each group in a loop, which grew with the number of
+    sections.
     """
-    from .models import Project, ProjectTimelineGroup, ProjectTimelineItem
+    from sqlalchemy import func
+
+    from .models import Project, ProjectDaySlot
+    from .projects.slots import SLOTS, today_local
 
     try:
         projects = (
-            Project.query.filter_by(user_id=current_user.id, is_archived=False).all()
+            Project.query.filter_by(user_id=current_user.id, is_archived=False)
+            .order_by(func.lower(Project.title).asc())
+            .all()
+        )
+        booked_today = (
+            ProjectDaySlot.query.filter_by(user_id=current_user.id, slot_date=today_local()).all()
         )
     except Exception:  # noqa: BLE001 - never let the nav break a page render
         return [], None
@@ -115,13 +122,7 @@ def build_project_switcher_context():
     if request.view_args:
         current_project_id = request.view_args.get("project_id")
 
-    groups = (
-        ProjectTimelineGroup.query.filter_by(user_id=current_user.id)
-        .order_by(ProjectTimelineGroup.position.asc(), ProjectTimelineGroup.id.asc())
-        .all()
-    )
-
-    def entry(project):
+    def entry(project, slot=""):
         return {
             "id": project.id,
             "title": project.title,
@@ -129,42 +130,31 @@ def build_project_switcher_context():
             "is_starred": bool(project.is_starred),
             "is_private": bool(project.is_private),
             "is_current": project.id == current_project_id,
+            "slot": slot,
         }
 
-    nav_groups = []
-    seen = set()
-    backlog_entries = []
-    for group in groups:
-        items = (
-            ProjectTimelineItem.query.filter_by(group_id=group.id, item_type="project")
-            .order_by(ProjectTimelineItem.position.asc(), ProjectTimelineItem.id.asc())
-            .all()
-        )
-        group_entries = []
-        for item in items:
-            project = projects_by_id.get(item.project_id)
-            if project and project.id not in seen:
-                group_entries.append(entry(project))
-                seen.add(project.id)
-        if not group_entries:
-            continue
-        # The backlog group parks projects that were pushed off the timeline; it
-        # is not a real section, so collect it separately instead of rendering it
-        # as an (unlabelled) timeline section.
-        if group.is_backlog:
-            backlog_entries.extend(group_entries)
-        else:
-            nav_groups.append(
-                {"name": group.name or "", "projects": group_entries, "is_backlog": False}
-            )
+    slot_by_letter = {booking.slot: booking for booking in booked_today}
+    today_entries = []
+    scheduled_ids = set()
+    for letter in SLOTS:
+        booking = slot_by_letter.get(letter)
+        project = projects_by_id.get(booking.project_id) if booking else None
+        if project and project.id not in scheduled_ids:
+            today_entries.append(entry(project, slot=letter))
+            scheduled_ids.add(project.id)
 
-    # Projects not yet placed on any timeline group are off timeline as well.
-    backlog_entries.extend(
-        entry(project) for project in projects if project.id not in seen
-    )
-    if backlog_entries:
+    nav_groups = []
+    if today_entries:
+        nav_groups.append({"name": "Today", "projects": today_entries, "is_backlog": False})
+
+    rest = [entry(project) for project in projects if project.id not in scheduled_ids]
+    if rest:
         nav_groups.append(
-            {"name": "Off timeline", "projects": backlog_entries, "is_backlog": True}
+            {
+                "name": "All projects" if today_entries else "",
+                "projects": rest,
+                "is_backlog": False,
+            }
         )
 
     current_project = projects_by_id.get(current_project_id)

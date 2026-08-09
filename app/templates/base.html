@@ -52,11 +52,9 @@
                 <a
                     class="app-logo"
                     data-app-logo
-                    href="{{ url_for('projects.dashboard') if current_user.is_authenticated else url_for('main.home') }}"
-                    data-home-url="{{ url_for('main.home') }}"
-                    data-projects-url="{{ url_for('projects.dashboard') }}"
-                    aria-label="Projects"
-                    title="Projects"
+                    href="{{ url_for('main.home') }}"
+                    aria-label="Home"
+                    title="Home"
                 >
                     <span class="app-brand-mark" aria-hidden="true">◆</span>
                 </a>
@@ -107,7 +105,10 @@
                         {{ icon("home") }}Home
                     </a>
                     {% if current_user.is_authenticated %}
-                        <a class="nav-link {% if request.endpoint == 'projects.dashboard' %}active{% endif %}" href="{{ url_for('projects.dashboard') }}">
+                        <a class="nav-link {% if request.endpoint == 'projects.schedule' %}active{% endif %}" href="{{ url_for('projects.schedule') }}">
+                            {{ icon("calendar") }}Schedule
+                        </a>
+                        <a class="nav-link {% if request.endpoint == 'projects.timeline_view' %}active{% endif %}" href="{{ url_for('projects.timeline_view') }}">
                             {{ icon("folder") }}Projects
                         </a>
                         <a class="nav-link {% if request.endpoint and request.endpoint.startswith('time_tracking.') %}active{% endif %}" href="{{ url_for('time_tracking.index') }}">
@@ -193,7 +194,11 @@
                                 data-switcher-item
                                 data-switcher-name="{{ project.title | lower }}"
                             >
-                                <span class="switcher-dot" aria-hidden="true"></span>
+                                {% if project.slot %}
+                                    <span class="switcher-slot" title="Today's slot {{ project.slot }}">{{ project.slot }}</span>
+                                {% else %}
+                                    <span class="switcher-dot" aria-hidden="true"></span>
+                                {% endif %}
                                 <span class="switcher-title">{{ project.title }}</span>
                                 {% if project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
                                 {% if project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
@@ -208,7 +213,7 @@
                 <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
                 <span><kbd>↵</kbd> open</span>
                 <span><kbd>esc</kbd> close</span>
-                <a class="ms-auto" href="{{ url_for('projects.dashboard') }}">All projects →</a>
+                <a class="ms-auto" href="{{ url_for('projects.timeline_view') }}">All projects →</a>
             </div>
         </div>
     </div>
@@ -256,14 +261,6 @@
                             <button type="button" class="settings-segment" data-value="markdown">Markdown</button>
                         </div>
                     </div>
-                    <div class="settings-group">
-                        <div class="settings-label">{{ icon("link") }}Logo opens</div>
-                        <p class="settings-hint">Where the top-left logo takes you.</p>
-                        <div class="settings-segments" role="group" aria-label="Logo destination" data-setting="logo-target">
-                            <button type="button" class="settings-segment" data-value="projects">Projects</button>
-                            <button type="button" class="settings-segment" data-value="home">Home</button>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
@@ -309,7 +306,6 @@
             const uiSetting = () => (read("app-ui") === "classic" ? "classic" : "modern");
             const themeSetting = () => read("app-theme") || "system";
             const layoutSetting = () => (read("app-project-layout") === "stacked" ? "stacked" : "sidebar");
-            const logoTargetSetting = () => (read("app-logo-target") === "home" ? "home" : "projects");
             const planEditorSetting = () => (read("app-plan-editor") === "markdown" ? "markdown" : "blocks");
 
             const effectiveTheme = () => {
@@ -324,19 +320,8 @@
                 themeColorMeta?.setAttribute("content", themeColors[theme] || themeColors.light);
             };
 
-            const applyLogoTarget = () => {
-                const target = logoTargetSetting();
-                document.querySelectorAll("[data-app-logo]").forEach((logo) => {
-                    const url = target === "home" ? logo.dataset.homeUrl : logo.dataset.projectsUrl;
-                    if (url) { logo.setAttribute("href", url); }
-                    const label = target === "home" ? "Home" : "Projects";
-                    logo.setAttribute("aria-label", label);
-                    logo.setAttribute("title", label);
-                });
-            };
-
             const refreshSegments = () => {
-                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "logo-target": logoTargetSetting(), "plan-editor": planEditorSetting() };
+                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "plan-editor": planEditorSetting() };
                 Object.entries(map).forEach(([name, value]) => {
                     document.querySelectorAll(`[data-setting="${name}"] .settings-segment`).forEach((btn) => {
                         btn.classList.toggle("is-active", btn.dataset.value === value);
@@ -353,7 +338,6 @@
                 root.setAttribute("data-bs-theme", effectiveTheme());
                 root.setAttribute("data-project-layout", layoutSetting());
                 root.setAttribute("data-plan-editor", planEditorSetting());
-                applyLogoTarget();
                 syncThemeColor();
                 refreshSegments();
             };
@@ -361,7 +345,6 @@
             const setUi = (mode) => { store("app-ui", mode === "classic" ? "classic" : "modern"); applyAll(); };
             const setTheme = (mode) => { if (mode === "system") { clear("app-theme"); } else { store("app-theme", mode); } applyAll(); };
             const setLayout = (mode) => { store("app-project-layout", mode === "stacked" ? "stacked" : "sidebar"); applyAll(); };
-            const setLogoTarget = (mode) => { store("app-logo-target", mode === "home" ? "home" : "projects"); applyAll(); };
             const setPlanEditor = (mode) => {
                 store("app-plan-editor", mode === "markdown" ? "markdown" : "blocks");
                 applyAll();
@@ -385,9 +368,6 @@
             });
             document.querySelectorAll('[data-setting="project-layout"] .settings-segment').forEach((btn) => {
                 btn.addEventListener("click", () => setLayout(btn.dataset.value));
-            });
-            document.querySelectorAll('[data-setting="logo-target"] .settings-segment').forEach((btn) => {
-                btn.addEventListener("click", () => setLogoTarget(btn.dataset.value));
             });
             document.querySelectorAll('[data-setting="plan-editor"] .settings-segment').forEach((btn) => {
                 btn.addEventListener("click", () => setPlanEditor(btn.dataset.value));
