@@ -163,18 +163,54 @@ def project_bookings(user_id, project_id, ignore_ids=()):
     return today_slot, future_slot
 
 
+def bookings_by_project(user_id):
+    """
+    ``{project_id: (today_slot, future_slot)}`` for every booked project, in one
+    query.
+
+    The bulk form of project_bookings(). Asking per project is fine for one
+    project, but the picker weighs the rule against the whole project list at
+    once, and that turned into a query each.
+    """
+    today = today_local()
+    entries = (
+        ProjectDaySlot.query.filter(
+            ProjectDaySlot.user_id == user_id, ProjectDaySlot.slot_date >= today
+        )
+        .order_by(ProjectDaySlot.slot_date.asc())
+        .all()
+    )
+
+    by_project = {}
+    for entry in entries:
+        today_slot, future_slot = by_project.get(entry.project_id, (None, None))
+        if entry.slot_date == today:
+            today_slot = today_slot or entry
+        elif future_slot is None:
+            future_slot = entry
+        by_project[entry.project_id] = (today_slot, future_slot)
+    return by_project
+
+
+def blocker_for_day(bookings, day, today=None):
+    """
+    Which of a project's two bookings stands in the way on ``day``, if any.
+
+    ``bookings`` is a ``(today_slot, future_slot)`` pair from either
+    project_bookings() or bookings_by_project() - the rule itself lives here, so
+    both the single-project and the bulk path answer identically.
+    """
+    today_slot, future_slot = bookings
+    return today_slot if day == (today or today_local()) else future_slot
+
+
 def blocking_booking(user_id, project_id, day, ignore_ids=()):
     """
     Why ``project_id`` may not take a slot on ``day``, or None if it may.
 
     A project gets at most two bookings: one today and one in the future.
     """
-    today = today_local()
-    today_slot, future_slot = project_bookings(user_id, project_id, ignore_ids)
-
-    if day == today:
-        return today_slot
-    return future_slot
+    return blocker_for_day(project_bookings(user_id, project_id, ignore_ids), day)
 
 
 def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
@@ -187,11 +223,14 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
     today = today_local()
     last_day = today + timedelta(days=days - 1)
     booked = slots_from(user_id, today, last_day)
+    # The project's own two bookings do not change from day to day, so they are
+    # read once for the whole grid rather than per row.
+    bookings = project_bookings(user_id, project_id)
 
     window = []
     for offset in range(days):
         day = today + timedelta(days=offset)
-        blocker = blocking_booking(user_id, project_id, day)
+        blocker = blocker_for_day(bookings, day, today)
         day_slots = booked.get(day, {slot: None for slot in SLOTS})
 
         window.append(
@@ -268,13 +307,17 @@ def slot_candidates(user_id, day, slot):
     taken = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
     labels = project_last_session_labels(user_id, projects)
     today = today_local()
+    # Every project is weighed against the rule here, so their bookings come in
+    # one query instead of one per row.
+    bookings = bookings_by_project(user_id) if taken is None else {}
 
     candidates = []
     for project in projects:
         if taken is not None:
             reason = f"Slot {slot} is taken by {taken.project.title}."
         else:
-            reason = _blocked_reason(blocking_booking(user_id, project.id, day), day, today)
+            blocker = blocker_for_day(bookings.get(project.id, (None, None)), day, today)
+            reason = _blocked_reason(blocker, day, today)
 
         candidates.append(
             {
