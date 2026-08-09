@@ -82,7 +82,7 @@ Create a separate `service.py` file only for time/timezone/aggregation logic —
 **The authoritative one: Alembic migrations.** The block in `__init__.py` is backward compatibility for old databases —
 treat it as frozen and don't add new columns there.
 
-(The second conflict listed here — two copies of `_get_or_create_timeline` — went away in 1.6.0
+(The second conflict listed here — two copies of `_get_or_create_timeline` — went away in 1.5.0
 when the `ai` blueprint was removed. Only the version in `app/projects/routes.py` remains.)
 
 ---
@@ -118,7 +118,7 @@ Tick off the sections matching your change. Each item is a specific file/command
 
 ### User-visible behavior change
 - [ ] Update the relevant template in [app/templates/](../app/templates/) and/or the style in [app/static/css/](../app/static/css/).
-- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.6.0`) — it's shown in the UI.
+- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.5.0`) — it's shown in the UI.
 - [ ] Check whether the change requires updating the feature description in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### New dependency

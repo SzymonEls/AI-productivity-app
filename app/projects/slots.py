@@ -21,6 +21,9 @@ SLOTS = ("A", "B", "C")
 # A and B are the day's real work; C is a spare that never shows tracked time.
 TIMED_SLOTS = ("A", "B")
 SCHEDULE_WINDOW_DAYS = 7
+# The schedule page shows three rolling weeks of day cards, empty days included.
+CALENDAR_WEEKS = 3
+DAYS_PER_WEEK = 7
 
 
 def today_local():
@@ -77,10 +80,40 @@ def slots_from(user_id, start_day, end_day=None):
     return by_date
 
 
-def scheduled_days(user_id, start_day=None):
-    """Days from ``start_day`` on that have at least one project booked."""
+def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
+    """
+    The schedule page: ``weeks`` calendar weeks of days, as lists of
+    ``(date, {slot: ProjectDaySlot|None})``.
+
+    Weeks run Monday to Sunday. The first one starts today rather than on its
+    Monday - days that have already passed cannot be booked, so there is nothing
+    to show there - which makes it a short week on any day but a Monday.
+
+    Empty days are kept: the page is a strip of calendar sheets you can book or
+    drop a project onto, so a day with nothing in it is a target rather than
+    something to leave out.
+    """
     start_day = today_local() if start_day is None else start_day
-    return sorted(slots_from(user_id, start_day).items())
+    # Monday is weekday() 0, so this is 7 on a Monday and 1 on a Sunday.
+    first_week_days = DAYS_PER_WEEK - start_day.weekday()
+    total_days = first_week_days + (weeks - 1) * DAYS_PER_WEEK
+    booked = slots_from(user_id, start_day, start_day + timedelta(days=total_days - 1))
+
+    calendar = []
+    day = start_day
+    for index in range(weeks):
+        length = first_week_days if index == 0 else DAYS_PER_WEEK
+        calendar.append(
+            [
+                (
+                    day + timedelta(days=offset),
+                    booked.get(day + timedelta(days=offset), {slot: None for slot in SLOTS}),
+                )
+                for offset in range(length)
+            ]
+        )
+        day += timedelta(days=length)
+    return calendar
 
 
 def unscheduled_projects(user_id):
@@ -107,8 +140,13 @@ def unscheduled_projects(user_id):
     )
 
 
-def project_bookings(user_id, project_id):
-    """The project's slots from today on, as (today_slot, future_slot)."""
+def project_bookings(user_id, project_id, ignore_ids=()):
+    """The project's slots from today on, as (today_slot, future_slot).
+
+    ``ignore_ids`` drops bookings that are on their way out - the row being
+    dragged elsewhere, or the one about to be deleted. Without it a booking
+    would count as its own blocker and no move could ever be legal.
+    """
     today = today_local()
     entries = (
         ProjectDaySlot.query.filter(
@@ -119,19 +157,20 @@ def project_bookings(user_id, project_id):
         .order_by(ProjectDaySlot.slot_date.asc())
         .all()
     )
+    entries = [entry for entry in entries if entry.id not in ignore_ids]
     today_slot = next((entry for entry in entries if entry.slot_date == today), None)
     future_slot = next((entry for entry in entries if entry.slot_date > today), None)
     return today_slot, future_slot
 
 
-def blocking_booking(user_id, project_id, day):
+def blocking_booking(user_id, project_id, day, ignore_ids=()):
     """
     Why ``project_id`` may not take a slot on ``day``, or None if it may.
 
     A project gets at most two bookings: one today and one in the future.
     """
     today = today_local()
-    today_slot, future_slot = project_bookings(user_id, project_id)
+    today_slot, future_slot = project_bookings(user_id, project_id, ignore_ids)
 
     if day == today:
         return today_slot
@@ -167,14 +206,40 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
                         "project_title": day_slots[slot].project.title if day_slots[slot] else "",
                         "is_this_project": bool(day_slots[slot]) and day_slots[slot].project_id == project_id,
                         "can_take": day_slots[slot] is None and blocker is None,
+                        # The dialog colours a slot exactly like the home page does,
+                        # so it needs the same two facts about it.
+                        "is_done": bool(day_slots[slot]) and bool(day_slots[slot].is_done),
+                        "is_optional": slot not in TIMED_SLOTS,
                     }
                     for slot in SLOTS
                 ],
-                # Same reason for all three slots of a day, so it is reported once.
-                "blocked_reason": _blocked_reason(blocker, day, today),
             }
         )
     return window
+
+
+def booking_note(user_id, project_id):
+    """
+    Where this project already stands, as the one line the planner shows.
+
+    The two-block rule blocks whole days at a time, so saying it per day - or
+    once per booking - only repeats itself. One sentence names both bookings and
+    the rule behind them, or nothing at all when the project is free to plan.
+    """
+    today_slot, future_slot = project_bookings(user_id, project_id)
+
+    booked = []
+    if today_slot is not None:
+        booked.append(f"today in slot {today_slot.slot}")
+    if future_slot is not None:
+        booked.append(f"{future_slot.slot_date.strftime('%d %b')} in slot {future_slot.slot}")
+    if not booked:
+        return ""
+
+    return (
+        f"Already planned for {' and '.join(booked)} — "
+        "a project takes at most one block today and one later."
+    )
 
 
 def _blocked_reason(blocker, day, today):
@@ -276,6 +341,74 @@ def set_session_done(user_id, project_id, day, done):
 
     booking.is_done = bool(done)
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
+
+
+def move_booking(user_id, from_day, from_slot, to_day, to_slot):
+    """
+    Move a booking to another day and slot, swapping with whatever sits there.
+
+    This is what a drag on the schedule page ends in. Returns ``(ok, message)``;
+    the caller commits, and a rejected move leaves the session untouched.
+    """
+    today = today_local()
+
+    if from_slot not in SLOTS or to_slot not in SLOTS:
+        return False, "Unknown slot."
+    if from_day < today or to_day < today:
+        return False, "That day is in the past."
+
+    source = ProjectDaySlot.query.filter_by(
+        user_id=user_id, slot_date=from_day, slot=from_slot
+    ).first()
+    if source is None:
+        return False, "There is nothing to move."
+    if from_day == to_day and from_slot == to_slot:
+        return True, "Nothing moved."
+
+    target = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=to_day, slot=to_slot).first()
+    moves = [(source, to_day)]
+    if target is not None:
+        moves.append((target, from_day))
+
+    # Both rows are leaving their current spot, so neither may count as a
+    # blocker - for itself or for the other one - while the rule is checked.
+    ignore_ids = {entry.id for entry, _ in moves}
+    for entry, day in moves:
+        blocker = blocking_booking(user_id, entry.project_id, day, ignore_ids)
+        if blocker is not None:
+            return False, f"{entry.project.title}: {_blocked_reason(blocker, day, today)}"
+
+    # Updating both rows in one flush would collide with the unique constraint on
+    # (user, date, slot), so the displaced row leaves the table and comes back on
+    # the spot the moved one has just vacated.
+    # Read off what the displaced row has to say before deleting it.
+    displaced = (target.project_id, target.is_done, target.project.title) if target is not None else None
+    if target is not None:
+        db.session.delete(target)
+        db.session.flush()
+
+    # "Done" describes a day's session, so it travels within a day and is
+    # dropped when the booking lands on another date.
+    source.slot_date = to_day
+    source.slot = to_slot
+    if to_day != from_day:
+        source.is_done = False
+    db.session.flush()
+
+    if displaced is not None:
+        project_id, was_done, displaced_title = displaced
+        db.session.add(
+            ProjectDaySlot(
+                user_id=user_id,
+                project_id=project_id,
+                slot_date=from_day,
+                slot=from_slot,
+                is_done=was_done if to_day == from_day else False,
+            )
+        )
+        return True, f"Swapped with {displaced_title}."
+
+    return True, f"Moved to {to_day.strftime('%d %b')}, slot {to_slot}."
 
 
 def clear_slot(user_id, day, slot):

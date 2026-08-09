@@ -17,10 +17,12 @@ from .slots import (
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
+    booking_note,
+    calendar_weeks,
     clear_slot,
+    move_booking,
     parse_slot_date,
     schedule_window,
-    scheduled_days,
     set_session_done,
     slot_candidates,
     slots_for_date,
@@ -44,7 +46,7 @@ def dashboard():
     """
     Kept only so existing links keep working.
 
-    This view moved to the home page in 1.6.0. Bookmarks, the redirects spread
+    This view moved to the home page in 1.5.0. Bookmarks, the redirects spread
     around the code, and above all the start_url baked into already-installed
     PWAs still point here, so the route stays as a redirect rather than a 404.
     """
@@ -120,28 +122,60 @@ def _minutes_label(minutes, zero=""):
 @projects_bp.route("/schedule")
 @login_required
 def schedule():
-    """Calendar cards for every upcoming day that has something booked."""
+    """Three rolling weeks of calendar sheets, one card per day, from today on."""
 
     today = today_local()
-    days = [
+    weeks = [
         {
-            "date": day,
-            "is_today": day == today,
-            "is_tomorrow": (day - today).days == 1,
-            "slots": [
-                {
-                    "slot": slot,
-                    "project": booked[slot].project if booked[slot] else None,
-                    "plan_heading": (
-                        first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
-                    ),
-                }
-                for slot in SLOTS
-            ],
+            "label": _week_label(index),
+            "range_label": _date_range_label(days[0][0], days[-1][0]),
+            "days": [_serialize_schedule_day(day, booked, today) for day, booked in days],
         }
-        for day, booked in scheduled_days(current_user.id, today)
+        for index, days in enumerate(calendar_weeks(current_user.id, start_day=today))
     ]
-    return render_template("projects/schedule.html", days=days, today=today)
+    return render_template("projects/schedule.html", weeks=weeks, today=today)
+
+
+# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it.
+_WEEK_LABELS = ("This week", "Next week", "In two weeks")
+
+
+def _week_label(index):
+    return _WEEK_LABELS[index] if index < len(_WEEK_LABELS) else f"In {index} weeks"
+
+
+def _date_range_label(first, last):
+    # The current week can be down to a single day, on a Sunday.
+    if first == last:
+        return first.strftime("%d %b").lstrip("0")
+    if first.month == last.month:
+        return f"{first.day}–{last.day} {last.strftime('%b')}"
+    return f"{first.strftime('%d %b')} – {last.strftime('%d %b')}"
+
+
+def _serialize_schedule_day(day, booked, today):
+    """One calendar sheet: its three slots, plus what the header has to show."""
+
+    slots = [
+        {
+            "slot": slot,
+            "project": booked[slot].project if booked[slot] else None,
+            "plan_heading": (
+                first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
+            ),
+            "is_done": bool(booked[slot].is_done) if booked[slot] else False,
+            # C is the spare slot; it stays visibly secondary once it is filled.
+            "is_optional": slot not in TIMED_SLOTS,
+        }
+        for slot in SLOTS
+    ]
+    return {
+        "date": day,
+        "is_today": day == today,
+        "is_weekend": day.weekday() >= 5,
+        "slots": slots,
+        "booked_count": sum(1 for entry in slots if entry["project"]),
+    }
 
 
 @projects_bp.route("/timeline-view")
@@ -179,9 +213,18 @@ def project_schedule_window(project_id):
         {
             "ok": True,
             "project": {"id": project.id, "title": project.title},
-            "days": schedule_window(current_user.id, project.id),
+            **_schedule_window_payload(project.id),
         }
     )
+
+
+def _schedule_window_payload(project_id):
+    """The planner grid plus the one line saying where the project already is."""
+
+    return {
+        "days": schedule_window(current_user.id, project_id),
+        "note": booking_note(current_user.id, project_id),
+    }
 
 
 @projects_bp.route("/schedule/candidates")
@@ -248,13 +291,34 @@ def assign_project_slot():
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
 
-    return jsonify(
-        {
-            "ok": True,
-            "message": message,
-            "days": schedule_window(current_user.id, project_id),
-        }
-    )
+    return jsonify({"ok": True, "message": message, **_schedule_window_payload(project_id)})
+
+
+@projects_bp.route("/schedule/move", methods=["POST"])
+@login_required
+def move_project_slot():
+    """Drag and drop on the schedule page: one booking moves onto another block."""
+
+    payload = request.get_json(silent=True) or request.form
+    from_day = parse_slot_date(payload.get("from_date"))
+    to_day = parse_slot_date(payload.get("to_date"))
+    from_slot = (payload.get("from_slot") or "").strip().upper()
+    to_slot = (payload.get("to_slot") or "").strip().upper()
+
+    if from_day is None or to_day is None:
+        return jsonify({"ok": False, "message": "Pick a block to move from and to."}), 400
+
+    ok, message = move_booking(current_user.id, from_day, from_slot, to_day, to_slot)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
+
+    return jsonify({"ok": True, "message": message})
 
 
 @projects_bp.route("/schedule/clear", methods=["POST"])
@@ -280,7 +344,7 @@ def clear_project_slot():
 
     response = {"ok": True, "message": message}
     if project_id is not None:
-        response["days"] = schedule_window(current_user.id, project_id)
+        response.update(_schedule_window_payload(project_id))
     return jsonify(response)
 
 

@@ -15,7 +15,10 @@ container, no external services.
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time against a target.
-- **Schedule** — a calendar card per day that has something booked, seven days ahead in the planner.
+- **Schedule** — three weeks of day sheets, each showing its A/B/C blocks in the same colours as
+  the home page: dashed grey while free, amber once booked, green when the session is done. Click a
+  free block to fill it, or hit Edit and drag projects between blocks; dropping one on a taken block
+  swaps the two.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.

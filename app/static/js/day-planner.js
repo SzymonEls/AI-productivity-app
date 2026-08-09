@@ -60,6 +60,7 @@
                     <button type="button" class="icon-button" data-planner-close aria-label="Close">&times;</button>
                 </header>
                 <p class="planner-status" data-planner-status role="status"></p>
+                <p class="planner-note" data-planner-note hidden></p>
                 <div class="planner-grid" data-planner-grid></div>
             </div>
         `;
@@ -91,14 +92,25 @@
         status.className = `planner-status${tone ? ` planner-status-${tone}` : ""}`;
     }
 
-    function renderGrid(days) {
+    /**
+     * Where the project already stands, said once above the grid.
+     *
+     * The rule blocks whole days at a time, so this used to be printed inside a
+     * day row - next to an arbitrary date, reading as if that one day were the
+     * problem. The server sends it as a single line instead.
+     */
+    function setNote(text) {
+        const note = ensureDialog().querySelector("[data-planner-note]");
+        note.textContent = text || "";
+        note.hidden = !text;
+    }
+
+    function renderGrid(payload) {
         const grid = ensureDialog().querySelector("[data-planner-grid]");
         grid.innerHTML = "";
-        // The same reason applies to every day once both blocks are used, so it
-        // is printed on the first day it appears rather than seven times.
-        let lastReason = "";
+        setNote(payload.note);
 
-        days.forEach((day) => {
+        payload.days.forEach((day) => {
             const row = document.createElement("div");
             row.className = `planner-day${day.is_today ? " planner-day-today" : ""}`;
 
@@ -112,7 +124,13 @@
 
             day.slots.forEach((slot) => {
                 const cell = document.createElement("div");
+                // Same colour language as the A/B/C cards on the home page: amber
+                // for a booked block, grey for the spare C, green once the session
+                // is done, and dashed grey while the block is still free.
                 cell.className = "planner-slot";
+                if (slot.is_optional) {
+                    cell.classList.add("planner-slot-optional");
+                }
 
                 const letter = document.createElement("span");
                 letter.className = "planner-slot-letter";
@@ -121,14 +139,31 @@
 
                 if (slot.project_id) {
                     cell.classList.add("planner-slot-taken");
+                    if (slot.is_done) {
+                        cell.classList.add("planner-slot-done");
+                    }
                     if (slot.is_this_project) {
                         cell.classList.add("planner-slot-mine");
                     }
+
                     const name = document.createElement("span");
                     name.className = "planner-slot-name";
                     name.textContent = slot.project_title;
                     cell.appendChild(name);
+
+                    const remove = document.createElement("button");
+                    remove.type = "button";
+                    remove.className = "planner-slot-remove";
+                    remove.innerHTML = "&times;";
+                    remove.title = `Free block ${slot.slot}`;
+                    remove.setAttribute(
+                        "aria-label",
+                        `Remove ${slot.project_title} from block ${slot.slot} on ${day.label}`
+                    );
+                    remove.addEventListener("click", () => releaseSlot(day.date, slot.slot));
+                    cell.appendChild(remove);
                 } else if (slot.can_take) {
+                    cell.classList.add("planner-slot-free");
                     const button = document.createElement("button");
                     button.type = "button";
                     button.className = "btn btn-outline-secondary btn-sm planner-take";
@@ -147,15 +182,6 @@
             });
 
             row.appendChild(slots);
-
-            if (day.blocked_reason && day.blocked_reason !== lastReason) {
-                const reason = document.createElement("div");
-                reason.className = "planner-day-reason";
-                reason.textContent = day.blocked_reason;
-                row.appendChild(reason);
-            }
-            lastReason = day.blocked_reason;
-
             grid.appendChild(row);
         });
     }
@@ -164,10 +190,32 @@
         setStatus("Saving…", "");
         postJson(SLOT_ENDPOINTS.assign, { project_id: currentProjectId, date, slot })
             .then((payload) => {
-                renderGrid(payload.days);
+                renderGrid(payload);
                 setStatus(payload.message, "success");
                 // The dashboard, the switcher and the schedule page all read
                 // from the server, so refresh once the user closes the dialog.
+                dialog.dataset.dirty = "true";
+            })
+            .catch((error) => setStatus(error.message, "danger"));
+    }
+
+    /**
+     * Free a block from inside the dialog.
+     *
+     * Any booked block can go, not just this project's own: the grid shows the
+     * whole week, and "that Tuesday belongs to something else" is exactly the
+     * thing you want to undo while planning. The endpoint answers with a fresh
+     * window when it knows which project the dialog is about, so the grid can be
+     * redrawn without closing it.
+     */
+    function releaseSlot(date, slot) {
+        setStatus("Removing…", "");
+        postJson(SLOT_ENDPOINTS.clear, { date, slot, project_id: currentProjectId })
+            .then((payload) => {
+                if (payload.days) {
+                    renderGrid(payload);
+                }
+                setStatus(payload.message, "success");
                 dialog.dataset.dirty = "true";
             })
             .catch((error) => setStatus(error.message, "danger"));
@@ -235,6 +283,7 @@
         delete element.dataset.dirty;
         element.querySelector("#plannerTitle").textContent = `Choose a project for slot ${slot}`;
         element.querySelector("[data-planner-grid]").innerHTML = "";
+        element.querySelector("[data-planner-note]").hidden = true;
         setStatus("Loading…", "");
 
         getJson(SLOT_ENDPOINTS.candidates(date, slot))
@@ -254,6 +303,7 @@
             ? `Plan next session · ${projectTitle}`
             : "Plan next session";
         element.querySelector("[data-planner-grid]").innerHTML = "";
+        element.querySelector("[data-planner-note]").hidden = true;
         setStatus("Loading…", "");
 
         fetch(SLOT_ENDPOINTS.window(projectId), {
@@ -267,7 +317,7 @@
                 return payload;
             })
             .then((payload) => {
-                renderGrid(payload.days);
+                renderGrid(payload);
                 setStatus("", "");
             })
             .catch((error) => setStatus(error.message, "danger"));

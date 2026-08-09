@@ -3,71 +3,104 @@
 
 {% block title %}Schedule{% endblock %}
 
+{% macro slot_cell(day, entry) %}
+    {# One block on a sheet. The letter and the two buttons belong to the position
+       and stay put; only [data-slot-content] travels when a project is dragged. #}
+    <li
+        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}"
+        data-slot-cell
+        data-date="{{ day.date.isoformat() }}"
+        data-slot="{{ entry.slot }}"
+    >
+        <span class="day-slot-letter" aria-hidden="true">{{ entry.slot }}</span>
+        <div
+            class="day-slot-content"
+            data-slot-content
+            data-project-id="{{ entry.project.id if entry.project else '' }}"
+            data-done="{{ 1 if entry.is_done else 0 }}"
+        >
+            {% if entry.project %}
+                <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
+                {% if entry.is_done %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
+                {% if entry.plan_heading %}<span class="day-slot-step">{{ entry.plan_heading }}</span>{% endif %}
+            {% else %}
+                <span class="day-slot-free">Free</span>
+            {% endif %}
+        </div>
+        <button
+            type="button"
+            class="icon-button day-slot-clear{% if not entry.project %} d-none{% endif %}"
+            data-clear-slot
+            data-date="{{ day.date.isoformat() }}"
+            data-slot="{{ entry.slot }}"
+            title="Free block {{ entry.slot }}"
+            aria-label="Free block {{ entry.slot }} on {{ day.date.strftime('%d %b') }}"
+        >{{ icon("x") }}</button>
+        {# Covers the whole block, so an empty one is one click away from a project. #}
+        <button
+            type="button"
+            class="day-slot-fill{% if entry.project %} d-none{% endif %}"
+            data-fill-slot
+            data-date="{{ day.date.isoformat() }}"
+            data-slot="{{ entry.slot }}"
+        ><span class="visually-hidden">Choose a project for block {{ entry.slot }} on {{ day.date.strftime('%d %b') }}</span></button>
+    </li>
+{% endmacro %}
+
 {% block content %}
-<div class="dashboard-page schedule-page">
+<div class="dashboard-page schedule-page" data-schedule>
     <section class="dashboard-section dashboard-header-section">
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-2">
                 <h1 class="h5 mb-0">Schedule</h1>
-                <span class="text-muted small">Days with something planned, from today on.</span>
+                <span class="text-muted small">The next three weeks, one sheet per day.</span>
             </div>
-            <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary btn-sm">{{ icon("home") }}Today</a>
+            <div class="d-flex align-items-center gap-2">
+                <span class="schedule-status" data-schedule-status role="status"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-schedule-edit>
+                    {{ icon("pencil") }}<span data-schedule-edit-label>Edit</span>
+                </button>
+                <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary btn-sm">{{ icon("home") }}Today</a>
+            </div>
         </div>
+        <p class="schedule-hint d-none" data-schedule-hint>
+            Drag a project onto another block to move it, or tap it and then tap where it should go.
+            Dropping it on a taken block swaps the two.
+        </p>
     </section>
 
-    {% if days %}
-        <div class="schedule-grid">
-            {% for day in days %}
-                <article class="schedule-card{% if day.is_today %} schedule-card-today{% endif %}" data-schedule-day="{{ day.date.isoformat() }}">
-                    <header class="schedule-card-header">
-                        <span class="schedule-card-weekday">{{ day.date.strftime("%a") }}</span>
-                        <span class="schedule-card-date">{{ day.date.strftime("%d %b") }}</span>
-                        {% if day.is_today %}
-                            <span class="schedule-card-tag">Today</span>
-                        {% elif day.is_tomorrow %}
-                            <span class="schedule-card-tag schedule-card-tag-muted">Tomorrow</span>
-                        {% endif %}
-                    </header>
-                    <ul class="schedule-slot-list">
-                        {% for entry in day.slots %}
-                            <li class="schedule-slot{% if not entry.project %} schedule-slot-free{% endif %}">
-                                <span class="schedule-slot-letter" aria-hidden="true">{{ entry.slot }}</span>
-                                {% if entry.project %}
-                                    <span class="schedule-slot-text">
-                                        <a href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
-                                        {% if entry.plan_heading %}
-                                            <span class="schedule-slot-step">{{ entry.plan_heading }}</span>
-                                        {% endif %}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        class="icon-button schedule-slot-clear"
-                                        data-clear-slot
-                                        data-date="{{ day.date.isoformat() }}"
-                                        data-slot="{{ entry.slot }}"
-                                        title="Free slot {{ entry.slot }}"
-                                        aria-label="Free slot {{ entry.slot }} on {{ day.date.strftime('%d %b') }}"
-                                    >{{ icon("x") }}</button>
-                                {% else %}
-                                    <span class="schedule-slot-text schedule-slot-empty">&mdash;</span>
-                                {% endif %}
-                            </li>
-                        {% endfor %}
-                    </ul>
-                </article>
-            {% endfor %}
-        </div>
-    {% else %}
-        <section class="dashboard-section">
-            <p class="text-muted mb-0">
-                Nothing is planned yet. Pick a project on
-                <a href="{{ url_for('main.home') }}">Today</a> and use &ldquo;Plan&rdquo; to book a session.
-            </p>
+    {% for week in weeks %}
+        <section class="schedule-week">
+            <header class="schedule-week-header">
+                <h2 class="schedule-week-title">{{ week.label }}</h2>
+                <span class="schedule-week-range">{{ week.range_label }}</span>
+            </header>
+            <div class="schedule-grid">
+                {% for day in week.days %}
+                    <article
+                        class="day-sheet{% if day.is_today %} day-sheet-today{% endif %}{% if day.is_weekend %} day-sheet-weekend{% endif %}{% if not day.booked_count %} day-sheet-quiet{% endif %}"
+                        data-schedule-day="{{ day.date.isoformat() }}"
+                    >
+                        <header class="day-sheet-header">
+                            <span class="day-sheet-weekday">{{ day.date.strftime("%a") }}</span>
+                            <span class="day-sheet-number">{{ day.date.strftime("%d") }}</span>
+                            <span class="day-sheet-month">{{ day.date.strftime("%b") }}</span>
+                            {% if day.is_today %}<span class="day-sheet-tag">Today</span>{% endif %}
+                        </header>
+                        <ul class="day-sheet-slots">
+                            {% for entry in day.slots %}
+                                {{ slot_cell(day, entry) }}
+                            {% endfor %}
+                        </ul>
+                    </article>
+                {% endfor %}
+            </div>
         </section>
-    {% endif %}
+    {% endfor %}
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
+<script src="{{ url_for('static', filename='js/schedule-board.js') }}"></script>
 {% endblock %}

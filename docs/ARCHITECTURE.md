@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar and moving a booking between blocks. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
@@ -87,13 +87,13 @@ The schema in the code matches the latest migration (`20260809_0018`).
    ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) adds missing columns with raw `ALTER TABLE`.
    This duplicates migrations — it exists so that old local SQLite files keep working. **Do not extend this block** — make new changes with a migration.
 3. **`OPENAI_API_KEY` and the `requests` library are read but unused** ([config.py](../config.py),
-   [requirements.txt](../requirements.txt)). The `ai` blueprint they were named after is gone as of 1.6.0;
+   [requirements.txt](../requirements.txt)). The `ai` blueprint they were named after is gone as of 1.5.0;
    the variables stay until the repo owner decides otherwise.
 4. **The plan-section "archive" is not a table.** When you archive a project plan section, the text is cut out of `long_goal` and appended to `archived_long_goal`
    via character offsets ([app/projects/routes.py:596-630](../app/projects/routes.py#L596-L630)).
 5. **`_get_or_create_timeline` writes to the database during a GET** — it seeds the timeline when
    the user has none ([app/projects/routes.py](../app/projects/routes.py)). It used to exist in two
-   copies; removing the `ai` blueprint in 1.6.0 left just this one.
+   copies; removing the `ai` blueprint in 1.5.0 left just this one.
 6. **The side menu queries the database on every render** ([app/__init__.py:57-173](../app/__init__.py#L57-L173)) —
    a few queries added to every HTML page; wrapped in `try/except` so it doesn't break the view.
 7. **Save on tab close** — `edit_project` recognizes the `_beacon=1` field and responds "silently"

@@ -1783,15 +1783,64 @@ button.picker-row:hover {
     text-decoration: underline;
 }
 
-/* Schedule page ---------------------------------------------------- */
+/* Schedule page — three weeks of calendar sheets -------------------- */
+
+.schedule-status {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.schedule-status-success { color: var(--success); }
+.schedule-status-danger { color: var(--danger); }
+
+.schedule-hint {
+    margin: 0.6rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+}
+
+.schedule-week + .schedule-week {
+    margin-top: 1.25rem;
+}
+
+.schedule-week-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    padding: 0 0.15rem;
+}
+
+.schedule-week-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.schedule-week-range {
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+}
 
 .schedule-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.6rem;
 }
 
-.schedule-card {
+/* Wide enough for the seven sheets of a week to stand in one row. */
+@media (min-width: 1500px) {
+    .schedule-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+}
+
+/* One day = one sheet off a tear-off calendar: a dated head, a perforation
+   line under it, and the day's three blocks below. */
+.day-sheet {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
@@ -1799,98 +1848,206 @@ button.picker-row:hover {
     overflow: hidden;
 }
 
-.schedule-card-today {
+.day-sheet-today {
     border-color: var(--primary);
 }
 
-.schedule-card-header {
+.day-sheet-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: 0.5rem;
-    padding: 0.6rem 0.9rem;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
     background: var(--surface-2);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px dashed var(--border-strong);
 }
 
-.schedule-card-weekday {
-    font-weight: 600;
+.day-sheet-today .day-sheet-header {
+    background: var(--primary-soft);
 }
 
-.schedule-card-date {
+.day-sheet-weekend .day-sheet-weekday {
+    color: var(--danger);
+}
+
+.day-sheet-weekday {
     color: var(--muted-foreground);
-    font-size: 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
-.schedule-card-tag {
+.day-sheet-number {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.day-sheet-month {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.day-sheet-tag {
     margin-left: auto;
     padding: 0.05rem 0.5rem;
     border-radius: var(--radius-pill);
     background: var(--primary);
     color: var(--primary-foreground);
-    font-size: 0.7rem;
-    text-transform: uppercase;
+    font-size: 0.68rem;
     letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
-.schedule-card-tag-muted {
-    background: var(--muted);
-    color: var(--muted-foreground);
-}
-
-.schedule-slot-list {
+.day-sheet-slots {
     list-style: none;
     margin: 0;
-    padding: 0.5rem 0.9rem 0.75rem;
+    padding: 0.5rem;
     display: grid;
     gap: 0.35rem;
 }
 
-.schedule-slot {
+/* Blocks read the same as the A/B/C cards on the home page: dashed grey while
+   free, amber once booked, grey for the spare C, green when the session is
+   done. Everything below takes its colour from --slot-card-accent. */
+.day-slot {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.4rem;
+    min-width: 0;
+    min-height: 2.4rem;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
 }
 
-.schedule-slot-letter {
-    width: 1.25rem;
+.day-slot.is-free {
+    border-style: dashed;
+}
+
+.day-slot.is-free:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.day-slot.is-booked {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 10%, var(--surface));
+}
+
+/* Same specificity as the rule above, so these have to stay after it. */
+.day-slot.is-booked.day-slot-optional {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+.day-slot.is-booked.is-done {
+    --slot-card-accent: var(--success);
+}
+
+.day-slot-letter {
+    flex: 0 0 auto;
+    width: 1.1rem;
     color: var(--muted-foreground);
+    font-size: 0.75rem;
     font-weight: 700;
-    font-size: 0.8rem;
+    text-align: center;
 }
 
-.schedule-slot-text {
-    display: grid;
+.day-slot.is-booked .day-slot-letter {
+    color: var(--slot-card-accent);
+}
+
+.day-slot-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.35rem;
     min-width: 0;
     flex: 1 1 auto;
 }
 
-.schedule-slot-text a {
-    text-decoration: none;
+.day-slot-title {
     color: inherit;
+    font-size: 0.88rem;
+    font-weight: 500;
     overflow-wrap: anywhere;
 }
 
-.schedule-slot-text a:hover {
+.day-slot-title:hover {
     text-decoration: underline;
 }
 
-.schedule-slot-step {
+.day-slot-done {
+    color: var(--success);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.day-slot-step {
+    flex-basis: 100%;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.day-slot-free {
     color: var(--muted-foreground);
     font-size: 0.8rem;
 }
 
-.schedule-slot-empty {
-    color: var(--muted-foreground);
+/* Freeing a block belongs to edit mode, next to moving one - outside it the
+   sheets are read-only apart from filling an empty block. (.d-none, set by the
+   script on an empty block, still wins over this.) */
+.day-slot-clear {
+    display: none;
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.85rem;
 }
 
-.schedule-slot-clear {
-    opacity: 0;
-    transition: opacity 0.12s ease-in-out;
+.schedule-page.is-editing .day-slot-clear {
+    display: inline-grid;
 }
 
-.schedule-slot:hover .schedule-slot-clear,
-.schedule-slot-clear:focus-visible {
-    opacity: 1;
+/* Covers the block, mirroring the fill button on an empty card at home. */
+.day-slot-fill {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Edit mode: blocks become draggable, and every block is a drop target. */
+.schedule-page.is-editing .day-slot.is-booked .day-slot-content {
+    cursor: grab;
+}
+
+.schedule-page.is-editing .day-slot.is-booked .day-slot-content:active {
+    cursor: grabbing;
+}
+
+.day-slot.is-dragging {
+    opacity: 0.45;
+}
+
+.day-slot.is-drag-over,
+.day-slot.is-picked {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--ring);
 }
 
 /* Planner dialog --------------------------------------------------- */
@@ -1986,6 +2143,7 @@ button.picker-row:hover {
 }
 
 .planner-slot-name {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1993,13 +2151,67 @@ button.picker-row:hover {
     color: var(--muted-foreground);
 }
 
+/* The dialog uses the home page's colour language, so a glance says whether a
+   block is free (dashed grey), booked (amber), spare (grey) or finished (green). */
+.planner-slot-free {
+    border-style: dashed;
+}
+
+.planner-slot-taken {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 10%, var(--surface));
+}
+
+/* Same specificity as the rule above, so these have to stay after it. */
+.planner-slot-taken.planner-slot-optional {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+.planner-slot-taken.planner-slot-done {
+    --slot-card-accent: var(--success);
+}
+
+.planner-slot-taken .planner-slot-letter {
+    color: var(--slot-card-accent);
+}
+
+.planner-slot-taken .planner-slot-name {
+    color: var(--foreground);
+}
+
+/* The project the dialog is about, marked without changing its status colour. */
 .planner-slot-mine {
-    border-color: var(--primary);
-    background: var(--primary-soft);
+    box-shadow: inset 0 0 0 1px var(--slot-card-accent);
 }
 
 .planner-slot-mine .planner-slot-name {
-    color: var(--primary);
+    font-weight: 600;
+}
+
+.planner-slot-blocked {
+    border-style: dashed;
+    opacity: 0.65;
+}
+
+.planner-slot-remove {
+    flex: 0 0 auto;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.planner-slot-remove:hover,
+.planner-slot-remove:focus-visible {
+    background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+    color: var(--danger);
 }
 
 .planner-take {
@@ -2007,10 +2219,19 @@ button.picker-row:hover {
     font-size: 0.75rem;
 }
 
-.planner-day-reason {
-    grid-column: 1 / -1;
+/* Why the free blocks below cannot be taken - one line for the whole grid. */
+.planner-note {
+    margin: 0 0 0.75rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
     color: var(--muted-foreground);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+}
+
+.planner-note[hidden] {
+    display: none;
 }
 
 /* Slot letter in the navbar project switcher ----------------------- */
