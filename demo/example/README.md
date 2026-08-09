@@ -8,7 +8,7 @@ with a backlog group and a note, and two weeks of tracked work sessions.
 |---|---|
 | Email | `demo@example.com` |
 | Password | `demo` |
-| Schema | at migration `20260809_0017` |
+| Schema | at migration `20260809_0018` |
 
 It is a convenience copy, not the source of truth: it was produced by
 `flask --app run.py seed-demo`, and that command is what a deployed demo runs on first boot

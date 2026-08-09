@@ -1517,6 +1517,8 @@
 }
 
 .slot-card {
+    /* Anchors the .stretched-link that turns the whole card into the hit area. */
+    position: relative;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
@@ -1528,13 +1530,155 @@
     box-shadow: var(--shadow-xs);
 }
 
-.slot-card-optional {
+.slot-card-linked {
+    transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
+}
+
+.slot-card-linked:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+/* The link fills the card, so show its focus ring on the card itself. */
+.slot-card-linked:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--ring);
+}
+
+.slot-card-linked .slot-card-title:focus-visible,
+.slot-card-fill:focus-visible {
+    outline: none;
+}
+
+/* Invisible hit area over an empty card, matching the stretched link on a filled one. */
+.slot-card-fill {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Project picker inside the planner dialog */
+
+.picker-list {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    text-align: left;
+}
+
+button.picker-row:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.picker-row-blocked {
+    background: var(--surface-2);
+    color: var(--muted-foreground);
+}
+
+.picker-row-text {
+    display: grid;
+    min-width: 0;
+}
+
+.picker-row-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.picker-row-note {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Today's tracked time against the targets set on the A and B projects. */
+.day-progress {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.day-progress-percent {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.day-progress-percent.is-complete {
+    color: var(--success);
+}
+
+.day-progress-detail {
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Empty is empty, whichever letter it is: grey and dashed, waiting to be filled. */
+.slot-card-empty {
     background: var(--surface-2);
     border-style: dashed;
 }
 
 .slot-card-empty .slot-card-step {
     color: var(--muted-foreground);
+}
+
+/* A booked slot carries an accent bar: amber for the day's real work in A and B,
+   grey for the optional C, so C stays visibly secondary once it is filled. Only
+   the colour differs - everything below reads it from --slot-card-accent. */
+.slot-card:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 7%, var(--surface));
+}
+
+/* Same specificity as the rule above, so it has to stay after it. */
+.slot-card-optional:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+/* A finished session goes green, whichever slot it sits in - last one wins. */
+.slot-card-done:not(.slot-card-empty) {
+    --slot-card-accent: var(--success);
+}
+
+.slot-done-tag {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--success) 18%, var(--surface));
+    color: var(--success);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.slot-card:not(.slot-card-empty):hover {
+    background: color-mix(in srgb, var(--slot-card-accent) 14%, var(--surface));
+    border-color: color-mix(in srgb, var(--slot-card-accent) 55%, var(--border));
 }
 
 .slot-card-letter {
@@ -1548,9 +1692,14 @@
     font-weight: 700;
 }
 
-.slot-card-optional .slot-card-letter {
+.slot-card-empty .slot-card-letter {
     background: var(--muted);
     color: var(--muted-foreground);
+}
+
+.slot-card:not(.slot-card-empty) .slot-card-letter {
+    background: color-mix(in srgb, var(--slot-card-accent) 16%, var(--surface));
+    color: var(--slot-card-accent);
 }
 
 .slot-card-heading {
@@ -1567,8 +1716,9 @@
     color: inherit;
 }
 
+/* No underline on hover: the whole card lights up, which is the affordance here. */
 .slot-card-title:hover {
-    text-decoration: underline;
+    text-decoration: none;
 }
 
 .slot-card-step {
@@ -1889,9 +2039,9 @@
         grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .slot-card-side {
+    .slot-card-side:not(:empty) {
         grid-column: 1 / -1;
-        justify-content: space-between;
+        justify-content: flex-end;
     }
 
     .planner-day {

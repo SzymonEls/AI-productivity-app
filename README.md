@@ -34,9 +34,12 @@ cp app/instance/.env.example app/instance/.env      # every setting is documente
 python run.py
 ```
 
-The app starts at `http://127.0.0.1:5000` and creates the SQLite database and its tables on
+The app starts at `http://127.0.0.1:5001` and creates the SQLite database and its tables on
 first run. Register an account, or set `DEFAULT_LOGIN_EMAIL` / `DEFAULT_LOGIN_PASSWORD` to
 pre-fill the login form.
+
+> Port 5001 rather than Flask's usual 5000: on macOS the AirPlay Receiver in Control Center
+> listens on `*:5000` and answers every request with a 403.
 
 ## Deployment
 

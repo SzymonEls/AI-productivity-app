@@ -212,6 +212,9 @@ class ProjectDaySlot(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=False)
     slot_date = db.Column(db.Date, nullable=False)
     slot = db.Column(db.String(1), nullable=False)
+    # Marks that day's session as finished. It lives on the slot, not the
+    # project, so it resets by itself tomorrow - that is a different row.
+    is_done = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,

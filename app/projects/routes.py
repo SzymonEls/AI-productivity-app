@@ -21,6 +21,8 @@ from .slots import (
     parse_slot_date,
     schedule_window,
     scheduled_days,
+    set_session_done,
+    slot_candidates,
     slots_for_date,
     today_local,
     unscheduled_projects,
@@ -56,6 +58,8 @@ def serialize_slot_card(slot, booking, totals):
     if project is None:
         return {"slot": slot, "project": None}
 
+    is_done = bool(booking.is_done)
+
     shows_time = slot in TIMED_SLOTS
     tracked_seconds = totals.get(project.id, 0) if shows_time else 0
     target_minutes = project.daily_target_minutes if shows_time else None
@@ -63,6 +67,7 @@ def serialize_slot_card(slot, booking, totals):
     return {
         "slot": slot,
         "project": project,
+        "is_done": is_done,
         "plan_heading": first_plan_section_title(project.long_goal),
         "shows_time": shows_time,
         # Same compact format on both sides of the slash: "45m / 2h", not
@@ -70,6 +75,32 @@ def serialize_slot_card(slot, booking, totals):
         # where seconds matter.
         "tracked_label": _minutes_label(tracked_seconds // 60, zero="0m") if shows_time else "",
         "target_label": _minutes_label(target_minutes),
+        # Raw numbers so the day total can be summed without parsing labels.
+        "tracked_minutes": tracked_seconds // 60 if shows_time else 0,
+        "target_minutes": target_minutes or 0,
+    }
+
+
+def day_progress(slot_cards):
+    """
+    How much of today's planned time is done, as a percentage.
+
+    Only slots with a target count, on both sides of the ratio: time spent on a
+    project you never set a target for is not progress against a plan, and
+    counting it would push the figure past 100% for no clear reason. Returns
+    None when nothing is targeted, so the caller can leave the spot empty.
+    """
+    targeted = [card for card in slot_cards if card.get("target_minutes")]
+    if not targeted:
+        return None
+
+    tracked = sum(card["tracked_minutes"] for card in targeted)
+    target = sum(card["target_minutes"] for card in targeted)
+
+    return {
+        "percent": round(tracked / target * 100),
+        "tracked_label": _minutes_label(tracked, zero="0m"),
+        "target_label": _minutes_label(target),
     }
 
 
@@ -151,6 +182,49 @@ def project_schedule_window(project_id):
             "days": schedule_window(current_user.id, project.id),
         }
     )
+
+
+@projects_bp.route("/schedule/candidates")
+@login_required
+def slot_candidate_list():
+    """Projects offered for one empty slot, for the picker on the home page."""
+
+    slot = (request.args.get("slot") or "").strip().upper()
+    day = parse_slot_date(request.args.get("date"))
+
+    if day is None or slot not in SLOTS:
+        return jsonify({"ok": False, "message": "Pick a day and a slot."}), 400
+
+    return jsonify(
+        {
+            "ok": True,
+            "date": day.isoformat(),
+            "slot": slot,
+            "projects": slot_candidates(current_user.id, day, slot),
+        }
+    )
+
+
+@projects_bp.route("/<int:project_id>/session-done", methods=["POST"])
+@login_required
+def toggle_session_done(project_id):
+    """Mark today's session for this project as done, or reopen it."""
+
+    project = _get_user_project_or_404(project_id)
+    payload = request.get_json(silent=True) or request.form
+    done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
+
+    ok, message, is_done = set_session_done(current_user.id, project.id, today_local(), done)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    return jsonify({"ok": True, "message": message, "is_done": is_done})
 
 
 @projects_bp.route("/schedule/assign", methods=["POST"])
@@ -293,11 +367,24 @@ def create_project():
 @login_required
 def project_detail(project_id):
     project = _get_user_project_or_404(project_id)
+    # Today's booking, if any - "Done" only means something when there is a
+    # session today to finish.
+    today_booking = next(
+        (
+            booking
+            for booking in slots_for_date(current_user.id, today_local()).values()
+            if booking and booking.project_id == project.id
+        ),
+        None,
+    )
+
     return render_template(
         "projects/project_detail.html",
         project=project,
         timer_summary=today_project_summary(current_user.id, project.id),
         daily_target_label=_minutes_label(project.daily_target_minutes),
+        today_slot=today_booking.slot if today_booking else "",
+        today_session_done=bool(today_booking and today_booking.is_done),
     )
 
 

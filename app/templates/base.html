@@ -109,7 +109,7 @@
                             {{ icon("calendar") }}Schedule
                         </a>
                         <a class="nav-link {% if request.endpoint == 'projects.timeline_view' %}active{% endif %}" href="{{ url_for('projects.timeline_view') }}">
-                            {{ icon("dashboard") }}Timeline
+                            {{ icon("folder") }}Projects
                         </a>
                         <a class="nav-link {% if request.endpoint and request.endpoint.startswith('time_tracking.') %}active{% endif %}" href="{{ url_for('time_tracking.index') }}">
                             {{ icon("clock") }}Time tracking

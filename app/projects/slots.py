@@ -185,6 +185,49 @@ def _blocked_reason(blocker, day, today):
     return f"Already planned for {blocker.slot_date.strftime('%d %b')} in slot {blocker.slot}."
 
 
+def slot_candidates(user_id, day, slot):
+    """
+    Every active project, annotated with whether it can take this slot.
+
+    Projects the two-block rule rules out are returned too, with the reason,
+    rather than silently missing from the list - "where did that project go" is
+    a worse experience than a greyed-out row that explains itself.
+    """
+    from ..time_tracking.service import first_plan_section_title, project_last_session_labels
+
+    projects = (
+        Project.query.filter_by(user_id=user_id, is_archived=False)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    taken = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
+    labels = project_last_session_labels(user_id, projects)
+    today = today_local()
+
+    candidates = []
+    for project in projects:
+        if taken is not None:
+            reason = f"Slot {slot} is taken by {taken.project.title}."
+        else:
+            reason = _blocked_reason(blocking_booking(user_id, project.id, day), day, today)
+
+        candidates.append(
+            {
+                "id": project.id,
+                "title": project.title,
+                "plan_heading": first_plan_section_title(project.long_goal),
+                "last_session": labels.get(project.id, ""),
+                "is_starred": bool(project.is_starred),
+                "can_take": not reason,
+                "reason": reason,
+            }
+        )
+
+    # Available ones first; the rest keep their alphabetical order underneath.
+    candidates.sort(key=lambda entry: (not entry["can_take"],))
+    return candidates
+
+
 def assign_slot(user_id, project_id, day, slot):
     """
     Book a project into a slot.
@@ -217,6 +260,22 @@ def assign_slot(user_id, project_id, day, slot):
         ProjectDaySlot(user_id=user_id, project_id=project_id, slot_date=day, slot=slot)
     )
     return True, f"Scheduled in slot {slot}."
+
+
+def set_session_done(user_id, project_id, day, done):
+    """
+    Flag the project's session on ``day`` as finished, or unfinished again.
+
+    Returns ``(ok, message, is_done)``; the caller commits.
+    """
+    booking = ProjectDaySlot.query.filter_by(
+        user_id=user_id, project_id=project_id, slot_date=day
+    ).first()
+    if booking is None:
+        return False, "This project has no session today.", False
+
+    booking.is_done = bool(done)
+    return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
 
 
 def clear_slot(user_id, day, slot):

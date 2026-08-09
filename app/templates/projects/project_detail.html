@@ -58,6 +58,22 @@
             <i class="fa-regular fa-calendar" aria-hidden="true"></i>
             <span>Plan next session</span>
         </button>
+        {% if today_slot %}
+            {# Only shown when the project actually has a session today - there is
+               nothing to finish otherwise. The flag lives on today's slot, so it
+               clears itself tomorrow. #}
+            <button
+                type="button"
+                class="btn {% if today_session_done %}btn-success{% else %}btn-outline-secondary{% endif %}"
+                data-session-done
+                data-project-id="{{ project.id }}"
+                data-done="{{ 1 if today_session_done else 0 }}"
+                title="Today's session is in slot {{ today_slot }}"
+            >
+                <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+                <span data-session-done-label>{{ "Done" if today_session_done else "Mark done" }}</span>
+            </button>
+        {% endif %}
         <div class="dropdown">
             <button type="button" class="btn btn-outline-secondary" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More actions">
                 <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>

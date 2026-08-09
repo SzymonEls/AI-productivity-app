@@ -13,12 +13,24 @@
 
     const SLOT_ENDPOINTS = {
         window: (projectId) => `/projects/${projectId}/schedule-window`,
+        candidates: (date, slot) =>
+            `/projects/schedule/candidates?date=${encodeURIComponent(date)}&slot=${encodeURIComponent(slot)}`,
         assign: "/projects/schedule/assign",
         clear: "/projects/schedule/clear",
     };
 
     let dialog = null;
     let currentProjectId = null;
+
+    function getJson(url) {
+        return fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } }).then(async (response) => {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || "Could not load the schedule.");
+            }
+            return payload;
+        });
+    }
 
     function postJson(url, body) {
         return fetch(url, {
@@ -161,6 +173,78 @@
             .catch((error) => setStatus(error.message, "danger"));
     }
 
+    function renderCandidates(projects, date, slot) {
+        const grid = ensureDialog().querySelector("[data-planner-grid]");
+        grid.innerHTML = "";
+
+        if (!projects.length) {
+            setStatus("You have no active projects yet.", "");
+            return;
+        }
+
+        const list = document.createElement("div");
+        list.className = "picker-list";
+
+        projects.forEach((project) => {
+            const row = document.createElement(project.can_take ? "button" : "div");
+            row.className = `picker-row${project.can_take ? "" : " picker-row-blocked"}`;
+            if (project.can_take) {
+                row.type = "button";
+                row.addEventListener("click", () => takeSlotFor(project.id, date, slot));
+            }
+
+            const text = document.createElement("span");
+            text.className = "picker-row-text";
+
+            const title = document.createElement("span");
+            title.className = "picker-row-title";
+            title.textContent = project.title;
+            if (project.is_starred) {
+                const star = document.createElement("span");
+                star.className = "switcher-badge";
+                star.setAttribute("aria-hidden", "true");
+                star.textContent = "★";
+                title.appendChild(star);
+            }
+            text.appendChild(title);
+
+            const note = document.createElement("span");
+            note.className = "picker-row-note";
+            note.textContent = project.can_take
+                ? project.plan_heading || project.last_session
+                : project.reason;
+            text.appendChild(note);
+
+            row.appendChild(text);
+            list.appendChild(row);
+        });
+
+        grid.appendChild(list);
+    }
+
+    function takeSlotFor(projectId, date, slot) {
+        setStatus("Saving…", "");
+        postJson(SLOT_ENDPOINTS.assign, { project_id: projectId, date, slot })
+            .then(() => window.location.reload())
+            .catch((error) => setStatus(error.message, "danger"));
+    }
+
+    function openSlotPicker(date, slot) {
+        const element = ensureDialog();
+        element.hidden = false;
+        delete element.dataset.dirty;
+        element.querySelector("#plannerTitle").textContent = `Choose a project for slot ${slot}`;
+        element.querySelector("[data-planner-grid]").innerHTML = "";
+        setStatus("Loading…", "");
+
+        getJson(SLOT_ENDPOINTS.candidates(date, slot))
+            .then((payload) => {
+                renderCandidates(payload.projects, payload.date, payload.slot);
+                setStatus("", "");
+            })
+            .catch((error) => setStatus(error.message, "danger"));
+    }
+
     function openPlanner(projectId, projectTitle) {
         currentProjectId = projectId;
         const element = ensureDialog();
@@ -204,6 +288,33 @@
         if (trigger) {
             event.preventDefault();
             openPlanner(trigger.dataset.projectId, trigger.dataset.projectTitle);
+            return;
+        }
+
+        const doneButton = event.target.closest("[data-session-done]");
+        if (doneButton) {
+            event.preventDefault();
+            const next = doneButton.dataset.done === "1" ? 0 : 1;
+            doneButton.disabled = true;
+            postJson(`/projects/${doneButton.dataset.projectId}/session-done`, { done: next })
+                .then((payload) => {
+                    doneButton.dataset.done = payload.is_done ? "1" : "0";
+                    doneButton.classList.toggle("btn-success", payload.is_done);
+                    doneButton.classList.toggle("btn-outline-secondary", !payload.is_done);
+                    doneButton.querySelector("[data-session-done-label]").textContent =
+                        payload.is_done ? "Done" : "Mark done";
+                })
+                .catch((error) => window.alert(error.message))
+                .finally(() => {
+                    doneButton.disabled = false;
+                });
+            return;
+        }
+
+        const emptySlot = event.target.closest("[data-fill-slot]");
+        if (emptySlot) {
+            event.preventDefault();
+            openSlotPicker(emptySlot.dataset.date, emptySlot.dataset.slot);
             return;
         }
 

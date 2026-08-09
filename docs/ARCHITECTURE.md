@@ -58,12 +58,13 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **ProjectTimelineGroup** — a group (column) on the timeline; the `is_backlog` flag = "off timeline".
 - **ProjectTimelineItem** — a tile: a project or a note (`item_type` = `"project"`/`"note"`).
 - **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
+  `is_done` marks that day's session finished - it lives on the slot, so it clears itself tomorrow.
   Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
   `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 
-The schema in the code matches the latest migration (`20260809_0017`).
+The schema in the code matches the latest migration (`20260809_0018`).
 
 ## Responsibility boundaries
 

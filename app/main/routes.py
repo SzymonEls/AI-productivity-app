@@ -24,18 +24,20 @@ def home():
     if not current_user.is_authenticated:
         return redirect(url_for("auth.login"))
 
-    from ..projects.routes import serialize_slot_card
+    from ..projects.routes import day_progress, serialize_slot_card
 
     today = today_local()
     booked = slots_for_date(current_user.id, today)
     # One query for every project's time today, rather than one per slot.
     totals = daily_totals_by_project(current_user.id, today)
     unplanned = unscheduled_projects(current_user.id)
+    slot_cards = [serialize_slot_card(slot, booked[slot], totals) for slot in SLOTS]
 
     return render_template(
         "home.html",
         today=today,
-        slot_cards=[serialize_slot_card(slot, booked[slot], totals) for slot in SLOTS],
+        slot_cards=slot_cards,
+        day_progress=day_progress(slot_cards),
         timed_slots=TIMED_SLOTS,
         unplanned_projects=unplanned,
         project_last_session_labels=project_last_session_labels(current_user.id, unplanned),

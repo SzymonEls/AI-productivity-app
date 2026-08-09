@@ -372,7 +372,14 @@ def _seed_day_slots(user, projects):
 
     for day, slot, project in bookings:
         db.session.add(
-            ProjectDaySlot(owner=user, project=project, slot_date=day, slot=slot)
+            ProjectDaySlot(
+                owner=user,
+                project=project,
+                slot_date=day,
+                slot=slot,
+                # One of today's sessions is finished, so the demo shows that state too.
+                is_done=(day == today and slot == "B"),
+            )
         )
 
     # A target so the dashboard shows "45m / 2h" rather than just the elapsed time.

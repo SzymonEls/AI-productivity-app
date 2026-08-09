@@ -11,10 +11,12 @@
                 <h1 class="h5 mb-0">Today</h1>
                 <span class="text-muted small">{{ today.strftime("%A, %d %B") }}</span>
             </div>
-            <div class="d-flex align-items-center gap-2">
-                <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
-                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
-            </div>
+            {% if day_progress %}
+                <div class="day-progress" title="Time tracked today against the targets of the projects in slots A and B">
+                    <span class="day-progress-percent{% if day_progress.percent >= 100 %} is-complete{% endif %}">{{ day_progress.percent }}%</span>
+                    <span class="day-progress-detail">{{ day_progress.tracked_label }} / {{ day_progress.target_label }}</span>
+                </div>
+            {% endif %}
         </div>
     </section>
 
@@ -22,16 +24,20 @@
         <section class="day-slots-main">
             {% for card in slot_cards %}
                 {% set is_optional = card.slot not in timed_slots %}
-                <article class="slot-card{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}">
+                <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}{% if card.is_done %} slot-card-done{% endif %}">
                     <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
                     <div class="slot-card-body">
                         {% if card.project %}
                             <div class="slot-card-heading">
-                                <a class="slot-card-title" href="{{ url_for('projects.project_detail', project_id=card.project.id) }}">
+                                {# stretched-link makes the whole card the hit area without
+                                   wrapping the card in an anchor, which would turn the time
+                                   and the badges into link text for a screen reader. #}
+                                <a class="slot-card-title stretched-link" href="{{ url_for('projects.project_detail', project_id=card.project.id) }}">
                                     {{ card.project.title }}
                                 </a>
                                 {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
                                 {% if card.project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                                {% if card.is_done %}<span class="slot-done-tag">Done</span>{% endif %}
                             </div>
                             {% if card.plan_heading %}
                                 <p class="slot-card-step mb-0">{{ card.plan_heading }}</p>
@@ -39,7 +45,17 @@
                                 <p class="slot-card-step slot-card-step-empty mb-0">No <code>#</code> section in the plan yet</p>
                             {% endif %}
                         {% else %}
-                            <p class="slot-card-step mb-0">Nothing planned for slot {{ card.slot }}.</p>
+                            <p class="slot-card-step mb-0">Nothing planned &mdash; pick a project.</p>
+                            {# Covers the whole card, mirroring the stretched link on a filled one. #}
+                            <button
+                                type="button"
+                                class="slot-card-fill"
+                                data-fill-slot
+                                data-date="{{ today.isoformat() }}"
+                                data-slot="{{ card.slot }}"
+                            >
+                                <span class="visually-hidden">Choose a project for slot {{ card.slot }}</span>
+                            </button>
                         {% endif %}
                     </div>
                     <div class="slot-card-side">
@@ -47,15 +63,6 @@
                             <span class="slot-card-time">
                                 {{ card.tracked_label }}{% if card.target_label %} <span class="slot-card-target">/ {{ card.target_label }}</span>{% endif %}
                             </span>
-                        {% endif %}
-                        {% if card.project %}
-                            <button
-                                type="button"
-                                class="btn btn-outline-secondary btn-sm"
-                                data-plan-session
-                                data-project-id="{{ card.project.id }}"
-                                data-project-title="{{ card.project.title }}"
-                            >{{ icon("calendar") }}Plan</button>
                         {% endif %}
                     </div>
                 </article>
