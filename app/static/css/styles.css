@@ -1975,7 +1975,7 @@ button.picker-row:hover {
 
 .day-slot-title {
     color: inherit;
-    font-size: 0.88rem;
+    font-size: 0.95rem;
     font-weight: 500;
     overflow-wrap: anywhere;
 }
@@ -1995,7 +1995,7 @@ button.picker-row:hover {
     min-width: 0;
     overflow: hidden;
     color: var(--muted-foreground);
-    font-size: 0.75rem;
+    font-size: 0.95rem;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
