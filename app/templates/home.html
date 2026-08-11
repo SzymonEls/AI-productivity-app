@@ -71,7 +71,7 @@
 
         <aside class="day-slots-aside">
             <div class="dashboard-section">
-                <h2 class="h6 mb-1">Not scheduled</h2>
+                <h2 class="h6 mb-1">Not scheduled{% if unplanned_projects %} <span class="text-muted fw-normal">({{ unplanned_projects|length }})</span>{% endif %}</h2>
                 <p class="text-muted small mb-3">No session planned after today.</p>
                 {% if unplanned_projects %}
                     <ul class="unplanned-list">
