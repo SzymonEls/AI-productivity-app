@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
@@ -14,14 +16,18 @@ from ..time_tracking.service import (
     utc_now,
 )
 from .slots import (
+    CALENDAR_WEEKS,
+    DAYS_PER_WEEK,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
     booking_note,
     calendar_weeks,
     clear_slot,
+    first_booked_day,
     move_booking,
     parse_slot_date,
+    past_calendar_weeks,
     schedule_window,
     set_session_done,
     slot_candidates,
@@ -136,12 +142,74 @@ def schedule():
     return render_template("projects/schedule.html", weeks=weeks, today=today)
 
 
+@projects_bp.route("/schedule/archive")
+@login_required
+def schedule_archive():
+    """The same sheets for days that have already been, three weeks at a time.
+
+    Read-only: nothing can be booked, moved or freed in the past, so the blocks
+    are shown without the buttons the board carries. ``until`` is the last day on
+    the page; the two links are worked out from the page's own edges, which keeps
+    the pages gapless whatever weekday the first one starts on.
+    """
+    today = today_local()
+    yesterday = today - timedelta(days=1)
+    until = parse_slot_date(request.args.get("until")) or yesterday
+    # A page reaching into the future would repeat the schedule page.
+    until = min(until, yesterday)
+
+    weeks = past_calendar_weeks(current_user.id, end_day=until)
+    # The weeks run newest first, so the page's edges are the oldest week's first
+    # day and the newest week's last one.
+    first_day = weeks[-1][0][0]
+    last_day = weeks[0][-1][0]
+    earliest = first_booked_day(current_user.id)
+
+    return render_template(
+        "projects/archive.html",
+        weeks=[
+            {
+                "label": _past_week_label(week[0][0], today),
+                "range_label": _date_range_label(week[0][0], week[-1][0]),
+                "days": [_serialize_schedule_day(day, booked, today) for day, booked in week],
+            }
+            for week in weeks
+        ],
+        booked_count=sum(
+            1 for week in weeks for _, booked in week for entry in booked.values() if entry
+        ),
+        range_label=_date_range_label(first_day, last_day),
+        # No point offering a page older than the first booking there has ever been.
+        earlier_until=first_day - timedelta(days=1)
+        if earliest is not None and earliest < first_day
+        else None,
+        later_until=min(last_day + timedelta(days=CALENDAR_WEEKS * DAYS_PER_WEEK), yesterday)
+        if last_day < yesterday
+        else None,
+    )
+
+
 # Calendar weeks, Monday to Sunday: "this week" is whatever is left of it.
 _WEEK_LABELS = ("This week", "Next week", "In two weeks")
+# The archive counts the other way, and says so from the week's own dates rather
+# than its place on the page - "Last week" has to mean last week on every page.
+# 0 happens on the newest page every day but a Monday: the days of this week that
+# are already behind us.
+_PAST_WEEK_LABELS = {
+    0: "Earlier this week",
+    1: "Last week",
+    2: "Two weeks ago",
+    3: "Three weeks ago",
+}
 
 
 def _week_label(index):
     return _WEEK_LABELS[index] if index < len(_WEEK_LABELS) else f"In {index} weeks"
+
+
+def _past_week_label(week_start, today):
+    weeks_ago = ((today - timedelta(days=today.weekday())) - week_start).days // DAYS_PER_WEEK
+    return _PAST_WEEK_LABELS.get(weeks_ago, f"{weeks_ago} weeks ago")
 
 
 def _date_range_label(first, last):

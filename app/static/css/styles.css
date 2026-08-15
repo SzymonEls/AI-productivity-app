@@ -2024,7 +2024,9 @@ button.picker-row:hover {
     border-style: dashed;
 }
 
-.day-slot.is-free:hover {
+/* Only on the board: the archive renders the same blocks, but nothing there
+   answers a click, so neither should hover or the grab cursor below. */
+[data-schedule] .day-slot.is-free:hover {
     background: var(--surface-hover);
     border-color: var(--border-strong);
 }
@@ -2124,11 +2126,11 @@ button.picker-row:hover {
 }
 
 /* A booked block is always draggable, and every block is a drop target. */
-.day-slot.is-booked .day-slot-content {
+[data-schedule] .day-slot.is-booked .day-slot-content {
     cursor: grab;
 }
 
-.day-slot.is-booked .day-slot-content:active {
+[data-schedule] .day-slot.is-booked .day-slot-content:active {
     cursor: grabbing;
 }
 
