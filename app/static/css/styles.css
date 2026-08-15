@@ -2102,16 +2102,14 @@ button.picker-row:hover {
 /* Freeing a block belongs to edit mode, next to moving one - outside it the
    sheets are read-only apart from filling an empty block. (.d-none, set by the
    script on an empty block, still wins over this.) */
+/* The board is always live, so the × sits on every booked block; the template
+   and refreshCell() put .d-none on the free ones, which outranks this. */
 .day-slot-clear {
-    display: none;
+    display: inline-grid;
     flex: 0 0 auto;
     width: 1.5rem;
     height: 1.5rem;
     font-size: 0.85rem;
-}
-
-.schedule-page.is-editing .day-slot-clear {
-    display: inline-grid;
 }
 
 /* Covers the block, mirroring the fill button on an empty card at home. */
@@ -2125,12 +2123,12 @@ button.picker-row:hover {
     cursor: pointer;
 }
 
-/* Edit mode: blocks become draggable, and every block is a drop target. */
-.schedule-page.is-editing .day-slot.is-booked .day-slot-content {
+/* A booked block is always draggable, and every block is a drop target. */
+.day-slot.is-booked .day-slot-content {
     cursor: grab;
 }
 
-.schedule-page.is-editing .day-slot.is-booked .day-slot-content:active {
+.day-slot.is-booked .day-slot-content:active {
     cursor: grabbing;
 }
 
