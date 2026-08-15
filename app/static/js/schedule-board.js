@@ -1,14 +1,19 @@
 /**
- * Edit mode for the schedule page.
+ * The schedule page as a board.
  *
- * "Edit" turns the three weeks of day sheets into a board: a booked block can be
- * dragged onto any other block, and dropping it on a taken one swaps the two.
- * The same move works by tapping - pick a block, then tap where it goes - which
- * is what keeps this usable on a phone, where HTML5 drag events do not fire.
+ * The three weeks of day sheets are always live: a booked block can be dragged
+ * onto any other block, and dropping it on a taken one swaps the two. The same
+ * move works by tapping - pick a block, then tap where it goes - which is what
+ * keeps this usable on a phone, where HTML5 drag events do not fire.
  *
- * The move is applied to the page first and posted afterwards; a rejected move
- * (the "one block today plus one in the future" rule) is undone again, so the
- * page never has to reload to stay truthful.
+ * There is no edit mode to switch on. It used to be one, and every action that
+ * reloaded the page threw it away; a board that is simply always a board has no
+ * state to lose. The cost is that a block's title no longer opens the project -
+ * on the board a click means "move this".
+ *
+ * Moves and clears are applied to the page first and posted afterwards; a
+ * refused one (the "one block today plus one in the future" rule) is undone
+ * again, so the page never has to reload to stay truthful.
  */
 (function () {
     "use strict";
@@ -19,17 +24,14 @@
     }
 
     const MOVE_ENDPOINT = "/projects/schedule/move";
-    const editButton = root.querySelector("[data-schedule-edit]");
-    const editLabel = root.querySelector("[data-schedule-edit-label]");
-    const hint = root.querySelector("[data-schedule-hint]");
+    const CLEAR_ENDPOINT = "/projects/schedule/clear";
     const statusOutput = root.querySelector("[data-schedule-status]");
 
-    let editMode = false;
     let pickedCell = null;
     let draggedContent = null;
     let statusTimer = null;
 
-    function postJson(url, body) {
+    function postJson(url, body, fallbackMessage) {
         return fetch(url, {
             method: "POST",
             headers: {
@@ -40,7 +42,7 @@
         }).then(async (response) => {
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload.ok) {
-                throw new Error(payload.message || "Could not move the block.");
+                throw new Error(payload.message || fallbackMessage);
             }
             return payload;
         });
@@ -78,7 +80,7 @@
         cell.classList.toggle("is-done", booked && content.dataset.done === "1");
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
-        content.draggable = editMode && booked;
+        content.draggable = booked;
     }
 
     function setDone(content, done) {
@@ -140,16 +142,85 @@
         const undo = applyMove(fromCell, toCell);
         setStatus("Moving…", "");
 
-        postJson(MOVE_ENDPOINT, {
-            from_date: fromCell.dataset.date,
-            from_slot: fromCell.dataset.slot,
-            to_date: toCell.dataset.date,
-            to_slot: toCell.dataset.slot,
-        })
+        postJson(
+            MOVE_ENDPOINT,
+            {
+                from_date: fromCell.dataset.date,
+                from_slot: fromCell.dataset.slot,
+                to_date: toCell.dataset.date,
+                to_slot: toCell.dataset.slot,
+            },
+            "Could not move the block."
+        )
             .then((payload) => setStatus(payload.message, "success"))
             .catch((error) => {
                 undo();
                 setStatus(error.message, "danger");
+            });
+    }
+
+    /**
+     * Empty a block on the page and return the function that fills it back in.
+     *
+     * The same shape as applyMove: the page changes first and the request
+     * follows, so a refused clear can be put back where it was. Freeing a block
+     * used to reload the page, which threw away edit mode along with it - only
+     * the Edit button ends that now.
+     */
+    function applyClear(cell) {
+        const content = contentOf(cell);
+        const previous = {
+            projectId: content.dataset.projectId,
+            done: content.dataset.done,
+            nodes: Array.from(content.childNodes),
+        };
+
+        // What the template puts in an empty block.
+        const free = document.createElement("span");
+        free.className = "day-slot-free";
+        free.textContent = "Free";
+
+        content.dataset.projectId = "";
+        content.dataset.done = "0";
+        content.replaceChildren(free);
+        refreshCell(cell);
+
+        return function undo() {
+            content.dataset.projectId = previous.projectId;
+            content.dataset.done = previous.done;
+            content.replaceChildren(...previous.nodes);
+            refreshCell(cell);
+        };
+    }
+
+    function requestClear(button) {
+        const cell = button.closest("[data-slot-cell]");
+        if (!cell || !isBooked(cell)) {
+            return;
+        }
+        // A block on its way out cannot stay picked up for a move.
+        if (pickedCell === cell) {
+            clearPick();
+        }
+
+        const undo = applyClear(cell);
+        button.disabled = true;
+        setStatus("Freeing…", "");
+
+        postJson(
+            CLEAR_ENDPOINT,
+            { date: cell.dataset.date, slot: cell.dataset.slot },
+            "Could not free the block."
+        )
+            .then((payload) => setStatus(payload.message, "success"))
+            .catch((error) => {
+                undo();
+                setStatus(error.message, "danger");
+            })
+            // The button belongs to the position, not the project: it is hidden
+            // now, but the next booking to land here needs it working again.
+            .finally(() => {
+                button.disabled = false;
             });
     }
 
@@ -165,34 +236,33 @@
         setStatus("Now tap the block it should go to.", "");
     }
 
-    function setEditMode(enabled) {
-        editMode = enabled;
-        root.classList.toggle("is-editing", enabled);
-        editButton.classList.toggle("btn-primary", enabled);
-        editButton.classList.toggle("btn-outline-secondary", !enabled);
-        editLabel.textContent = enabled ? "Done" : "Edit";
-        hint.classList.toggle("d-none", !enabled);
-        clearPick();
-        setStatus("", "");
-        cells().forEach(refreshCell);
-    }
+    // The template renders every block in its final state; only "draggable"
+    // belongs to the script, so the board is set up in one pass.
+    cells().forEach(refreshCell);
 
-    editButton.addEventListener("click", () => setEditMode(!editMode));
-
-    document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || !editMode) {
+    // Its own listener rather than a branch of the one below, which steps aside
+    // for these buttons.
+    root.addEventListener("click", (event) => {
+        const clearButton = event.target.closest("[data-clear-slot]");
+        if (!clearButton) {
             return;
         }
-        if (pickedCell) {
-            clearPick();
-            setStatus("", "");
-        } else {
-            setEditMode(false);
+        event.preventDefault();
+        requestClear(clearButton);
+    });
+
+    // Escape drops a block that was picked up. There is no longer a mode behind
+    // it to leave.
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || !pickedCell) {
+            return;
         }
+        clearPick();
+        setStatus("", "");
     });
 
     root.addEventListener("click", (event) => {
-        if (!editMode || event.target.closest("[data-clear-slot]")) {
+        if (event.target.closest("[data-clear-slot]")) {
             return;
         }
 
@@ -201,7 +271,7 @@
             return;
         }
 
-        // Titles are links; in edit mode a click means "move this", not "open it".
+        // Titles are links; on the board a click means "move this", not "open it".
         if (event.target.closest(".day-slot-title")) {
             event.preventDefault();
         }
@@ -225,12 +295,12 @@
             pick(cell);
         }
         // An empty block with nothing picked up falls through to the project
-        // picker, so edit mode can fill a day as well as rearrange it.
+        // picker, so the board fills a day as well as rearranging it.
     });
 
     root.addEventListener("dragstart", (event) => {
         const content = event.target.closest("[data-slot-content]");
-        if (!editMode || !content || !content.dataset.projectId) {
+        if (!content || !content.dataset.projectId) {
             event.preventDefault();
             return;
         }
@@ -244,7 +314,7 @@
 
     root.addEventListener("dragover", (event) => {
         const cell = event.target.closest("[data-slot-cell]");
-        if (!editMode || !draggedContent || !cell || cell.contains(draggedContent)) {
+        if (!draggedContent || !cell || cell.contains(draggedContent)) {
             return;
         }
         event.preventDefault();
@@ -261,7 +331,7 @@
 
     root.addEventListener("drop", (event) => {
         const cell = event.target.closest("[data-slot-cell]");
-        if (!editMode || !draggedContent || !cell) {
+        if (!draggedContent || !cell) {
             return;
         }
         event.preventDefault();

@@ -9,7 +9,7 @@ CALENDAR_TIMEZONE rather than in UTC.
 
 from datetime import date, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
 
 from ..extensions import db
@@ -24,6 +24,21 @@ SCHEDULE_WINDOW_DAYS = 7
 # The schedule page shows three rolling weeks of day cards, empty days included.
 CALENDAR_WEEKS = 3
 DAYS_PER_WEEK = 7
+
+# The health score on the home page: the last week of finished sessions weighed
+# against how much of the project list has a next session planned. The sessions
+# half measures the bookings that were actually made - A, B and C alike - so an
+# empty slot is neither a session missed nor one to make up for.
+# The window ends yesterday. Today is still being worked on, and counting its
+# bookings would open every morning with a drop that the day then undoes.
+HEALTH_WINDOW_DAYS = 7
+# Doing the work counts for more than having planned it, but not by much - a week
+# of sessions with nothing lined up afterwards is not a healthy system either.
+HEALTH_SESSIONS_WEIGHT = 0.6
+HEALTH_PLANNING_WEIGHT = 0.4
+# Below these the ring turns amber and then red.
+HEALTH_GOOD_PERCENT = 75
+HEALTH_WARN_PERCENT = 50
 
 
 def today_local():
@@ -138,6 +153,83 @@ def unscheduled_projects(user_id):
         .order_by(func.lower(Project.title).asc())
         .all()
     )
+
+
+def session_counts_since(user_id, first_day, last_day):
+    """``(booked, done)`` slots between the two dates, inclusive.
+
+    Both halves come from one pass over the range: "done" is only ever a share
+    of what was booked, so the two numbers are never wanted apart.
+    """
+    booked, done = (
+        db.session.query(
+            func.count(ProjectDaySlot.id),
+            # count() skips the NULLs the case leaves for the unfinished ones.
+            func.count(case((ProjectDaySlot.is_done.is_(True), 1))),
+        )
+        .filter(
+            ProjectDaySlot.user_id == user_id,
+            ProjectDaySlot.slot_date >= first_day,
+            ProjectDaySlot.slot_date <= last_day,
+        )
+        .one()
+    )
+    return booked or 0, done or 0
+
+
+def system_health(user_id, unplanned=None):
+    """
+    One 0-100 figure for "is this system being used", from two halves.
+
+    *Sessions* - of the sessions booked over the week before today, how many were
+    ticked off. Only booked slots count, in A, B and C alike: a slot nobody
+    filled was never a session to miss, so leaving one empty neither helps nor
+    hurts. Today is left out entirely, so the score only falls in the morning if
+    yesterday was left unfinished.
+    *Planning* - the share of active projects that have a next session booked,
+    which is the "Not scheduled" list read the other way round.
+
+    ``unplanned`` takes the list the caller already has (the home page renders
+    it) so the same query does not run twice; leave it out and it is fetched.
+    """
+    today = today_local()
+    yesterday = today - timedelta(days=1)
+    booked, done = session_counts_since(
+        user_id, yesterday - timedelta(days=HEALTH_WINDOW_DAYS - 1), yesterday
+    )
+    # A week with nothing booked scores zero rather than full marks: there is no
+    # completion rate to read off it, and an empty week is not a healthy one.
+    sessions_score = done / booked if booked else 0.0
+
+    if unplanned is None:
+        unplanned = unscheduled_projects(user_id)
+    unplanned_count = len(unplanned)
+    active_count = Project.query.filter_by(user_id=user_id, is_archived=False).count()
+    # No projects at all is not a failure to plan them, so it scores full marks
+    # rather than zero - the sessions half already says the system is idle.
+    planned_count = max(active_count - unplanned_count, 0)
+    planning_score = 1.0 if not active_count else planned_count / active_count
+
+    percent = round(
+        (sessions_score * HEALTH_SESSIONS_WEIGHT + planning_score * HEALTH_PLANNING_WEIGHT) * 100
+    )
+    if percent >= HEALTH_GOOD_PERCENT:
+        level = "good"
+    elif percent >= HEALTH_WARN_PERCENT:
+        level = "warn"
+    else:
+        level = "bad"
+
+    return {
+        "percent": percent,
+        "level": level,
+        "window_days": HEALTH_WINDOW_DAYS,
+        "done_sessions": done,
+        "booked_sessions": booked,
+        "planned_projects": planned_count,
+        "active_projects": active_count,
+        "unplanned_projects": unplanned_count,
+    }
 
 
 def project_bookings(user_id, project_id, ignore_ids=()):

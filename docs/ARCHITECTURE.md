@@ -24,9 +24,9 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar and moving a booking between blocks. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar, moving a booking between blocks and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
-| [app/main/](../app/main/) | Home page (today's A/B/C slots) + PWA files (manifest, service worker). |
+| [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
@@ -108,6 +108,16 @@ The schema in the code matches the latest migration (`20260809_0018`).
    so the flag is a Jinja global instead. Point 5 still applies in demo mode: the guard only stops writes
    on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
    timeline up front, which makes that a no-op.
+
+10. **The home page's health score is a convention, not a measurement.** `system_health`
+    ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
+    booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
+    counts on neither side of it), and the share of active projects that have a next session booked —
+    weighted 60/40, with the bands at 75 and 50 deciding the colour. The window and those four
+    numbers are constants at the top of the file; change them there, not in the template. Two
+    consequences worth knowing: today is deliberately outside the window, so the score moves in the
+    morning only when yesterday was left unfinished, and a week with nothing booked scores zero on
+    the sessions half rather than dividing by zero.
 
 ## What not to touch (and why)
 

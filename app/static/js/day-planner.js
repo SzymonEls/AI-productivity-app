@@ -5,8 +5,9 @@
  * "not scheduled" list, the project page). Renders a day x slot grid and books
  * a free slot without leaving the page.
  *
- * Also wires [data-clear-slot] buttons on the schedule page, which share the
- * same endpoint.
+ * Freeing a block used to live here too. It moved to schedule-board.js, the only
+ * page with those buttons, because emptying a block in place keeps edit mode -
+ * the reload this module does after booking would end it.
  */
 (function () {
     "use strict";
@@ -365,23 +366,6 @@
         if (emptySlot) {
             event.preventDefault();
             openSlotPicker(emptySlot.dataset.date, emptySlot.dataset.slot);
-            return;
         }
-
-        const clearButton = event.target.closest("[data-clear-slot]");
-        if (!clearButton) {
-            return;
-        }
-        event.preventDefault();
-        clearButton.disabled = true;
-        postJson(SLOT_ENDPOINTS.clear, {
-            date: clearButton.dataset.date,
-            slot: clearButton.dataset.slot,
-        })
-            .then(() => window.location.reload())
-            .catch((error) => {
-                clearButton.disabled = false;
-                window.alert(error.message);
-            });
     });
 })();

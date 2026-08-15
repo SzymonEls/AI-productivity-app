@@ -15,10 +15,12 @@ container, no external services.
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time against a target.
+  Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
+  were ticked off, mixed with how much of the project list has a next session planned.
 - **Schedule** — three weeks of day sheets, each showing its A/B/C blocks in the same colours as
-  the home page: dashed grey while free, amber once booked, green when the session is done. Click a
-  free block to fill it, or hit Edit and drag projects between blocks; dropping one on a taken block
-  swaps the two.
+  the home page: dashed grey while free, amber once booked, green when the session is done. The
+  sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
+  project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.
