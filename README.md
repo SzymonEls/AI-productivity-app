@@ -15,6 +15,8 @@ container, no external services.
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time against a target.
+  Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
+  were ticked off, mixed with how much of the project list has a next session planned.
 - **Schedule** — three weeks of day sheets, each showing its A/B/C blocks in the same colours as
   the home page: dashed grey while free, amber once booked, green when the session is done. Click a
   free block to fill it, or hit Edit and drag projects between blocks; dropping one on a taken block

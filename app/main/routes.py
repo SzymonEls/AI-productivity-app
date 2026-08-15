@@ -5,6 +5,7 @@ from ..projects.slots import (
     SLOTS,
     TIMED_SLOTS,
     slots_for_date,
+    system_health,
     today_local,
     unscheduled_projects,
 )
@@ -41,6 +42,9 @@ def home():
         timed_slots=TIMED_SLOTS,
         unplanned_projects=unplanned,
         project_last_session_labels=project_last_session_labels(current_user.id, unplanned),
+        # The list is passed in so the health figure reuses it instead of
+        # asking for the unscheduled projects a second time.
+        health=system_health(current_user.id, unplanned),
     )
 
 
