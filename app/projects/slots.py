@@ -131,6 +131,53 @@ def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
     return calendar
 
 
+def past_calendar_weeks(user_id, weeks=CALENDAR_WEEKS, end_day=None):
+    """
+    The archive: ``weeks`` calendar weeks up to and including ``end_day``
+    (yesterday by default), newest week first.
+
+    The mirror image of calendar_weeks(). There the first week is the short one,
+    because it starts today; here it is the newest, because it ends on ``end_day``
+    - every other week runs Monday to Sunday in full. Days keep their calendar
+    order inside a week; only the weeks are reversed, so the page opens on what
+    happened most recently.
+    """
+    end_day = today_local() - timedelta(days=1) if end_day is None else end_day
+    # Monday is weekday() 0, so this is 1 on a Monday and 7 on a Sunday.
+    newest_week_days = end_day.weekday() + 1
+    total_days = newest_week_days + (weeks - 1) * DAYS_PER_WEEK
+    booked = slots_from(user_id, end_day - timedelta(days=total_days - 1), end_day)
+
+    calendar = []
+    last_day = end_day
+    for index in range(weeks):
+        length = newest_week_days if index == 0 else DAYS_PER_WEEK
+        monday = last_day - timedelta(days=length - 1)
+        calendar.append(
+            [
+                (
+                    monday + timedelta(days=offset),
+                    booked.get(monday + timedelta(days=offset), {slot: None for slot in SLOTS}),
+                )
+                for offset in range(length)
+            ]
+        )
+        last_day = monday - timedelta(days=1)
+    return calendar
+
+
+def first_booked_day(user_id):
+    """The earliest day this user ever booked, or None if they never have.
+
+    The archive stops there rather than paging back through empty weeks forever.
+    """
+    return (
+        db.session.query(func.min(ProjectDaySlot.slot_date))
+        .filter(ProjectDaySlot.user_id == user_id)
+        .scalar()
+    )
+
+
 def unscheduled_projects(user_id):
     """
     Active projects with no slot *after* today.
