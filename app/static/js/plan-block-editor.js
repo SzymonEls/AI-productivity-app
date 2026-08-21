@@ -871,9 +871,20 @@
                     ${cmd.key === currentKey ? "<span class=\"pbe-menu-check\">✓</span>" : ""}
                 </button>`).join("");
 
+            // "Move to first section" is only offered when it would actually move
+            // something: there has to be a section to move into, and the blocks must
+            // not already be sitting in it. The count is of the blocks that would
+            // move, not of the whole selection - a heading in it stays where it is.
+            const movable = this._movableToFirstSection(targetIds);
+            const moveItem = movable.length
+                ? `<div class="pbe-menu-sep"></div>
+                <button type="button" class="pbe-menu-item" data-action="first-section"><span class="pbe-menu-label">${movable.length > 1 ? `Move ${movable.length} blocks to first section` : "Move to first section"}</span></button>`
+                : "";
+
             this.blockMenu.innerHTML = `
                 <div class="pbe-menu-heading">${multiple ? `Turn ${targetIds.length} blocks into` : "Turn into"}</div>
                 ${turnItems}
+                ${moveItem}
                 <div class="pbe-menu-sep"></div>
                 <button type="button" class="pbe-menu-item" data-action="add-below"><span class="pbe-menu-label">Add block below</span></button>
                 <button type="button" class="pbe-menu-item" data-action="duplicate"><span class="pbe-menu-label">Duplicate</span></button>
@@ -905,6 +916,8 @@
 
             if (action === "turn") {
                 this._turnInto(blockId, item.dataset.key);
+            } else if (action === "first-section") {
+                this._moveToFirstSection(blockId);
             } else if (action === "add-below") {
                 const next = { id: uid(), type: "paragraph", text: "", level: 0 };
                 this.blocks.splice(this.indexOf(blockId) + 1, 0, next);
@@ -929,6 +942,60 @@
                 this.focusBlock(focus.id, "end");
                 this.scheduleSave();
             }
+        }
+
+        // Where the first section ends: the index of the second top-level heading,
+        // or the end of the plan when there is only one section. -1 when the plan
+        // has no sections at all.
+        _firstSectionBounds() {
+            const start = this.blocks.findIndex((block) => block.type === "h1");
+            if (start < 0) return null;
+            const next = this.blocks.findIndex((block, index) => index > start && block.type === "h1");
+            return { start, end: next < 0 ? this.blocks.length : next };
+        }
+
+        // The blocks a "move to first section" would actually move: everything
+        // targeted except the ones already inside the first section and the top-level
+        // headings, which are the section boundaries themselves - moving one would
+        // carve up the sections rather than move a block between them.
+        _movableToFirstSection(targetIds) {
+            const bounds = this._firstSectionBounds();
+            if (!bounds) return [];
+            return targetIds.filter((id) => {
+                const index = this.indexOf(id);
+                if (index < 0 || this.blocks[index].type === "h1") return false;
+                return !(index > bounds.start && index < bounds.end);
+            });
+        }
+
+        /**
+         * Send a block - or a whole selection - to the end of the plan's first section.
+         *
+         * The first section is the step being worked on, so this is the "do this
+         * next" button: a task written anywhere in the plan lands under the first
+         * heading without a drag across the page. Appending rather than inserting
+         * at the top keeps the section's own order intact, the way the plan-section
+         * archive appends too.
+         */
+        _moveToFirstSection(blockId) {
+            const ids = this._movableToFirstSection(this._menuTargetIds(blockId));
+            if (!ids.length) return;
+            const bounds = this._firstSectionBounds();
+
+            const idSet = new Set(ids);
+            const moved = this.blocks.filter((block) => idSet.has(block.id));
+            // Blocks pulled out from above the drop point shift it up by as many.
+            const removedBefore = this.blocks.slice(0, bounds.end).filter((block) => idSet.has(block.id)).length;
+            const remaining = this.blocks.filter((block) => !idSet.has(block.id));
+            const insertAt = Math.max(0, Math.min(bounds.end - removedBefore, remaining.length));
+            remaining.splice(insertAt, 0, ...moved);
+            this.blocks = remaining;
+
+            this.renderAll();
+            if (this.selectedIds.length <= 1) {
+                this.focusBlock(moved[0].id, "end");
+            }
+            this.scheduleSave();
         }
 
         // The blocks a block-menu action targets: the whole block selection when the
