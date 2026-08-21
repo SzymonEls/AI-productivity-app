@@ -14,6 +14,7 @@
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="schedule-status" data-schedule-status role="status"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-day-off-open>{{ icon("moon") }}Day off</button>
                 <a href="{{ url_for('projects.schedule_archive') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archive</a>
                 <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary btn-sm">{{ icon("home") }}Today</a>
             </div>
@@ -25,8 +26,8 @@
            explain themselves. #}
         <p class="schedule-hint">
             Drag a project onto another block to move it, or tap it and then tap where it should go.
-            Dropping it on a taken block swaps the two. The moon on a day sheet takes that day off:
-            it and everything planned after it move one day later.
+            Dropping it on a taken block swaps the two. "Day off" asks for a date and frees it:
+            that day and everything planned after it move one day later.
         </p>
     </section>
 
@@ -51,6 +52,37 @@
             <a href="{{ url_for('projects.schedule', weeks=more_weeks) }}" class="btn btn-outline-secondary btn-sm">Show more weeks</a>
         </div>
     {% endif %}
+
+    {# A date to type rather than a button per sheet: the day being freed is
+       usually one you already know, and it may well be past the edge of the
+       page. Same backdrop and dialog as the session planner, so the two read as
+       one thing. #}
+    <div class="planner-backdrop" data-day-off-dialog hidden>
+        <div class="planner-dialog planner-dialog-narrow" role="dialog" aria-modal="true" aria-labelledby="dayOffTitle">
+            <header class="planner-header">
+                <h2 class="h6 mb-0" id="dayOffTitle">Take a day off</h2>
+                <button type="button" class="icon-button" data-day-off-close aria-label="Close">&times;</button>
+            </header>
+            <p class="planner-note">
+                The day you pick is freed: it and everything planned after it move one day later.
+                A session already marked done stops being done — it happens on another date now.
+            </p>
+            <label class="form-label" for="dayOffDate">Day off</label>
+            <input
+                type="date"
+                id="dayOffDate"
+                class="form-control"
+                data-day-off-date
+                min="{{ today.isoformat() }}"
+                value="{{ today.isoformat() }}"
+            >
+            <p class="planner-status" data-day-off-status role="status"></p>
+            <div class="d-flex justify-content-end gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-day-off-close>Cancel</button>
+                <button type="button" class="btn btn-primary btn-sm" data-day-off-submit>Move the plan on</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
