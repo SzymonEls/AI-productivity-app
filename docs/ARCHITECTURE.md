@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar forwards and backwards (schedule and archive), moving a booking between blocks and the home page's health score. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar forwards and backwards (schedule and archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later) and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
@@ -109,7 +109,17 @@ The schema in the code matches the latest migration (`20260809_0018`).
    on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
    timeline up front, which makes that a no-op.
 
-10. **The home page's health score is a convention, not a measurement.** `system_health`
+10. **A day off moves the bookings newest first.** `shift_bookings_forward`
+    ([app/projects/slots.py](../app/projects/slots.py)) pushes every booking from the chosen day
+    on one day later, so each one lands on the date the booking after it has just left. Walking
+    the rows the other way round would hit the unique constraint on `(user, date, slot)` halfway
+    through, and so would moving them all in one flush — hence the `flush()` per row. Two
+    consequences: a session marked done loses the flag (it describes a day, like in
+    `move_booking`), and the shift can push a booking past the edge of the schedule page, which is
+    why that page's window grows to the last booked day (`weeks_to_cover`) instead of being a
+    fixed three weeks.
+
+11. **The home page's health score is a convention, not a measurement.** `system_health`
     ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
     booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
     counts on neither side of it), and the share of active projects that have a next session booked —

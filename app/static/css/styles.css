@@ -1995,6 +1995,33 @@ button.picker-row:hover {
     text-transform: uppercase;
 }
 
+/* Sits at the right end of the head, after the "Today" tag when there is one
+   (a second auto margin would otherwise split the gap between the two). */
+.day-sheet-off {
+    margin-left: auto;
+    align-self: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0.55;
+}
+
+.day-sheet-tag + .day-sheet-off {
+    margin-left: 0.35rem;
+}
+
+.day-sheet-off:hover,
+.day-sheet-off:focus-visible {
+    opacity: 1;
+}
+
+.schedule-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
 .day-sheet-slots {
     list-style: none;
     margin: 0;

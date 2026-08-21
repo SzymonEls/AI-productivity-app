@@ -25,6 +25,7 @@
 
     const MOVE_ENDPOINT = "/projects/schedule/move";
     const CLEAR_ENDPOINT = "/projects/schedule/clear";
+    const DAY_OFF_ENDPOINT = "/projects/schedule/day-off";
     const statusOutput = root.querySelector("[data-schedule-status]");
 
     let pickedCell = null;
@@ -240,9 +241,40 @@
     // belongs to the script, so the board is set up in one pass.
     cells().forEach(refreshCell);
 
+    /**
+     * Take a day off: this day and every day after it move one day later.
+     *
+     * Unlike a move or a clear this touches sheets all over the page - and
+     * possibly past its edge, since everything is pushed out by a day - so it
+     * reloads rather than trying to redraw the board in place.
+     */
+    function requestDayOff(button) {
+        const label = button.dataset.label || "this day";
+        if (!window.confirm(`Take ${label} off? Everything planned for it and after it moves one day later.`)) {
+            return;
+        }
+
+        button.disabled = true;
+        setStatus("Moving the plan…", "");
+
+        postJson(DAY_OFF_ENDPOINT, { date: button.dataset.date }, "Could not take the day off.")
+            .then(() => window.location.reload())
+            .catch((error) => {
+                button.disabled = false;
+                setStatus(error.message, "danger");
+            });
+    }
+
     // Its own listener rather than a branch of the one below, which steps aside
     // for these buttons.
     root.addEventListener("click", (event) => {
+        const dayOffButton = event.target.closest("[data-day-off]");
+        if (dayOffButton) {
+            event.preventDefault();
+            requestDayOff(dayOffButton);
+            return;
+        }
+
         const clearButton = event.target.closest("[data-clear-slot]");
         if (!clearButton) {
             return;

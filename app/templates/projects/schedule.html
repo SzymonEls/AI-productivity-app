@@ -10,7 +10,7 @@
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-2">
                 <h1 class="h5 mb-0">Schedule</h1>
-                <span class="text-muted small">The next three weeks, one sheet per day.</span>
+                <span class="text-muted small">The next {{ week_count }} weeks, one sheet per day.</span>
             </div>
             <div class="d-flex align-items-center gap-2">
                 <span class="schedule-status" data-schedule-status role="status"></span>
@@ -25,7 +25,8 @@
            explain themselves. #}
         <p class="schedule-hint">
             Drag a project onto another block to move it, or tap it and then tap where it should go.
-            Dropping it on a taken block swaps the two.
+            Dropping it on a taken block swaps the two. The moon on a day sheet takes that day off:
+            it and everything planned after it move one day later.
         </p>
     </section>
 
@@ -42,6 +43,14 @@
             </div>
         </section>
     {% endfor %}
+
+    {% if more_weeks %}
+        {# The window already reaches the last booking on its own; this is for
+           looking further ahead than anything booked. #}
+        <div class="schedule-more">
+            <a href="{{ url_for('projects.schedule', weeks=more_weeks) }}" class="btn btn-outline-secondary btn-sm">Show more weeks</a>
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
 

@@ -18,6 +18,7 @@ from ..time_tracking.service import (
 from .slots import (
     CALENDAR_WEEKS,
     DAYS_PER_WEEK,
+    MAX_CALENDAR_WEEKS,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
@@ -30,10 +31,12 @@ from .slots import (
     past_calendar_weeks,
     schedule_window,
     set_session_done,
+    shift_bookings_forward,
     slot_candidates,
     slots_for_date,
     today_local,
     unscheduled_projects,
+    weeks_to_cover,
 )
 
 
@@ -128,18 +131,61 @@ def _minutes_label(minutes, zero=""):
 @projects_bp.route("/schedule")
 @login_required
 def schedule():
-    """Three rolling weeks of calendar sheets, one card per day, from today on."""
+    """Rolling weeks of calendar sheets, one card per day, from today on.
+
+    The page shows CALENDAR_WEEKS weeks, and more when there is something to
+    show there: a booking further out - a day off pushes them all a day later -
+    stretches the window to reach it, and ``weeks`` stretches it by hand.
+    """
 
     today = today_local()
+    week_count = weeks_to_cover(current_user.id, today)
+    requested = _coerce_int(request.args.get("weeks"))
+    if requested is not None:
+        week_count = max(week_count, min(requested, MAX_CALENDAR_WEEKS))
+
     weeks = [
         {
             "label": _week_label(index),
             "range_label": _date_range_label(days[0][0], days[-1][0]),
             "days": [_serialize_schedule_day(day, booked, today) for day, booked in days],
         }
-        for index, days in enumerate(calendar_weeks(current_user.id, start_day=today))
+        for index, days in enumerate(
+            calendar_weeks(current_user.id, weeks=week_count, start_day=today)
+        )
     ]
-    return render_template("projects/schedule.html", weeks=weeks, today=today)
+    return render_template(
+        "projects/schedule.html",
+        weeks=weeks,
+        today=today,
+        week_count=week_count,
+        # Two more weeks per click, up to the point where the page would be all
+        # empty sheets.
+        more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,
+    )
+
+
+@projects_bp.route("/schedule/day-off", methods=["POST"])
+@login_required
+def schedule_day_off():
+    """Free a day by moving it, and everything after it, a day later."""
+
+    payload = request.get_json(silent=True) or request.form
+    day = parse_slot_date(payload.get("date"))
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    ok, message, _moved = shift_bookings_forward(current_user.id, day)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
+
+    return jsonify({"ok": True, "message": message})
 
 
 @projects_bp.route("/schedule/archive")

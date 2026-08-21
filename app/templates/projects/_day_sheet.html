@@ -60,6 +60,19 @@
             <span class="day-sheet-number">{{ day.date.strftime("%d") }}</span>
             <span class="day-sheet-month">{{ day.date.strftime("%b") }}</span>
             {% if day.is_today %}<span class="day-sheet-tag">Today</span>{% endif %}
+            {% if not readonly %}
+                {# Nothing to move out of the way in the past, so the archive
+                   renders the header without it. #}
+                <button
+                    type="button"
+                    class="icon-button day-sheet-off"
+                    data-day-off
+                    data-date="{{ day.date.isoformat() }}"
+                    data-label="{{ day.date.strftime('%d %b') }}"
+                    title="Day off — push this day and everything after it one day later"
+                    aria-label="Take {{ day.date.strftime('%d %b') }} off"
+                >{{ icon("moon") }}</button>
+            {% endif %}
         </header>
         <ul class="day-sheet-slots">
             {% for entry in day.slots %}

@@ -24,6 +24,10 @@ SCHEDULE_WINDOW_DAYS = 7
 # The schedule page shows three rolling weeks of day cards, empty days included.
 CALENDAR_WEEKS = 3
 DAYS_PER_WEEK = 7
+# The schedule page grows past its default when the bookings run further out - a
+# day off pushes them - but not without end: past this it is a scroll through
+# empty sheets.
+MAX_CALENDAR_WEEKS = 12
 
 # The health score on the home page: the last week of finished sessions weighed
 # against how much of the project list has a next session planned. The sessions
@@ -176,6 +180,43 @@ def first_booked_day(user_id):
         .filter(ProjectDaySlot.user_id == user_id)
         .scalar()
     )
+
+
+def last_booked_day(user_id):
+    """The latest day this user has booked, or None if they never have.
+
+    The mirror of first_booked_day(): the archive stops at the earliest booking,
+    the schedule page reaches out to the latest one.
+    """
+    return (
+        db.session.query(func.max(ProjectDaySlot.slot_date))
+        .filter(ProjectDaySlot.user_id == user_id)
+        .scalar()
+    )
+
+
+def weeks_to_cover(user_id, start_day=None, minimum=CALENDAR_WEEKS, maximum=MAX_CALENDAR_WEEKS):
+    """How many calendar weeks the schedule has to show to reach the last booking.
+
+    The page shows a fixed number of weeks by default, which is fine until
+    something pushes a booking past its edge - taking a day off does exactly
+    that. The window then grows to the last booked day rather than hiding it,
+    up to ``maximum`` weeks.
+    """
+    start_day = today_local() if start_day is None else start_day
+    last = last_booked_day(user_id)
+    if last is None or last <= start_day:
+        return minimum
+
+    # The first week is the short one: it starts today rather than on its Monday.
+    first_week_days = DAYS_PER_WEEK - start_day.weekday()
+    days_needed = (last - start_day).days + 1
+    if days_needed <= first_week_days:
+        weeks = 1
+    else:
+        # Ceiling division over the whole weeks that follow the short one.
+        weeks = 1 + -(-(days_needed - first_week_days) // DAYS_PER_WEEK)
+    return max(minimum, min(weeks, maximum))
 
 
 def unscheduled_projects(user_id):
@@ -591,6 +632,49 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         return True, f"Swapped with {displaced_title}."
 
     return True, f"Moved to {to_day.strftime('%d %b')}, slot {to_slot}."
+
+
+def shift_bookings_forward(user_id, from_day, days=1):
+    """
+    Take a day off: push every booking from ``from_day`` on ``days`` days later.
+
+    The chosen day is left empty and everything planned for it - and for every
+    day after it - simply happens a day later, so the order of the plan survives
+    a day that does not. Returns ``(ok, message, moved)``; the caller commits.
+
+    The rows are moved newest first. Every booking lands on the date the one
+    after it has just left, so going the other way round would collide with the
+    unique constraint on (user, date, slot) halfway through; the flush per row
+    keeps the same collision from happening inside one statement batch.
+    """
+    if days < 1:
+        return False, "A day off is at least one day.", 0
+    if from_day < today_local():
+        return False, "That day is in the past.", 0
+
+    entries = (
+        ProjectDaySlot.query.filter(
+            ProjectDaySlot.user_id == user_id, ProjectDaySlot.slot_date >= from_day
+        )
+        .order_by(ProjectDaySlot.slot_date.desc())
+        .all()
+    )
+    if not entries:
+        return True, f"{from_day.strftime('%d %b')} was already free.", 0
+
+    for entry in entries:
+        entry.slot_date = entry.slot_date + timedelta(days=days)
+        # "Done" describes a day's session, so it does not travel to another
+        # date - the same rule move_booking() applies to a single booking.
+        entry.is_done = False
+        db.session.flush()
+
+    return (
+        True,
+        f"Day off on {from_day.strftime('%d %b')} — {len(entries)} "
+        f"{'block' if len(entries) == 1 else 'blocks'} moved a day later.",
+        len(entries),
+    )
 
 
 def clear_slot(user_id, day, slot):
