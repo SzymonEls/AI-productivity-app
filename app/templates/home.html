@@ -135,6 +135,15 @@
                     </ul>
                 </div>
             </div>
+
+            {# The tags themselves live in the plans as text; this asks for them
+               when it is opened rather than the page carrying a list nobody may
+               look at. #}
+            <div class="dashboard-section">
+                <h2 class="h6 mb-1">Tags</h2>
+                <p class="text-muted small mb-3">Whatever you marked with a <code>#tag</code> in a plan's list.</p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-open-tags>Show tags</button>
+            </div>
         </aside>
     </div>
 </div>
@@ -142,4 +151,5 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tag-list.js') }}"></script>
 {% endblock %}

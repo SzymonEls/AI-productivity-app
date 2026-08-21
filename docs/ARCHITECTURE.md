@@ -22,7 +22,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [config.py](../config.py) | Settings and reading environment variables from `.env`. |
 | [app/extensions.py](../app/extensions.py) | Shared Flask extension objects. |
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
-| [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
+| [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
@@ -128,7 +128,20 @@ The schema in the code matches the latest migration (`20260809_0018`).
     can push a booking past the edge of the schedule page, which is why that page's window grows to
     the last booked day (`weeks_to_cover`) instead of being a fixed three weeks.
 
-11. **The home page's health score is a convention, not a measurement.** `system_health`
+11. **A tag is not stored anywhere.** `#shop` in "- [ ] call the printer #shop" is text in
+    `Project.long_goal` and nothing else — no table, no column, nothing to keep in step. The tag
+    list on the home page asks `/projects/tags`, which reads every active plan and groups what it
+    finds (`_collect_tags` in [app/projects/routes.py](../app/projects/routes.py)); that pass is
+    why the dialog opens on a spinner. Three rules follow the same `TAG_PATTERN`
+    ([app/markdown_utils.py](../app/markdown_utils.py)) so the views cannot disagree: a tag starts
+    with a letter, may not follow a word character or "(" (so `C#` and a `](#anchor)` link target
+    are not tags), and **only counts inside a list item** — which is why the block editor paints
+    them in list blocks alone. The JavaScript copies of the pattern
+    ([plan-block-editor.js](../app/static/js/plan-block-editor.js),
+    [tag-list.js](../app/static/js/tag-list.js)) spell it with Unicode property escapes, because
+    JavaScript's `\w` is ASCII and would cut `#dom-i-ogród` short.
+
+12. **The home page's health score is a convention, not a measurement.** `system_health`
     ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
     booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
     counts on neither side of it), and the share of active projects that have a next session booked —

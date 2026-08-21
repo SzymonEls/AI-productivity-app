@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
@@ -6,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
-from ..markdown_utils import render_project_markdown
+from ..markdown_utils import TAG_PATTERN, render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
 from ..time_tracking.service import (
     daily_totals_by_project,
@@ -343,6 +344,76 @@ def _schedule_window_payload(project_id):
         "days": schedule_window(current_user.id, project_id),
         "note": booking_note(current_user.id, project_id),
     }
+
+
+# What a tag looks like is defined once, in markdown_utils, next to the code that
+# paints one into a rendered plan.
+# The three kinds of list item the plan editor writes, and nothing else: a tag
+# belongs to a thing to do, not to a heading or a paragraph.
+PLAN_LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]\s+(?:\[(?P<checked>[ xX])\]\s+)?|\d+\.\s+)(?P<text>.*\S)\s*$")
+
+
+@projects_bp.route("/tags")
+@login_required
+def project_tags():
+    """Every #tag in the list items of the active plans, with what carries it.
+
+    Searched on request rather than kept in a table: the tags are plain text in
+    the plan, so there is nothing to keep in step - what the plan says now is the
+    answer, and a plan edited on another device needs no migration to show up
+    here. It costs one pass over the user's plans, which is why the dialog that
+    asks for it shows a spinner.
+    """
+
+    projects = (
+        Project.query.filter_by(user_id=current_user.id, is_archived=False)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    return jsonify({"ok": True, "tags": _collect_tags(projects)})
+
+
+def _collect_tags(projects):
+    """The tags of these projects' plans, alphabetical, each with its items."""
+
+    tags = {}
+    for project in projects:
+        for text, is_done in _plan_list_items(project.long_goal):
+            for name in dict.fromkeys(TAG_PATTERN.findall(text)):
+                # "#Shop" and "#shop" are one tag; the first spelling seen names it.
+                tag = tags.setdefault(name.lower(), {"name": name, "items": []})
+                tag["items"].append(
+                    {
+                        "project_id": project.id,
+                        "project_title": project.title,
+                        "text": text,
+                        "is_done": is_done,
+                        # Safe mode hides a private project's plan; a tagged line
+                        # of it listed here would walk straight past that, so the
+                        # list is told which rows to cover up.
+                        "is_private": bool(project.is_private),
+                        # The project page picks the tag out of the plan and scrolls
+                        # to it, so the item leads back to itself and not just to
+                        # the top of a long plan.
+                        "url": url_for(
+                            "projects.project_detail", project_id=project.id, tag=tag["name"]
+                        ),
+                    }
+                )
+
+    return [
+        {"name": tag["name"], "count": len(tag["items"]), "items": tag["items"]}
+        for _, tag in sorted(tags.items())
+    ]
+
+
+def _plan_list_items(markdown):
+    """``(text, is_done)`` for every list item in a plan, markers stripped."""
+
+    for line in (markdown or "").splitlines():
+        match = PLAN_LIST_ITEM_PATTERN.match(line)
+        if match:
+            yield match.group("text"), (match.group("checked") or "").lower() == "x"
 
 
 @projects_bp.route("/schedule/candidates")

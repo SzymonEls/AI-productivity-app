@@ -762,6 +762,22 @@
     border-radius: 4px;
 }
 
+/* Where the tag list lands: the block it linked to says so for a moment, then
+   goes back to being an ordinary line. */
+.pbe-block.pbe-tag-found {
+    border-radius: 4px;
+    animation: pbe-tag-found 2.6s ease-out;
+}
+
+@keyframes pbe-tag-found {
+    0%, 55% { background: color-mix(in srgb, var(--primary) 20%, transparent); }
+    100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pbe-block.pbe-tag-found { animation: none; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+}
+
 /* While drag-selecting blocks, suppress native text selection. */
 .pbe-selecting,
 .pbe-selecting .pbe-content { user-select: none; -webkit-user-select: none; }
@@ -2224,6 +2240,104 @@ button.picker-row:hover {
 .day-slot.is-picked {
     border-color: var(--primary);
     box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* Tags -------------------------------------------------------------- *
+   A tag is plain text in the plan, so it is only ever painted: same pill in the
+   block editor, in a rendered plan and in the tag list, which is what makes the
+   three read as one thing. */
+.plan-tag {
+    display: inline-block;
+    padding: 0 0.35rem;
+    border-radius: var(--radius-pill);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 0.92em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* The tag the reader was sent to, in the classic (rendered) plan. */
+.plan-tag.plan-tag-found {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.tag-list {
+    display: grid;
+    gap: 1.1rem;
+}
+
+.tag-list-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.5rem 0;
+    justify-content: center;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.tag-group-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.4rem;
+    font-size: 0.95rem;
+}
+
+.tag-group-count {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.tag-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: inherit;
+    text-decoration: none;
+}
+
+.tag-item + .tag-item {
+    margin-top: 0.35rem;
+}
+
+.tag-item:hover,
+.tag-item:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+    color: inherit;
+}
+
+.tag-item-text {
+    min-width: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+/* A ticked-off to-do keeps its place in the list but stops asking to be done. */
+.tag-item.is-done .tag-item-text {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+/* In safe mode a private project's line is listed but not read out. */
+.tag-item-covered {
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+.tag-item-project {
+    flex: 0 0 auto;
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
 }
 
 /* Planner dialog --------------------------------------------------- */

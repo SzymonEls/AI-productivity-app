@@ -1780,6 +1780,51 @@
             document.documentElement.dataset.planEditor === "markdown" ? "markdown" : "blocks"
         );
 
+        // Arrived from the tag list: go to the line that carried the tag rather
+        // than leaving the reader at the top of a long plan. The classic editor
+        // has no blocks to ask, so there the rendered plan is searched instead.
+        //
+        // Held until the page has loaded: scrolling during parse is undone by the
+        // browser's own scroll restoration a moment later, and the reader ends up
+        // back at the top wondering what the link did.
+        const revealRequestedTag = () => {
+            const requested = new URLSearchParams(window.location.search).get("tag");
+            if (!requested) {
+                return;
+            }
+            const wanted = requested.replace(/^#/, "").toLowerCase();
+            if (blockEditor && blockEditor.revealTag(wanted)) {
+                return;
+            }
+            const painted = Array.from(document.querySelectorAll(".long-goal-preview .plan-tag")).find(
+                (span) => span.textContent.replace(/^#/, "").toLowerCase() === wanted
+            );
+            if (painted) {
+                // Same reason as in the block editor: a smooth scroll is animated,
+                // and an animation does not run while the page is hidden.
+                const root = document.documentElement;
+                const previous = root.style.scrollBehavior;
+                root.style.scrollBehavior = "auto";
+                painted.scrollIntoView({ block: "center" });
+                root.style.scrollBehavior = previous;
+                painted.classList.add("plan-tag-found");
+            }
+        };
+
+        // Twice: once now, so the reader lands on the line even if the CDN scripts
+        // keep the load event waiting, and once after it, because the browser
+        // restores the scroll position as part of loading and undoes the first
+        // attempt. revealTag() leaves the page alone the second time if the line
+        // is already on screen.
+        // A timeout rather than requestAnimationFrame: opened in a background tab,
+        // rAF does not run until the tab is looked at, and the reveal would be
+        // skipped rather than merely late.
+        const scheduleTagReveal = () => window.setTimeout(revealRequestedTag, 0);
+        scheduleTagReveal();
+        if (document.readyState !== "complete") {
+            window.addEventListener("load", scheduleTagReveal, { once: true });
+        }
+
         document.addEventListener("plan-editor-change", (event) => {
             applyPlanEditorMode(event.detail && event.detail.mode === "markdown" ? "markdown" : "blocks");
         });

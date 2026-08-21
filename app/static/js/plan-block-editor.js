@@ -24,6 +24,59 @@
 
     const isListType = (type) => LIST_TYPES.includes(type);
     const isHeadingType = (type) => /^h[1-3]$/.test(type || "");
+
+    // The same tag as the server paints into a rendered plan (app/markdown_utils.py):
+    // it starts with a letter and may not follow a word character, so "C#" is not
+    // one. Spelled with Unicode properties rather than \w, which in JavaScript is
+    // ASCII and would cut "#dom-i-ogród" short; the leading character is captured
+    // rather than looked behind, which older Safari would not run.
+    const TAG_RE = /(^|[^\p{L}\p{N}_#(])#(\p{L}[\p{L}\p{N}_-]*)/gu;
+
+    const tagsIn = (text) => {
+        const found = [];
+        TAG_RE.lastIndex = 0;
+        let match;
+        while ((match = TAG_RE.exec(text || "")) !== null) {
+            found.push({ name: match[2], start: match.index + match[1].length });
+        }
+        return found;
+    };
+
+    /**
+     * Paint the tags in one line of plain text.
+     *
+     * A tag is characters in the plan, never a node: this only wraps what is
+     * already there, so el.textContent still reads back the block's text exactly
+     * and the Markdown round-trip is untouched.
+     *
+     * ``paint`` is false for everything but a list item, because that is where a
+     * tag counts - the tag list reads list items only, and a "#word" painted in a
+     * paragraph would promise to show up there and then not.
+     */
+    const renderInlineText = (el, text, paint) => {
+        const tags = paint ? tagsIn(text) : [];
+        if (!tags.length) {
+            el.textContent = text || "";
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        let index = 0;
+        tags.forEach((tag) => {
+            if (tag.start > index) {
+                fragment.appendChild(document.createTextNode(text.slice(index, tag.start)));
+            }
+            const span = document.createElement("span");
+            span.className = "plan-tag";
+            span.textContent = `#${tag.name}`;
+            fragment.appendChild(span);
+            index = tag.start + tag.name.length + 1;
+        });
+        if (index < text.length) {
+            fragment.appendChild(document.createTextNode(text.slice(index)));
+        }
+        el.replaceChildren(fragment);
+    };
     const indentLevel = (spaces) => Math.min(Math.floor(spaces.replace(/\t/g, "  ").length / 2), MAX_LEVEL);
 
     // --- Markdown -> blocks ------------------------------------------------
@@ -138,22 +191,52 @@
         return pre.toString().length;
     };
 
+    // Walks the text nodes rather than assuming the block is one: a painted tag
+    // puts a <span> in the middle of the line, and an offset inside or after it
+    // has to land in the right node.
     const setCaretOffset = (el, offset) => {
         el.focus();
         const selection = window.getSelection();
         const range = document.createRange();
-        const length = el.textContent.length;
-        const target = Math.max(0, Math.min(offset, length));
-        const node = el.firstChild;
-        if (node && node.nodeType === Node.TEXT_NODE) {
-            range.setStart(node, target);
-        } else {
-            range.selectNodeContents(el);
-            range.collapse(target === 0);
+        const target = Math.max(0, Math.min(offset, el.textContent.length));
+
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        let node = walker.nextNode();
+        while (node) {
+            if (target <= seen + node.length) {
+                range.setStart(node, target - seen);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return;
+            }
+            seen += node.length;
+            node = walker.nextNode();
         }
+
+        // An empty block has no text node to put the caret in.
+        range.selectNodeContents(el);
         range.collapse(true);
         selection.removeAllRanges();
         selection.addRange(range);
+    };
+
+    /**
+     * Jump to an element, without the animation.
+     *
+     * Bootstrap sets scroll-behavior: smooth on the document, and a smooth scroll
+     * is animated - which means it does not happen at all while the page is
+     * hidden (a link opened in a background tab), leaving the reader at the top
+     * when they come to look. Turning the property off around the call lands them
+     * on the line instead, and does not need the newer "instant" behaviour value.
+     */
+    const scrollToElement = (el) => {
+        const root = document.documentElement;
+        const previous = root.style.scrollBehavior;
+        root.style.scrollBehavior = "auto";
+        el.scrollIntoView({ block: "center" });
+        root.style.scrollBehavior = previous;
     };
 
     // --- editor ------------------------------------------------------------
@@ -500,7 +583,7 @@
                 if (block.type === "todo" && block.checked) {
                     content.classList.add("is-checked");
                 }
-                content.textContent = block.text || "";
+                renderInlineText(content, block.text || "", isListType(block.type));
                 el.appendChild(content);
             }
             return el;
@@ -527,8 +610,59 @@
             if (this._maybeTransform(ctx)) {
                 return; // re-rendered + saved inside
             }
+            this._repaintTags(ctx, event);
             // Coalesce a run of typing in the same block into one undo step.
             this.scheduleSave(`text:${ctx.block.id}`);
+        }
+
+        /**
+         * Repaint the tags of the block being typed in, caret and all.
+         *
+         * Only when there is something to paint or something painted already, so
+         * an ordinary line is never rebuilt under the caret. Left alone mid-IME
+         * composition, where replacing the nodes would drop what is being typed.
+         */
+        _repaintTags(ctx, event) {
+            if (event && event.isComposing) return;
+            const { block, content } = ctx;
+            const paint = isListType(block.type);
+            const painted = content.querySelector(".plan-tag") !== null;
+            if (!painted && (!paint || !tagsIn(block.text).length)) return;
+
+            const offset = getCaretOffset(content);
+            renderInlineText(content, block.text || "", paint);
+            if (offset != null) setCaretOffset(content, offset);
+        }
+
+        /**
+         * Scroll to the first block carrying ``tag`` and flash it.
+         *
+         * What the tag list links back to: a tagged line is one line of a long
+         * plan, and landing at the top of the page is not landing on it.
+         */
+        revealTag(tag) {
+            const name = String(tag || "").replace(/^#/, "").toLowerCase();
+            if (!name) return false;
+
+            const found = this.blocks.find(
+                (block) =>
+                    isListType(block.type) &&
+                    tagsIn(block.text).some((entry) => entry.name.toLowerCase() === name)
+            );
+            const el = found && this.list.querySelector(`[data-id="${found.id}"]`);
+            if (!el) return false;
+
+            // Only scroll when the line is not already there to be read: this runs
+            // twice on a page load (before and after the browser's own scroll
+            // restoration), and the second run must not yank a reader who has
+            // started scrolling on their own.
+            const rect = el.getBoundingClientRect();
+            if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                scrollToElement(el);
+            }
+            el.classList.add("pbe-tag-found");
+            window.setTimeout(() => el.classList.remove("pbe-tag-found"), 2600);
+            return true;
         }
 
         _maybeTransform(ctx) {

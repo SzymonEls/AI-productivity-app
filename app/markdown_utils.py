@@ -13,6 +13,19 @@ TASK_ITEM_PATTERN = re.compile(
 TOP_LEVEL_HEADING_PATTERN = re.compile(r"<h1(?P<attrs>[^>]*)>.*?</h1>", re.DOTALL)
 LIST_ITEM_PATTERN = re.compile(r"^(?P<indent>\s*)(?:[-*+]\s|\d+\.\s)")
 
+# A tag is written straight into the plan - "- [ ] call the printer #shop" - and
+# stored as nothing but those characters, so this pattern is the whole definition
+# of one. It has to start with a letter (a bare "#2" is a number) and may not
+# follow a word character or an opening bracket, which keeps "C#" out and leaves
+# the "#anchor" of a Markdown link alone. Kept here rather than in
+# projects/routes.py because painting one is what the app mostly does with it;
+# the tag list imports it from here.
+TAG_PATTERN = re.compile(r"(?<![\w#(])#([^\W\d_][\w-]*)")
+# Only inside a list item: a tag marks something to do, and a "#" anywhere else
+# in Markdown is a heading.
+LIST_TAG_SPLIT_PATTERN = re.compile(r"(<[^>]+>)")
+OPEN_LIST_ITEM_PATTERN = re.compile(r"<li[\s>]", re.IGNORECASE)
+
 
 def render_markdown(value):
     if not value:
@@ -61,7 +74,31 @@ def _render_markdown_html(value):
     html = TASK_ITEM_PATTERN.sub(_render_task_item, html)
     html = html.replace("<ul>\n<li><input", '<ul class="task-list">\n<li class="task-list-item"><input')
     html = html.replace("<li><input", '<li class="task-list-item"><input')
-    return html
+    return paint_tags(html)
+
+
+def paint_tags(html):
+    """Wrap the #tags inside list items in a span, leaving the rest alone.
+
+    Walks the tags and the text between them rather than running the pattern over
+    the whole document: a "#" in an attribute - ``href="#top"`` - is not a tag,
+    and neither is a heading. Only the text of an ``<li>`` is painted.
+    """
+    if "#" not in html:
+        return html
+
+    painted = []
+    depth = 0
+    for part in LIST_TAG_SPLIT_PATTERN.split(html):
+        if part.startswith("<"):
+            if OPEN_LIST_ITEM_PATTERN.match(part):
+                depth += 1
+            elif part.lower().startswith("</li"):
+                depth = max(depth - 1, 0)
+        elif depth:
+            part = TAG_PATTERN.sub(r'<span class="plan-tag">#\1</span>', part)
+        painted.append(part)
+    return "".join(painted)
 
 
 def _normalize_two_space_nested_lists(value):
