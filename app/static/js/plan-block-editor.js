@@ -23,6 +23,7 @@
     const uid = () => `b${Date.now().toString(36)}${(uidCounter += 1).toString(36)}`;
 
     const isListType = (type) => LIST_TYPES.includes(type);
+    const isHeadingType = (type) => /^h[1-3]$/.test(type || "");
     const indentLevel = (spaces) => Math.min(Math.floor(spaces.replace(/\t/g, "  ").length / 2), MAX_LEVEL);
 
     // --- Markdown -> blocks ------------------------------------------------
@@ -622,6 +623,21 @@
             const offset = content ? (getCaretOffset(content) ?? block.text.length) : 0;
             const before = (block.text || "").slice(0, offset);
             const after = (block.text || "").slice(offset);
+
+            // Enter at the very start of a heading opens a line above it instead of
+            // splitting it in two. Splitting would leave the heading behind as an
+            // empty one and push its title down as a paragraph - the section would
+            // stay put and lose its name. Here the heading keeps its text, so the
+            // whole section moves down with it, and a plain text block takes the
+            // place the heading came from.
+            if (isHeadingType(block.type) && offset === 0 && (block.text || "").trim()) {
+                const above = { id: uid(), type: "paragraph", text: "", level: 0 };
+                this.blocks.splice(this.indexOf(block.id), 0, above);
+                this.renderAll();
+                this.focusBlock(above.id, 0);
+                this.scheduleSave();
+                return;
+            }
 
             // Pressing Enter on an empty list/quote item exits back to a paragraph.
             if ((isListType(block.type) || block.type === "quote") && !block.text.trim()) {
