@@ -130,9 +130,9 @@ The schema in the code matches the latest migration (`20260809_0018`).
 
 11. **A tag is not stored anywhere.** `#shop` in "- [ ] call the printer #shop" is text in
     `Project.long_goal` and nothing else — no table, no column, nothing to keep in step. The tag
-    list on the home page asks `/projects/tags`, which reads every active plan and groups what it
-    finds (`_collect_tags` in [app/projects/routes.py](../app/projects/routes.py)); that pass is
-    why the dialog opens on a spinner. Three rules follow the same `TAG_PATTERN`
+    tag page (`/projects/tags`, linked from the home page) carries no tags of its own: it arrives
+    with a spinner in the HTML and asks `/projects/tags/search`, which reads every active plan and
+    groups what it finds (`_collect_tags` in [app/projects/routes.py](../app/projects/routes.py)). Three rules follow the same `TAG_PATTERN`
     ([app/markdown_utils.py](../app/markdown_utils.py)) so the views cannot disagree: a tag starts
     with a letter, may not follow a word character or "(" (so `C#` and a `](#anchor)` link target
     are not tags), and **only counts inside a list item** — which is why the block editor paints

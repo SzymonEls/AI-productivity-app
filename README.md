@@ -15,8 +15,9 @@ container, no external services.
   to the theme switch) and such a project opens with its plan and its thoughts behind a button
   each; a reveal is remembered for five minutes, and reaching for the shield again drops it.
 - **Tags** — write `#anything` in a list item of a plan and it becomes a tag. Nothing is stored
-  as a tag: the home page's tag list reads the plans when you open it and groups what it finds,
-  and every entry leads back to the line it came from. Tags are picked out in the plan itself too.
+  as a tag: the tag page, linked from the home page, reads the plans as it opens — spinner and
+  all — and groups what it finds; every entry leads back to the line it came from. Tags are
+  picked out in the plan itself too.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page

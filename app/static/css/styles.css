@@ -2265,7 +2265,7 @@ button.picker-row:hover {
 
 .tag-list {
     display: grid;
-    gap: 1.1rem;
+    gap: 1.25rem;
 }
 
 .tag-list-loading {
@@ -2282,8 +2282,17 @@ button.picker-row:hover {
     display: flex;
     align-items: baseline;
     gap: 0.5rem;
-    margin: 0 0 0.4rem;
+    margin: 0 0 0.45rem;
     font-size: 0.95rem;
+}
+
+/* Two columns of tags once there is room for them: the page is a whole screen
+   now, not a dialog, and a long single column wastes most of it. */
+@media (min-width: 992px) {
+    .tags-page .tag-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
 }
 
 .tag-group-count {

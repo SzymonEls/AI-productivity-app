@@ -136,13 +136,13 @@
                 </div>
             </div>
 
-            {# The tags themselves live in the plans as text; this asks for them
-               when it is opened rather than the page carrying a list nobody may
-               look at. #}
+            {# The tags live in the plans as text and are searched for on the page
+               this leads to, not here: the home page would otherwise pay for a
+               list nobody may look at. #}
             <div class="dashboard-section">
                 <h2 class="h6 mb-1">Tags</h2>
                 <p class="text-muted small mb-3">Whatever you marked with a <code>#tag</code> in a plan's list.</p>
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-open-tags>Show tags</button>
+                <a href="{{ url_for('projects.tags_page') }}" class="btn btn-outline-secondary btn-sm">Show tags</a>
             </div>
         </aside>
     </div>
@@ -151,5 +151,4 @@
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
-<script src="{{ url_for('static', filename='js/tag-list.js') }}"></script>
 {% endblock %}

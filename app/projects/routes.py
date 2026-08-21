@@ -355,14 +355,28 @@ PLAN_LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]\s+(?:\[(?P<checked>[ xX])\]\s
 
 @projects_bp.route("/tags")
 @login_required
-def project_tags():
+def tags_page():
+    """The tag list, as a page of its own.
+
+    It carries no tags: the page arrives with a spinner in it and asks
+    ``tags/search`` for them, which is the pass over every plan. A page rather
+    than a dialog because a list of everything tagged is somewhere you stay for a
+    while - it can be linked to, gone back to, and left open on a phone.
+    """
+
+    return render_template("projects/tags.html")
+
+
+@projects_bp.route("/tags/search")
+@login_required
+def search_tags():
     """Every #tag in the list items of the active plans, with what carries it.
 
     Searched on request rather than kept in a table: the tags are plain text in
     the plan, so there is nothing to keep in step - what the plan says now is the
     answer, and a plan edited on another device needs no migration to show up
-    here. It costs one pass over the user's plans, which is why the dialog that
-    asks for it shows a spinner.
+    here. It costs one pass over the user's plans, which is why the page that
+    asks for it opens on a spinner.
     """
 
     projects = (
