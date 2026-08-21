@@ -1282,13 +1282,14 @@
     min-height: 220px !important;
 }
 
-/* Private projects: the plan and the thoughts sit behind a button until asked
-   for. The card is rendered veiled, so nothing is on screen for a frame before
-   the script decides; the controls go with the content, since there is nothing
-   to edit while it is hidden. */
-.private-veiled .private-hideable,
-.private-veiled .inline-section-controls,
-.private-veiled .plan-save-status {
+/* Private projects in safe mode: the plan and the thoughts sit behind a button
+   until asked for. The card is rendered veiled whatever the mode and the veil is
+   drawn by [data-safe-mode="on"] alone, so switching the mode needs no reload and
+   nothing is on screen for a frame before the decision. The controls go with the
+   content, since there is nothing to edit while it is hidden. */
+[data-safe-mode="on"] .private-veiled .private-hideable,
+[data-safe-mode="on"] .private-veiled .inline-section-controls,
+[data-safe-mode="on"] .private-veiled .plan-save-status {
     display: none;
 }
 
@@ -1303,7 +1304,7 @@
     background: var(--surface-2);
 }
 
-.private-veiled .private-veil {
+[data-safe-mode="on"] .private-veiled .private-veil {
     display: flex;
 }
 

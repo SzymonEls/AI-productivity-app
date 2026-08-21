@@ -26,11 +26,15 @@
                 root.setAttribute("data-bs-theme", theme);
                 root.setAttribute("data-project-layout", localStorage.getItem("app-project-layout") || "sidebar");
                 root.setAttribute("data-plan-editor", localStorage.getItem("app-plan-editor") || "blocks");
+                // Before first paint, like the theme: a private project's plan must
+                // not be on screen for a frame before safe mode hides it.
+                root.setAttribute("data-safe-mode", localStorage.getItem("app-safe-mode") === "on" ? "on" : "off");
             } catch (error) {
                 root.setAttribute("data-ui", "modern");
                 root.setAttribute("data-bs-theme", "light");
                 root.setAttribute("data-project-layout", "sidebar");
                 root.setAttribute("data-plan-editor", "blocks");
+                root.setAttribute("data-safe-mode", "off");
             }
         })();
         if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -136,6 +140,19 @@
                     >
                         <svg class="theme-toggle-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
                         <svg class="theme-toggle-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+                    </button>
+
+                    {# Safe mode: the same kind of switch as the theme, next to it,
+                       because it is used the same way - a glance and a click when
+                       the room changes, not a trip into the settings. #}
+                    <button
+                        type="button"
+                        class="icon-button safe-mode-toggle"
+                        data-safe-mode-toggle
+                        aria-pressed="false"
+                    >
+                        <svg class="safe-mode-off" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.5 7 9.5 4.1-2 7-5.3 7-9.5V6z"/></svg>
+                        <svg class="safe-mode-on" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.5 7 9.5 4.1-2 7-5.3 7-9.5V6z"/><path d="m8.8 11.8 2.2 2.2 4.2-4.2"/></svg>
                     </button>
 
                     {% if current_user.is_authenticated %}
@@ -330,6 +347,9 @@
             const themeSetting = () => read("app-theme") || "system";
             const layoutSetting = () => (read("app-project-layout") === "stacked" ? "stacked" : "sidebar");
             const planEditorSetting = () => (read("app-plan-editor") === "markdown" ? "markdown" : "blocks");
+            // Off unless asked for: safe mode is the exception you switch on when
+            // someone can see the screen, not the way the app normally reads.
+            const safeModeSetting = () => (read("app-safe-mode") === "on" ? "on" : "off");
 
             const effectiveTheme = () => {
                 if (uiSetting() === "classic") { return "light"; }
@@ -356,18 +376,38 @@
                 });
             };
 
+            const syncSafeModeButtons = () => {
+                const on = safeModeSetting() === "on";
+                document.querySelectorAll("[data-safe-mode-toggle]").forEach((button) => {
+                    button.setAttribute("aria-pressed", on ? "true" : "false");
+                    button.title = on
+                        ? "Safe mode is on — a private project's plan and thoughts stay hidden"
+                        : "Safe mode — hide a private project's plan and thoughts";
+                    button.setAttribute("aria-label", button.title);
+                });
+            };
+
             const applyAll = () => {
                 root.setAttribute("data-ui", uiSetting());
                 root.setAttribute("data-bs-theme", effectiveTheme());
                 root.setAttribute("data-project-layout", layoutSetting());
                 root.setAttribute("data-plan-editor", planEditorSetting());
+                root.setAttribute("data-safe-mode", safeModeSetting());
                 syncThemeColor();
+                syncSafeModeButtons();
                 refreshSegments();
             };
 
             const setUi = (mode) => { store("app-ui", mode === "classic" ? "classic" : "modern"); applyAll(); };
             const setTheme = (mode) => { if (mode === "system") { clear("app-theme"); } else { store("app-theme", mode); } applyAll(); };
             const setLayout = (mode) => { store("app-project-layout", mode === "stacked" ? "stacked" : "sidebar"); applyAll(); };
+            const setSafeMode = (mode) => {
+                store("app-safe-mode", mode === "on" ? "on" : "off");
+                applyAll();
+                // The pages that hide something behind it listen for this: switching
+                // it on has to draw the curtain there and then, not on the next load.
+                document.dispatchEvent(new CustomEvent("safe-mode-change", { detail: { mode: safeModeSetting() } }));
+            };
             const setPlanEditor = (mode) => {
                 store("app-plan-editor", mode === "markdown" ? "markdown" : "blocks");
                 applyAll();
@@ -381,6 +421,10 @@
                     if (uiSetting() === "classic") { return; }
                     setTheme(effectiveTheme() === "dark" ? "light" : "dark");
                 });
+            });
+
+            document.querySelectorAll("[data-safe-mode-toggle]").forEach((button) => {
+                button.addEventListener("click", () => setSafeMode(safeModeSetting() === "on" ? "off" : "on"));
             });
 
             document.querySelectorAll('[data-setting="ui"] .settings-segment').forEach((btn) => {

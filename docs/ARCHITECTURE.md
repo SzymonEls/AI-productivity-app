@@ -52,10 +52,14 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **User** — username, email (both unique), hashed password.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
   the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
-  the project page renders the plan and the thoughts veiled and
-  [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts them per card, for
-  five minutes at a time (localStorage). The text is in the page all along — nothing is withheld
-  from the browser, and nothing about it is enforced server-side.
+  the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
+  only drawn while **safe mode** is on — a browser-side switch (`app-safe-mode` in localStorage,
+  `data-safe-mode` on `<html>`, toggled by the shield in the navbar) that lives entirely in
+  [app/templates/base.html](../app/templates/base.html) and the two CSS rules keyed on it.
+  [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts a card for five
+  minutes at a time and re-veils everything when safe mode is switched on again. The text is in
+  the page all along — nothing is withheld from the browser, and nothing about it is enforced
+  server-side.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).

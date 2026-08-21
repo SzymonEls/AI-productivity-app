@@ -11,8 +11,9 @@ container, no external services.
 - **Projects** — each one has a short goal, a cadence and a long plan written in Markdown.
   Headings become steps, checkboxes stay checkable in the rendered view, and a finished
   section can be archived out of the plan without leaving the page. A project marked private
-  carries no padlock anywhere — that would point it out — and opens with its plan and its
-  thoughts behind a button each; a reveal is remembered for five minutes.
+  carries no padlock anywhere — that would point it out. Switch on **safe mode** (the shield next
+  to the theme switch) and such a project opens with its plan and its thoughts behind a button
+  each; a reveal is remembered for five minutes, and reaching for the shield again drops it.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page

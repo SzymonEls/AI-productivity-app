@@ -1,10 +1,12 @@
 /**
- * Private projects: the plan and the thoughts open behind a button.
+ * Private projects in safe mode: the plan and the thoughts open behind a button.
  *
  * A private project used to be marked with a padlock and shown like any other,
  * which is the wrong way round - the padlock told a room full of people which
- * project was the private one, and then showed them its contents. The page now
- * renders those two cards veiled and this lifts them one at a time.
+ * project was the private one, and then showed them its contents. Alone at a
+ * desk, though, hiding your own plan from yourself is just a click in the way,
+ * so the hiding belongs to safe mode (the shield next to the theme switch) and
+ * this only has work to do while that is on.
  *
  * A reveal is remembered for REVEAL_MINUTES, so moving between the project page
  * and the timer or the schedule does not mean asking again, and coming back to
@@ -17,6 +19,14 @@
 
     const REVEAL_MINUTES = 5;
     const storageKey = (projectId, section) => `app-private-reveal:${projectId}:${section}`;
+
+    const cards = Array.from(document.querySelectorAll("[data-private-section]"));
+    if (!cards.length) {
+        return;
+    }
+
+    const keyFor = (card) => storageKey(card.dataset.projectId, card.dataset.privateSection);
+    const safeModeOn = () => document.documentElement.getAttribute("data-safe-mode") === "on";
 
     function readExpiry(key) {
         try {
@@ -34,16 +44,38 @@
         }
     }
 
-    document.querySelectorAll("[data-private-section]").forEach((card) => {
-        const key = storageKey(card.dataset.projectId, card.dataset.privateSection);
+    function forgetExpiry(key) {
+        try {
+            window.localStorage.removeItem(key);
+        } catch (error) {
+            /* Nothing was remembered, then. */
+        }
+    }
 
-        if (readExpiry(key) > Date.now()) {
+    // Only meaningful while safe mode is on - the veil is drawn by that alone -
+    // but the remembered reveals are applied here so a card the user has already
+    // opened does not close again on every page load.
+    cards.forEach((card) => {
+        if (readExpiry(keyFor(card)) > Date.now()) {
             card.classList.remove("private-veiled");
         }
 
         card.querySelector("[data-private-reveal]")?.addEventListener("click", () => {
             card.classList.remove("private-veiled");
-            writeExpiry(key, Date.now() + REVEAL_MINUTES * 60 * 1000);
+            writeExpiry(keyFor(card), Date.now() + REVEAL_MINUTES * 60 * 1000);
+        });
+    });
+
+    // Switching safe mode on means "hide this now", so it also drops what was
+    // revealed earlier: the point of reaching for the shield is that the room has
+    // changed, and a reveal from four minutes ago knows nothing about that.
+    document.addEventListener("safe-mode-change", () => {
+        if (!safeModeOn()) {
+            return;
+        }
+        cards.forEach((card) => {
+            forgetExpiry(keyFor(card));
+            card.classList.add("private-veiled");
         });
     });
 })();
