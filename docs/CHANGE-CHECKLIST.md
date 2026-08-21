@@ -118,7 +118,8 @@ Tick off the sections matching your change. Each item is a specific file/command
 
 ### User-visible behavior change
 - [ ] Update the relevant template in [app/templates/](../app/templates/) and/or the style in [app/static/css/](../app/static/css/).
-- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.5.1`) — it's shown in the UI.
+- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.6`) — it's shown in the UI.
+      One number per release, not per change: a batch of features that ship together share it.
 - [ ] Check whether the change requires updating the feature description in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ### New dependency
