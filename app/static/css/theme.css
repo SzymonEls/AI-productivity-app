@@ -115,6 +115,13 @@
     --bs-primary-rgb: 99, 102, 241;
 }
 
+/* How far down the screen the sticky navbar reaches, for anything that sticks
+   to the top underneath it. base.html measures the bar and overwrites this with
+   the real number; the value here is what the first paint uses. */
+:root {
+    --app-navbar-height: 3.35rem;
+}
+
 /* ------------------------------------------------------------------ *
  * Base
  * ------------------------------------------------------------------ */
@@ -279,6 +286,20 @@ a {
 .theme-toggle .theme-toggle-moon { display: inline; }
 [data-bs-theme="dark"] .theme-toggle .theme-toggle-sun { display: inline; }
 [data-bs-theme="dark"] .theme-toggle .theme-toggle-moon { display: none; }
+
+/* Safe mode reads like the theme switch beside it: one icon for each state,
+   and the shield fills in with the accent colour while it is on, so "is it on"
+   is answerable from across the room. */
+.safe-mode-toggle .safe-mode-on { display: none; }
+.safe-mode-toggle .safe-mode-off { display: inline; }
+[data-safe-mode="on"] .safe-mode-toggle .safe-mode-on { display: inline; }
+[data-safe-mode="on"] .safe-mode-toggle .safe-mode-off { display: none; }
+
+[data-safe-mode="on"] .safe-mode-toggle {
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+    background: var(--primary-soft);
+}
 
 .user-menu-button {
     display: inline-flex;

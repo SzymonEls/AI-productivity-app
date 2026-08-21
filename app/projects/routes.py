@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
@@ -6,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
-from ..markdown_utils import render_project_markdown
+from ..markdown_utils import TAG_PATTERN, render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
 from ..time_tracking.service import (
     daily_totals_by_project,
@@ -16,8 +17,9 @@ from ..time_tracking.service import (
     utc_now,
 )
 from .slots import (
-    CALENDAR_WEEKS,
+    ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
+    MAX_CALENDAR_WEEKS,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
@@ -29,11 +31,14 @@ from .slots import (
     parse_slot_date,
     past_calendar_weeks,
     schedule_window,
+    set_block_done,
     set_session_done,
+    shift_bookings_forward,
     slot_candidates,
     slots_for_date,
     today_local,
     unscheduled_projects,
+    weeks_to_cover,
 )
 
 
@@ -128,18 +133,62 @@ def _minutes_label(minutes, zero=""):
 @projects_bp.route("/schedule")
 @login_required
 def schedule():
-    """Three rolling weeks of calendar sheets, one card per day, from today on."""
+    """Rolling weeks of calendar sheets, one card per day, from today on.
+
+    The page shows SCHEDULE_WEEKS weeks - a month - and more when there is
+    something to
+    show there: a booking further out - a day off pushes them all a day later -
+    stretches the window to reach it, and ``weeks`` stretches it by hand.
+    """
 
     today = today_local()
+    week_count = weeks_to_cover(current_user.id, today)
+    requested = _coerce_int(request.args.get("weeks"))
+    if requested is not None:
+        week_count = max(week_count, min(requested, MAX_CALENDAR_WEEKS))
+
     weeks = [
         {
             "label": _week_label(index),
             "range_label": _date_range_label(days[0][0], days[-1][0]),
             "days": [_serialize_schedule_day(day, booked, today) for day, booked in days],
         }
-        for index, days in enumerate(calendar_weeks(current_user.id, start_day=today))
+        for index, days in enumerate(
+            calendar_weeks(current_user.id, weeks=week_count, start_day=today)
+        )
     ]
-    return render_template("projects/schedule.html", weeks=weeks, today=today)
+    return render_template(
+        "projects/schedule.html",
+        weeks=weeks,
+        today=today,
+        week_count=week_count,
+        # Two more weeks per click, up to the point where the page would be all
+        # empty sheets.
+        more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,
+    )
+
+
+@projects_bp.route("/schedule/day-off", methods=["POST"])
+@login_required
+def schedule_day_off():
+    """Free a day by moving it, and everything after it, a day later."""
+
+    payload = request.get_json(silent=True) or request.form
+    day = parse_slot_date(payload.get("date"))
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    ok, message, _moved = shift_bookings_forward(current_user.id, day)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
+
+    return jsonify({"ok": True, "message": message})
 
 
 @projects_bp.route("/schedule/archive")
@@ -183,14 +232,16 @@ def schedule_archive():
         earlier_until=first_day - timedelta(days=1)
         if earliest is not None and earliest < first_day
         else None,
-        later_until=min(last_day + timedelta(days=CALENDAR_WEEKS * DAYS_PER_WEEK), yesterday)
+        later_until=min(last_day + timedelta(days=ARCHIVE_WEEKS * DAYS_PER_WEEK), yesterday)
         if last_day < yesterday
         else None,
     )
 
 
-# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it.
-_WEEK_LABELS = ("This week", "Next week", "In two weeks")
+# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it. The
+# page runs a month, so the list reaches further than the three weeks it once
+# had; anything past it falls back to "In N weeks".
+_WEEK_LABELS = ("This week", "Next week", "In two weeks", "In three weeks", "In four weeks")
 # The archive counts the other way, and says so from the week's own dates rather
 # than its place on the page - "Last week" has to mean last week on every page.
 # 0 happens on the newest page every day but a Monday: the days of this week that
@@ -295,6 +346,90 @@ def _schedule_window_payload(project_id):
     }
 
 
+# What a tag looks like is defined once, in markdown_utils, next to the code that
+# paints one into a rendered plan.
+# The three kinds of list item the plan editor writes, and nothing else: a tag
+# belongs to a thing to do, not to a heading or a paragraph.
+PLAN_LIST_ITEM_PATTERN = re.compile(r"^\s*(?:[-*+]\s+(?:\[(?P<checked>[ xX])\]\s+)?|\d+\.\s+)(?P<text>.*\S)\s*$")
+
+
+@projects_bp.route("/tags")
+@login_required
+def tags_page():
+    """The tag list, as a page of its own.
+
+    It carries no tags: the page arrives with a spinner in it and asks
+    ``tags/search`` for them, which is the pass over every plan. A page rather
+    than a dialog because a list of everything tagged is somewhere you stay for a
+    while - it can be linked to, gone back to, and left open on a phone.
+    """
+
+    return render_template("projects/tags.html")
+
+
+@projects_bp.route("/tags/search")
+@login_required
+def search_tags():
+    """Every #tag in the list items of the active plans, with what carries it.
+
+    Searched on request rather than kept in a table: the tags are plain text in
+    the plan, so there is nothing to keep in step - what the plan says now is the
+    answer, and a plan edited on another device needs no migration to show up
+    here. It costs one pass over the user's plans, which is why the page that
+    asks for it opens on a spinner.
+    """
+
+    projects = (
+        Project.query.filter_by(user_id=current_user.id, is_archived=False)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    return jsonify({"ok": True, "tags": _collect_tags(projects)})
+
+
+def _collect_tags(projects):
+    """The tags of these projects' plans, alphabetical, each with its items."""
+
+    tags = {}
+    for project in projects:
+        for text, is_done in _plan_list_items(project.long_goal):
+            for name in dict.fromkeys(TAG_PATTERN.findall(text)):
+                # "#Shop" and "#shop" are one tag; the first spelling seen names it.
+                tag = tags.setdefault(name.lower(), {"name": name, "items": []})
+                tag["items"].append(
+                    {
+                        "project_id": project.id,
+                        "project_title": project.title,
+                        "text": text,
+                        "is_done": is_done,
+                        # Safe mode hides a private project's plan; a tagged line
+                        # of it listed here would walk straight past that, so the
+                        # list is told which rows to cover up.
+                        "is_private": bool(project.is_private),
+                        # The project page picks the tag out of the plan and scrolls
+                        # to it, so the item leads back to itself and not just to
+                        # the top of a long plan.
+                        "url": url_for(
+                            "projects.project_detail", project_id=project.id, tag=tag["name"]
+                        ),
+                    }
+                )
+
+    return [
+        {"name": tag["name"], "count": len(tag["items"]), "items": tag["items"]}
+        for _, tag in sorted(tags.items())
+    ]
+
+
+def _plan_list_items(markdown):
+    """``(text, is_done)`` for every list item in a plan, markers stripped."""
+
+    for line in (markdown or "").splitlines():
+        match = PLAN_LIST_ITEM_PATTERN.match(line)
+        if match:
+            yield match.group("text"), (match.group("checked") or "").lower() == "x"
+
+
 @projects_bp.route("/schedule/candidates")
 @login_required
 def slot_candidate_list():
@@ -326,6 +461,38 @@ def toggle_session_done(project_id):
     done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
 
     ok, message, is_done = set_session_done(current_user.id, project.id, today_local(), done)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    return jsonify({"ok": True, "message": message, "is_done": is_done})
+
+
+@projects_bp.route("/schedule/session-done", methods=["POST"])
+@login_required
+def toggle_block_session_done():
+    """Tick off the session in one block, or reopen it - including in the past.
+
+    The other done switch (``toggle_session_done``) is about a project's session
+    today, which is the only one the project page and the home page can mean. The
+    archive ticks a block on a day that has already been: a session finished on
+    Tuesday that nobody marked at the time is still a session finished.
+    """
+
+    payload = request.get_json(silent=True) or request.form
+    day = parse_slot_date(payload.get("date"))
+    slot = (payload.get("slot") or "").strip().upper()
+    done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
+
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    ok, message, is_done = set_block_done(current_user.id, day, slot, done)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
 

@@ -22,9 +22,9 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [config.py](../config.py) | Settings and reading environment variables from `.env`. |
 | [app/extensions.py](../app/extensions.py) | Shared Flask extension objects. |
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
-| [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
+| [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar forwards and backwards (schedule and archive), moving a booking between blocks and the home page's health score. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
@@ -51,7 +51,15 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 
 - **User** — username, email (both unique), hashed password.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
-  the flags `is_starred`/`is_private`/`is_archived`.
+  the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
+  the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
+  only drawn while **safe mode** is on — a browser-side switch (`app-safe-mode` in localStorage,
+  `data-safe-mode` on `<html>`, toggled by the shield in the navbar) that lives entirely in
+  [app/templates/base.html](../app/templates/base.html) and the two CSS rules keyed on it.
+  [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts a card for five
+  minutes at a time and re-veils everything when safe mode is switched on again. The text is in
+  the page all along — nothing is withheld from the browser, and nothing about it is enforced
+  server-side.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -109,7 +117,31 @@ The schema in the code matches the latest migration (`20260809_0018`).
    on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
    timeline up front, which makes that a no-op.
 
-10. **The home page's health score is a convention, not a measurement.** `system_health`
+10. **A day off moves the bookings newest first.** `shift_bookings_forward`
+    ([app/projects/slots.py](../app/projects/slots.py)) pushes every booking from the chosen day
+    on one day later, so each one lands on the date the booking after it has just left. Walking
+    the rows the other way round would hit the unique constraint on `(user, date, slot)` halfway
+    through, and so would moving them all in one flush — hence the `flush()` per row. Two
+    consequences: **a booking already marked done does not move at all** — it happened, and "done"
+    belongs to a date, so moving it would file the work under a day it was not done on and quietly
+    undo it (a block with one in its way is held back too, having nowhere to land) — and the shift
+    can push a booking past the edge of the schedule page, which is why that page's window grows to
+    the last booked day (`weeks_to_cover`) instead of being a fixed three weeks.
+
+11. **A tag is not stored anywhere.** `#shop` in "- [ ] call the printer #shop" is text in
+    `Project.long_goal` and nothing else — no table, no column, nothing to keep in step. The tag
+    tag page (`/projects/tags`, linked from the home page) carries no tags of its own: it arrives
+    with a spinner in the HTML and asks `/projects/tags/search`, which reads every active plan and
+    groups what it finds (`_collect_tags` in [app/projects/routes.py](../app/projects/routes.py)). Three rules follow the same `TAG_PATTERN`
+    ([app/markdown_utils.py](../app/markdown_utils.py)) so the views cannot disagree: a tag starts
+    with a letter, may not follow a word character or "(" (so `C#` and a `](#anchor)` link target
+    are not tags), and **only counts inside a list item** — which is why the block editor paints
+    them in list blocks alone. The JavaScript copies of the pattern
+    ([plan-block-editor.js](../app/static/js/plan-block-editor.js),
+    [tag-list.js](../app/static/js/tag-list.js)) spell it with Unicode property escapes, because
+    JavaScript's `\w` is ASCII and would cut `#dom-i-ogród` short.
+
+12. **The home page's health score is a convention, not a measurement.** `system_health`
     ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
     booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
     counts on neither side of it), and the share of active projects that have a next session booked —

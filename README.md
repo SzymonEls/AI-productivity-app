@@ -10,19 +10,31 @@ container, no external services.
 
 - **Projects** — each one has a short goal, a cadence and a long plan written in Markdown.
   Headings become steps, checkboxes stay checkable in the rendered view, and a finished
-  section can be archived out of the plan without leaving the page.
+  section can be archived out of the plan without leaving the page. A project marked private
+  carries no padlock anywhere — that would point it out. Switch on **safe mode** (the shield next
+  to the theme switch) and such a project opens with its plan and its thoughts behind a button
+  each; a reveal is remembered for five minutes, and reaching for the shield again drops it.
+- **Tags** — write `#anything` in a list item of a plan and it becomes a tag. Nothing is stored
+  as a tag: the tag page, linked from the home page, reads the plans as it opens — spinner and
+  all — and groups what it finds; every entry leads back to the line it came from. Tags are
+  picked out in the plan itself too.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time against a target.
   Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
   were ticked off, mixed with how much of the project list has a next session planned.
-- **Schedule** — three weeks of day sheets, each showing its A/B/C blocks in the same colours as
+- **Schedule** — a month of day sheets, each showing its A/B/C blocks in the same colours as
   the home page: dashed grey while free, amber once booked, green when the session is done. The
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
+  "Day off", next to the archive link, asks for a date and frees it: that day and everything
+  planned after it move one day later — bar a session already ticked off, which stays on the day
+  it happened — and the page shows as many weeks as it takes to keep the last booking in view.
   **Archive** shows the same sheets for days already gone, three weeks a page, back to the first
-  booking; it is a record, so nothing there can be booked, moved or freed.
+  booking; it is a record, so nothing there can be booked, moved or freed — but its ✓ still works,
+  so a session finished on Tuesday can be ticked off on Thursday and counts towards the health
+  ring like any other.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.

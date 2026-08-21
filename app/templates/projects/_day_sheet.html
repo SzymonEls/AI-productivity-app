@@ -5,6 +5,10 @@
   script binds to, the × and the click target behind an empty block. Nothing in
   the past can be booked, moved or freed, so the archive renders the same blocks
   without a single control that would be refused.
+
+  It keeps one: the ✓ on a booked block, which ticks the session off after the
+  fact. That changes what a day says happened, not what is planned for it, so it
+  is the one thing the past still answers.
 #}
 {% from "icons.html" import icon %}
 
@@ -22,12 +26,28 @@
         >
             {% if entry.project %}
                 <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
-                {% if entry.is_done %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
+                {% if entry.is_done and not readonly %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
                 {% if entry.plan_heading %}<span class="day-slot-step">{{ entry.plan_heading }}</span>{% endif %}
             {% else %}
                 <span class="day-slot-free">Free</span>
             {% endif %}
         </div>
+        {% if readonly and entry.project %}
+            {# The one thing a past block can still be told: that the session did
+               happen. The ✓ is the button itself here, rather than the label the
+               board shows next to the title. #}
+            <button
+                type="button"
+                class="icon-button day-slot-done-toggle"
+                data-toggle-done
+                data-date="{{ day.date.isoformat() }}"
+                data-slot="{{ entry.slot }}"
+                data-done="{{ 1 if entry.is_done else 0 }}"
+                aria-pressed="{{ 'true' if entry.is_done else 'false' }}"
+                title="{{ "Session done — click to reopen" if entry.is_done else "Mark this session done" }}"
+                aria-label="{{ "Reopen" if entry.is_done else "Mark done" }} the block {{ entry.slot }} session on {{ day.date.strftime('%d %b') }}"
+            >{{ icon("check") }}</button>
+        {% endif %}
         {% if not readonly %}
             <button
                 type="button"

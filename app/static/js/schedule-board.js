@@ -25,6 +25,10 @@
 
     const MOVE_ENDPOINT = "/projects/schedule/move";
     const CLEAR_ENDPOINT = "/projects/schedule/clear";
+    const DAY_OFF_ENDPOINT = "/projects/schedule/day-off";
+    // A day off reloads the page, which would throw away the one line saying what
+    // it did - including which blocks it would not move.
+    const DAY_OFF_MESSAGE_KEY = "schedule-day-off-message";
     const statusOutput = root.querySelector("[data-schedule-status]");
 
     let pickedCell = null;
@@ -240,9 +244,101 @@
     // belongs to the script, so the board is set up in one pass.
     cells().forEach(refreshCell);
 
+    // Pick up what the day off had to say before it reloaded the page. It is
+    // worth carrying: "1 stayed put" is the answer to why the day you took off
+    // still has a block on it.
+    try {
+        const carried = window.sessionStorage.getItem(DAY_OFF_MESSAGE_KEY);
+        if (carried) {
+            window.sessionStorage.removeItem(DAY_OFF_MESSAGE_KEY);
+            setStatus(carried, "success");
+        }
+    } catch (error) {
+        /* No session storage: nothing to carry. */
+    }
+
+    /**
+     * Take a day off: the day named in the dialog, and every day after it, move
+     * one day later.
+     *
+     * The date is typed rather than clicked on a sheet - the day being freed is
+     * usually one you already know, and it can be past the edge of the page.
+     * Unlike a move or a clear this touches sheets all over the page, and pushes
+     * the last of them out by a day, so it reloads instead of trying to redraw
+     * the board in place.
+     */
+    const dayOffDialog = root.querySelector("[data-day-off-dialog]");
+    const dayOffDate = root.querySelector("[data-day-off-date]");
+    const dayOffStatus = root.querySelector("[data-day-off-status]");
+    const dayOffSubmit = root.querySelector("[data-day-off-submit]");
+
+    function setDayOffStatus(message, tone) {
+        dayOffStatus.textContent = message || "";
+        dayOffStatus.className = `planner-status${tone ? ` planner-status-${tone}` : ""}`;
+    }
+
+    function openDayOff() {
+        clearPick();
+        setDayOffStatus("", "");
+        dayOffDialog.hidden = false;
+        dayOffDate.focus();
+    }
+
+    function closeDayOff() {
+        dayOffDialog.hidden = true;
+        dayOffSubmit.disabled = false;
+    }
+
+    function requestDayOff() {
+        const date = dayOffDate.value;
+        if (!date) {
+            setDayOffStatus("Pick a day first.", "danger");
+            return;
+        }
+
+        dayOffSubmit.disabled = true;
+        setDayOffStatus("Moving the plan…", "");
+
+        postJson(DAY_OFF_ENDPOINT, { date }, "Could not take the day off.")
+            .then((payload) => {
+                try {
+                    window.sessionStorage.setItem(DAY_OFF_MESSAGE_KEY, payload.message || "");
+                } catch (error) {
+                    /* No session storage: the board just comes back quiet. */
+                }
+                window.location.reload();
+            })
+            .catch((error) => {
+                dayOffSubmit.disabled = false;
+                setDayOffStatus(error.message, "danger");
+            });
+    }
+
+    dayOffDialog.addEventListener("click", (event) => {
+        if (event.target === dayOffDialog || event.target.closest("[data-day-off-close]")) {
+            closeDayOff();
+        } else if (event.target.closest("[data-day-off-submit]")) {
+            requestDayOff();
+        }
+    });
+
+    // Enter in the date field is the same "yes" as the button.
+    dayOffDate.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            requestDayOff();
+        }
+    });
+
     // Its own listener rather than a branch of the one below, which steps aside
     // for these buttons.
     root.addEventListener("click", (event) => {
+        if (event.target.closest("[data-day-off-open]")) {
+            event.preventDefault();
+            openDayOff();
+            return;
+        }
+
         const clearButton = event.target.closest("[data-clear-slot]");
         if (!clearButton) {
             return;
@@ -251,10 +347,17 @@
         requestClear(clearButton);
     });
 
-    // Escape drops a block that was picked up. There is no longer a mode behind
-    // it to leave.
+    // Escape closes the day-off dialog, or drops a block that was picked up.
+    // There is no longer a mode behind either of them to leave.
     document.addEventListener("keydown", (event) => {
-        if (event.key !== "Escape" || !pickedCell) {
+        if (event.key !== "Escape") {
+            return;
+        }
+        if (!dayOffDialog.hidden) {
+            closeDayOff();
+            return;
+        }
+        if (!pickedCell) {
             return;
         }
         clearPick();

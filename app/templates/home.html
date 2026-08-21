@@ -36,7 +36,10 @@
                                     {{ card.project.title }}
                                 </a>
                                 {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
-                                {% if card.project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                                {# No padlock: a private project is one nobody looking over your
+                                   shoulder should be able to pick out of today's three cards.
+                                   Privacy shows on the project's own page instead, where the plan
+                                   and the thoughts stay behind a button. #}
                                 {% if card.is_done %}<span class="slot-done-tag">Done</span>{% endif %}
                             </div>
                             {% if card.plan_heading %}
@@ -131,6 +134,15 @@
                         </li>
                     </ul>
                 </div>
+            </div>
+
+            {# The tags live in the plans as text and are searched for on the page
+               this leads to, not here: the home page would otherwise pay for a
+               list nobody may look at. #}
+            <div class="dashboard-section">
+                <h2 class="h6 mb-1">Tags</h2>
+                <p class="text-muted small mb-3">Whatever you marked with a <code>#tag</code> in a plan's list.</p>
+                <a href="{{ url_for('projects.tags_page') }}" class="btn btn-outline-secondary btn-sm">Show tags</a>
             </div>
         </aside>
     </div>

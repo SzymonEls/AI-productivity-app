@@ -762,6 +762,22 @@
     border-radius: 4px;
 }
 
+/* Where the tag list lands: the block it linked to says so for a moment, then
+   goes back to being an ordinary line. */
+.pbe-block.pbe-tag-found {
+    border-radius: 4px;
+    animation: pbe-tag-found 2.6s ease-out;
+}
+
+@keyframes pbe-tag-found {
+    0%, 55% { background: color-mix(in srgb, var(--primary) 20%, transparent); }
+    100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pbe-block.pbe-tag-found { animation: none; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+}
+
 /* While drag-selecting blocks, suppress native text selection. */
 .pbe-selecting,
 .pbe-selecting .pbe-content { user-select: none; -webkit-user-select: none; }
@@ -1243,11 +1259,16 @@
     font-size: 0.98rem;
 }
 
+/* The toolbar follows a long plan down the screen, which on a phone is the
+   difference between reaching for bold and scrolling back to the top of the
+   editor for it. It sticks below the navbar rather than at 0: the navbar is
+   sticky too and sits far above it, so a toolbar stuck at the very top simply
+   disappears underneath and reads as one that never moved at all. */
 .EasyMDEContainer .editor-toolbar {
     border-color: var(--input);
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     position: sticky;
-    top: 0;
+    top: var(--app-navbar-height, 0px);
     z-index: 5;
     background: var(--surface);
 }
@@ -1266,12 +1287,60 @@
     border-color: var(--border);
 }
 
+/* Fullscreen takes the toolbar out of the page, navbar and all, so the offset
+   above has to be undone with it. */
 .EasyMDEContainer .editor-toolbar.fullscreen {
     position: fixed;
+    top: 0;
 }
 
 .EasyMDEContainer .CodeMirror-sided {
     min-height: 220px !important;
+}
+
+/* Private projects in safe mode: the plan and the thoughts sit behind a button
+   until asked for. The card is rendered veiled whatever the mode and the veil is
+   drawn by [data-safe-mode="on"] alone, so switching the mode needs no reload and
+   nothing is on screen for a frame before the decision. The controls go with the
+   content, since there is nothing to edit while it is hidden. */
+[data-safe-mode="on"] .private-veiled .private-hideable,
+[data-safe-mode="on"] .private-veiled .inline-section-controls,
+[data-safe-mode="on"] .private-veiled .plan-save-status {
+    display: none;
+}
+
+.private-veil {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 1rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+[data-safe-mode="on"] .private-veiled .private-veil {
+    display: flex;
+}
+
+.private-veil-lock {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
+.private-veil-note {
+    flex: 1 1 10rem;
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
 }
 
 .plan-chip {
@@ -1995,6 +2064,12 @@ button.picker-row:hover {
     text-transform: uppercase;
 }
 
+.schedule-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
 .day-sheet-slots {
     list-style: none;
     margin: 0;
@@ -2114,6 +2189,29 @@ button.picker-row:hover {
     font-size: 0.85rem;
 }
 
+/* The archive's ✓: dim until the session is ticked off, green once it is, and
+   the only thing on a past block that answers a click. */
+.day-slot-done-toggle {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0.35;
+}
+
+.day-slot-done-toggle:hover,
+.day-slot-done-toggle:focus-visible {
+    background: transparent;
+    border-color: var(--border);
+    opacity: 1;
+}
+
+.day-slot.is-done .day-slot-done-toggle {
+    color: var(--success);
+    opacity: 1;
+}
+
 /* Covers the block, mirroring the fill button on an empty card at home. */
 .day-slot-fill {
     position: absolute;
@@ -2144,6 +2242,113 @@ button.picker-row:hover {
     box-shadow: 0 0 0 2px var(--ring);
 }
 
+/* Tags -------------------------------------------------------------- *
+   A tag is plain text in the plan, so it is only ever painted: same pill in the
+   block editor, in a rendered plan and in the tag list, which is what makes the
+   three read as one thing. */
+.plan-tag {
+    display: inline-block;
+    padding: 0 0.35rem;
+    border-radius: var(--radius-pill);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 0.92em;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* The tag the reader was sent to, in the classic (rendered) plan. */
+.plan-tag.plan-tag-found {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.tag-list {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.tag-list-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.5rem 0;
+    justify-content: center;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.tag-group-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.45rem;
+    font-size: 0.95rem;
+}
+
+/* Two columns of tags once there is room for them: the page is a whole screen
+   now, not a dialog, and a long single column wastes most of it. */
+@media (min-width: 992px) {
+    .tags-page .tag-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+
+.tag-group-count {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.tag-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: inherit;
+    text-decoration: none;
+}
+
+.tag-item + .tag-item {
+    margin-top: 0.35rem;
+}
+
+.tag-item:hover,
+.tag-item:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+    color: inherit;
+}
+
+.tag-item-text {
+    min-width: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+/* A ticked-off to-do keeps its place in the list but stops asking to be done. */
+.tag-item.is-done .tag-item-text {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+/* In safe mode a private project's line is listed but not read out. */
+.tag-item-covered {
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+.tag-item-project {
+    flex: 0 0 auto;
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+}
+
 /* Planner dialog --------------------------------------------------- */
 
 .planner-backdrop {
@@ -2168,6 +2373,11 @@ button.picker-row:hover {
     border-radius: var(--radius-lg);
     background: var(--surface);
     box-shadow: var(--shadow-lg, 0 20px 40px rgba(0, 0, 0, 0.25));
+}
+
+/* One date and two buttons - the session planner's grid of days would dwarf it. */
+.planner-dialog-narrow {
+    width: min(24rem, 100%);
 }
 
 .planner-header {

@@ -20,10 +20,21 @@ from ..time_tracking.service import app_timezone, utc_now
 SLOTS = ("A", "B", "C")
 # A and B are the day's real work; C is a spare that never shows tracked time.
 TIMED_SLOTS = ("A", "B")
-SCHEDULE_WINDOW_DAYS = 7
-# The schedule page shows three rolling weeks of day cards, empty days included.
-CALENDAR_WEEKS = 3
+# The planner dialog offers a fortnight: a week was short enough that a project
+# with a booking in it had nowhere left to go, and the dialog scrolls anyway.
+SCHEDULE_WINDOW_DAYS = 14
 DAYS_PER_WEEK = 7
+# The schedule page shows a month of rolling weeks of day cards, empty days
+# included - five, because the first week starts today rather than on its Monday.
+SCHEDULE_WEEKS = 5
+# The archive pages back through the same sheets three weeks at a time. Shorter
+# than the schedule on purpose: it is read backwards, a page at a time, and every
+# page costs a click.
+ARCHIVE_WEEKS = 3
+# The schedule page grows past its default when the bookings run further out - a
+# day off pushes them - but not without end: past this it is a scroll through
+# empty sheets.
+MAX_CALENDAR_WEEKS = 12
 
 # The health score on the home page: the last week of finished sessions weighed
 # against how much of the project list has a next session planned. The sessions
@@ -95,7 +106,7 @@ def slots_from(user_id, start_day, end_day=None):
     return by_date
 
 
-def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
+def calendar_weeks(user_id, weeks=SCHEDULE_WEEKS, start_day=None):
     """
     The schedule page: ``weeks`` calendar weeks of days, as lists of
     ``(date, {slot: ProjectDaySlot|None})``.
@@ -131,7 +142,7 @@ def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
     return calendar
 
 
-def past_calendar_weeks(user_id, weeks=CALENDAR_WEEKS, end_day=None):
+def past_calendar_weeks(user_id, weeks=ARCHIVE_WEEKS, end_day=None):
     """
     The archive: ``weeks`` calendar weeks up to and including ``end_day``
     (yesterday by default), newest week first.
@@ -176,6 +187,43 @@ def first_booked_day(user_id):
         .filter(ProjectDaySlot.user_id == user_id)
         .scalar()
     )
+
+
+def last_booked_day(user_id):
+    """The latest day this user has booked, or None if they never have.
+
+    The mirror of first_booked_day(): the archive stops at the earliest booking,
+    the schedule page reaches out to the latest one.
+    """
+    return (
+        db.session.query(func.max(ProjectDaySlot.slot_date))
+        .filter(ProjectDaySlot.user_id == user_id)
+        .scalar()
+    )
+
+
+def weeks_to_cover(user_id, start_day=None, minimum=SCHEDULE_WEEKS, maximum=MAX_CALENDAR_WEEKS):
+    """How many calendar weeks the schedule has to show to reach the last booking.
+
+    The page shows a fixed number of weeks by default, which is fine until
+    something pushes a booking past its edge - taking a day off does exactly
+    that. The window then grows to the last booked day rather than hiding it,
+    up to ``maximum`` weeks.
+    """
+    start_day = today_local() if start_day is None else start_day
+    last = last_booked_day(user_id)
+    if last is None or last <= start_day:
+        return minimum
+
+    # The first week is the short one: it starts today rather than on its Monday.
+    first_week_days = DAYS_PER_WEEK - start_day.weekday()
+    days_needed = (last - start_day).days + 1
+    if days_needed <= first_week_days:
+        weeks = 1
+    else:
+        # Ceiling division over the whole weeks that follow the short one.
+        weeks = 1 + -(-(days_needed - first_week_days) // DAYS_PER_WEEK)
+    return max(minimum, min(weeks, maximum))
 
 
 def unscheduled_projects(user_id):
@@ -525,6 +573,31 @@ def set_session_done(user_id, project_id, day, done):
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
 
 
+def set_block_done(user_id, day, slot, done):
+    """
+    Tick off the session booked in one block, or reopen it, on any day.
+
+    The block rather than the project: this is what the archive ticks, where a
+    day holds three finished sessions and "which project" is not the question -
+    and where the same project may well have been booked again since.
+
+    Returns ``(ok, message, is_done)``; the caller commits.
+    """
+    if slot not in SLOTS:
+        return False, "Unknown slot.", False
+
+    booking = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
+    if booking is None:
+        return False, "That block is free.", False
+
+    booking.is_done = bool(done)
+    return (
+        True,
+        "Session marked done." if booking.is_done else "Session reopened.",
+        booking.is_done,
+    )
+
+
 def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     """
     Move a booking to another day and slot, swapping with whatever sits there.
@@ -591,6 +664,76 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         return True, f"Swapped with {displaced_title}."
 
     return True, f"Moved to {to_day.strftime('%d %b')}, slot {to_slot}."
+
+
+def shift_bookings_forward(user_id, from_day, days=1):
+    """
+    Take a day off: push the bookings from ``from_day`` on ``days`` days later.
+
+    The chosen day is freed and everything planned for it - and for every day
+    after it - simply happens a day later, so the order of the plan survives a
+    day that does not. Returns ``(ok, message, moved)``; the caller commits.
+
+    A session already marked done stays exactly where it is. It happened: moving
+    it would file work already done under a day it was not done on, and would
+    quietly undo it, since "done" belongs to a date and does not travel. So
+    taking today off after finishing block A moves what is left of the day and
+    leaves A on today - which is also why the day is not always empty afterwards.
+
+    The rows are moved newest first. Every booking lands on the date the one
+    after it has just left, so going the other way round would collide with the
+    unique constraint on (user, date, slot) halfway through; the flush per row
+    keeps the same collision from happening inside one statement batch. A block
+    held back by a finished session in the way is held back for the same reason -
+    there is nowhere for it to land - and holds back the one behind it in turn.
+    """
+    if days < 1:
+        return False, "A day off is at least one day.", 0
+    if from_day < today_local():
+        return False, "That day is in the past.", 0
+
+    entries = (
+        ProjectDaySlot.query.filter(
+            ProjectDaySlot.user_id == user_id, ProjectDaySlot.slot_date >= from_day
+        )
+        .order_by(ProjectDaySlot.slot_date.desc())
+        .all()
+    )
+    if not entries:
+        return True, f"{from_day.strftime('%d %b')} was already free.", 0
+
+    moved = 0
+    # The (date, slot) spots nothing may move onto: a finished session, or a
+    # booking stuck behind one.
+    staying = set()
+    for entry in entries:
+        target = (entry.slot_date + timedelta(days=days), entry.slot)
+        if entry.is_done or target in staying:
+            staying.add((entry.slot_date, entry.slot))
+            continue
+
+        entry.slot_date = target[0]
+        db.session.flush()
+        moved += 1
+
+    return True, _day_off_message(from_day, moved, len(staying)), moved
+
+
+def _day_off_message(from_day, moved, stayed):
+    """What the day off did, in one line: what moved, and what would not.
+
+    "Stayed" is finished sessions and, in principle, whatever was left with
+    nowhere to land behind one, so it is counted rather than named.
+    """
+    day_label = from_day.strftime("%d %b")
+    if not moved:
+        return f"Nothing moved — a finished session stays on the day it happened."
+
+    blocks = "block" if moved == 1 else "blocks"
+    message = f"Day off on {day_label} — {moved} {blocks} moved a day later."
+    if stayed:
+        message += f" {stayed} stayed put: a finished session does not move."
+    return message
 
 
 def clear_slot(user_id, day, slot):

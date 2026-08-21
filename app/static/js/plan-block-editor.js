@@ -23,6 +23,60 @@
     const uid = () => `b${Date.now().toString(36)}${(uidCounter += 1).toString(36)}`;
 
     const isListType = (type) => LIST_TYPES.includes(type);
+    const isHeadingType = (type) => /^h[1-3]$/.test(type || "");
+
+    // The same tag as the server paints into a rendered plan (app/markdown_utils.py):
+    // it starts with a letter and may not follow a word character, so "C#" is not
+    // one. Spelled with Unicode properties rather than \w, which in JavaScript is
+    // ASCII and would cut "#dom-i-ogród" short; the leading character is captured
+    // rather than looked behind, which older Safari would not run.
+    const TAG_RE = /(^|[^\p{L}\p{N}_#(])#(\p{L}[\p{L}\p{N}_-]*)/gu;
+
+    const tagsIn = (text) => {
+        const found = [];
+        TAG_RE.lastIndex = 0;
+        let match;
+        while ((match = TAG_RE.exec(text || "")) !== null) {
+            found.push({ name: match[2], start: match.index + match[1].length });
+        }
+        return found;
+    };
+
+    /**
+     * Paint the tags in one line of plain text.
+     *
+     * A tag is characters in the plan, never a node: this only wraps what is
+     * already there, so el.textContent still reads back the block's text exactly
+     * and the Markdown round-trip is untouched.
+     *
+     * ``paint`` is false for everything but a list item, because that is where a
+     * tag counts - the tag list reads list items only, and a "#word" painted in a
+     * paragraph would promise to show up there and then not.
+     */
+    const renderInlineText = (el, text, paint) => {
+        const tags = paint ? tagsIn(text) : [];
+        if (!tags.length) {
+            el.textContent = text || "";
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        let index = 0;
+        tags.forEach((tag) => {
+            if (tag.start > index) {
+                fragment.appendChild(document.createTextNode(text.slice(index, tag.start)));
+            }
+            const span = document.createElement("span");
+            span.className = "plan-tag";
+            span.textContent = `#${tag.name}`;
+            fragment.appendChild(span);
+            index = tag.start + tag.name.length + 1;
+        });
+        if (index < text.length) {
+            fragment.appendChild(document.createTextNode(text.slice(index)));
+        }
+        el.replaceChildren(fragment);
+    };
     const indentLevel = (spaces) => Math.min(Math.floor(spaces.replace(/\t/g, "  ").length / 2), MAX_LEVEL);
 
     // --- Markdown -> blocks ------------------------------------------------
@@ -137,22 +191,52 @@
         return pre.toString().length;
     };
 
+    // Walks the text nodes rather than assuming the block is one: a painted tag
+    // puts a <span> in the middle of the line, and an offset inside or after it
+    // has to land in the right node.
     const setCaretOffset = (el, offset) => {
         el.focus();
         const selection = window.getSelection();
         const range = document.createRange();
-        const length = el.textContent.length;
-        const target = Math.max(0, Math.min(offset, length));
-        const node = el.firstChild;
-        if (node && node.nodeType === Node.TEXT_NODE) {
-            range.setStart(node, target);
-        } else {
-            range.selectNodeContents(el);
-            range.collapse(target === 0);
+        const target = Math.max(0, Math.min(offset, el.textContent.length));
+
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        let node = walker.nextNode();
+        while (node) {
+            if (target <= seen + node.length) {
+                range.setStart(node, target - seen);
+                range.collapse(true);
+                selection.removeAllRanges();
+                selection.addRange(range);
+                return;
+            }
+            seen += node.length;
+            node = walker.nextNode();
         }
+
+        // An empty block has no text node to put the caret in.
+        range.selectNodeContents(el);
         range.collapse(true);
         selection.removeAllRanges();
         selection.addRange(range);
+    };
+
+    /**
+     * Jump to an element, without the animation.
+     *
+     * Bootstrap sets scroll-behavior: smooth on the document, and a smooth scroll
+     * is animated - which means it does not happen at all while the page is
+     * hidden (a link opened in a background tab), leaving the reader at the top
+     * when they come to look. Turning the property off around the call lands them
+     * on the line instead, and does not need the newer "instant" behaviour value.
+     */
+    const scrollToElement = (el) => {
+        const root = document.documentElement;
+        const previous = root.style.scrollBehavior;
+        root.style.scrollBehavior = "auto";
+        el.scrollIntoView({ block: "center" });
+        root.style.scrollBehavior = previous;
     };
 
     // --- editor ------------------------------------------------------------
@@ -499,7 +583,7 @@
                 if (block.type === "todo" && block.checked) {
                     content.classList.add("is-checked");
                 }
-                content.textContent = block.text || "";
+                renderInlineText(content, block.text || "", isListType(block.type));
                 el.appendChild(content);
             }
             return el;
@@ -526,8 +610,59 @@
             if (this._maybeTransform(ctx)) {
                 return; // re-rendered + saved inside
             }
+            this._repaintTags(ctx, event);
             // Coalesce a run of typing in the same block into one undo step.
             this.scheduleSave(`text:${ctx.block.id}`);
+        }
+
+        /**
+         * Repaint the tags of the block being typed in, caret and all.
+         *
+         * Only when there is something to paint or something painted already, so
+         * an ordinary line is never rebuilt under the caret. Left alone mid-IME
+         * composition, where replacing the nodes would drop what is being typed.
+         */
+        _repaintTags(ctx, event) {
+            if (event && event.isComposing) return;
+            const { block, content } = ctx;
+            const paint = isListType(block.type);
+            const painted = content.querySelector(".plan-tag") !== null;
+            if (!painted && (!paint || !tagsIn(block.text).length)) return;
+
+            const offset = getCaretOffset(content);
+            renderInlineText(content, block.text || "", paint);
+            if (offset != null) setCaretOffset(content, offset);
+        }
+
+        /**
+         * Scroll to the first block carrying ``tag`` and flash it.
+         *
+         * What the tag list links back to: a tagged line is one line of a long
+         * plan, and landing at the top of the page is not landing on it.
+         */
+        revealTag(tag) {
+            const name = String(tag || "").replace(/^#/, "").toLowerCase();
+            if (!name) return false;
+
+            const found = this.blocks.find(
+                (block) =>
+                    isListType(block.type) &&
+                    tagsIn(block.text).some((entry) => entry.name.toLowerCase() === name)
+            );
+            const el = found && this.list.querySelector(`[data-id="${found.id}"]`);
+            if (!el) return false;
+
+            // Only scroll when the line is not already there to be read: this runs
+            // twice on a page load (before and after the browser's own scroll
+            // restoration), and the second run must not yank a reader who has
+            // started scrolling on their own.
+            const rect = el.getBoundingClientRect();
+            if (rect.top < 0 || rect.bottom > window.innerHeight) {
+                scrollToElement(el);
+            }
+            el.classList.add("pbe-tag-found");
+            window.setTimeout(() => el.classList.remove("pbe-tag-found"), 2600);
+            return true;
         }
 
         _maybeTransform(ctx) {
@@ -622,6 +757,21 @@
             const offset = content ? (getCaretOffset(content) ?? block.text.length) : 0;
             const before = (block.text || "").slice(0, offset);
             const after = (block.text || "").slice(offset);
+
+            // Enter at the very start of a heading opens a line above it instead of
+            // splitting it in two. Splitting would leave the heading behind as an
+            // empty one and push its title down as a paragraph - the section would
+            // stay put and lose its name. Here the heading keeps its text, so the
+            // whole section moves down with it, and a plain text block takes the
+            // place the heading came from.
+            if (isHeadingType(block.type) && offset === 0 && (block.text || "").trim()) {
+                const above = { id: uid(), type: "paragraph", text: "", level: 0 };
+                this.blocks.splice(this.indexOf(block.id), 0, above);
+                this.renderAll();
+                this.focusBlock(above.id, 0);
+                this.scheduleSave();
+                return;
+            }
 
             // Pressing Enter on an empty list/quote item exits back to a paragraph.
             if ((isListType(block.type) || block.type === "quote") && !block.text.trim()) {
@@ -855,9 +1005,20 @@
                     ${cmd.key === currentKey ? "<span class=\"pbe-menu-check\">✓</span>" : ""}
                 </button>`).join("");
 
+            // "Move to first section" is only offered when it would actually move
+            // something: there has to be a section to move into, and the blocks must
+            // not already be sitting in it. The count is of the blocks that would
+            // move, not of the whole selection - a heading in it stays where it is.
+            const movable = this._movableToFirstSection(targetIds);
+            const moveItem = movable.length
+                ? `<div class="pbe-menu-sep"></div>
+                <button type="button" class="pbe-menu-item" data-action="first-section"><span class="pbe-menu-label">${movable.length > 1 ? `Move ${movable.length} blocks to first section` : "Move to first section"}</span></button>`
+                : "";
+
             this.blockMenu.innerHTML = `
                 <div class="pbe-menu-heading">${multiple ? `Turn ${targetIds.length} blocks into` : "Turn into"}</div>
                 ${turnItems}
+                ${moveItem}
                 <div class="pbe-menu-sep"></div>
                 <button type="button" class="pbe-menu-item" data-action="add-below"><span class="pbe-menu-label">Add block below</span></button>
                 <button type="button" class="pbe-menu-item" data-action="duplicate"><span class="pbe-menu-label">Duplicate</span></button>
@@ -889,6 +1050,8 @@
 
             if (action === "turn") {
                 this._turnInto(blockId, item.dataset.key);
+            } else if (action === "first-section") {
+                this._moveToFirstSection(blockId);
             } else if (action === "add-below") {
                 const next = { id: uid(), type: "paragraph", text: "", level: 0 };
                 this.blocks.splice(this.indexOf(blockId) + 1, 0, next);
@@ -913,6 +1076,60 @@
                 this.focusBlock(focus.id, "end");
                 this.scheduleSave();
             }
+        }
+
+        // Where the first section ends: the index of the second top-level heading,
+        // or the end of the plan when there is only one section. -1 when the plan
+        // has no sections at all.
+        _firstSectionBounds() {
+            const start = this.blocks.findIndex((block) => block.type === "h1");
+            if (start < 0) return null;
+            const next = this.blocks.findIndex((block, index) => index > start && block.type === "h1");
+            return { start, end: next < 0 ? this.blocks.length : next };
+        }
+
+        // The blocks a "move to first section" would actually move: everything
+        // targeted except the ones already inside the first section and the top-level
+        // headings, which are the section boundaries themselves - moving one would
+        // carve up the sections rather than move a block between them.
+        _movableToFirstSection(targetIds) {
+            const bounds = this._firstSectionBounds();
+            if (!bounds) return [];
+            return targetIds.filter((id) => {
+                const index = this.indexOf(id);
+                if (index < 0 || this.blocks[index].type === "h1") return false;
+                return !(index > bounds.start && index < bounds.end);
+            });
+        }
+
+        /**
+         * Send a block - or a whole selection - to the end of the plan's first section.
+         *
+         * The first section is the step being worked on, so this is the "do this
+         * next" button: a task written anywhere in the plan lands under the first
+         * heading without a drag across the page. Appending rather than inserting
+         * at the top keeps the section's own order intact, the way the plan-section
+         * archive appends too.
+         */
+        _moveToFirstSection(blockId) {
+            const ids = this._movableToFirstSection(this._menuTargetIds(blockId));
+            if (!ids.length) return;
+            const bounds = this._firstSectionBounds();
+
+            const idSet = new Set(ids);
+            const moved = this.blocks.filter((block) => idSet.has(block.id));
+            // Blocks pulled out from above the drop point shift it up by as many.
+            const removedBefore = this.blocks.slice(0, bounds.end).filter((block) => idSet.has(block.id)).length;
+            const remaining = this.blocks.filter((block) => !idSet.has(block.id));
+            const insertAt = Math.max(0, Math.min(bounds.end - removedBefore, remaining.length));
+            remaining.splice(insertAt, 0, ...moved);
+            this.blocks = remaining;
+
+            this.renderAll();
+            if (this.selectedIds.length <= 1) {
+                this.focusBlock(moved[0].id, "end");
+            }
+            this.scheduleSave();
         }
 
         // The blocks a block-menu action targets: the whole block selection when the
