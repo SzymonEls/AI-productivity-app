@@ -30,6 +30,7 @@ from .slots import (
     parse_slot_date,
     past_calendar_weeks,
     schedule_window,
+    set_block_done,
     set_session_done,
     shift_bookings_forward,
     slot_candidates,
@@ -375,6 +376,38 @@ def toggle_session_done(project_id):
     done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
 
     ok, message, is_done = set_session_done(current_user.id, project.id, today_local(), done)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    return jsonify({"ok": True, "message": message, "is_done": is_done})
+
+
+@projects_bp.route("/schedule/session-done", methods=["POST"])
+@login_required
+def toggle_block_session_done():
+    """Tick off the session in one block, or reopen it - including in the past.
+
+    The other done switch (``toggle_session_done``) is about a project's session
+    today, which is the only one the project page and the home page can mean. The
+    archive ticks a block on a day that has already been: a session finished on
+    Tuesday that nobody marked at the time is still a session finished.
+    """
+
+    payload = request.get_json(silent=True) or request.form
+    day = parse_slot_date(payload.get("date"))
+    slot = (payload.get("slot") or "").strip().upper()
+    done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
+
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    ok, message, is_done = set_block_done(current_user.id, day, slot, done)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
 

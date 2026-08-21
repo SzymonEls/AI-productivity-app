@@ -24,7 +24,9 @@ container, no external services.
   The moon on a sheet takes that day off: the day and everything planned after it move one day
   later, and the page shows as many weeks as it takes to keep the last booking in view.
   **Archive** shows the same sheets for days already gone, three weeks a page, back to the first
-  booking; it is a record, so nothing there can be booked, moved or freed.
+  booking; it is a record, so nothing there can be booked, moved or freed — but its ✓ still works,
+  so a session finished on Tuesday can be ticked off on Thursday and counts towards the health
+  ring like any other.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.

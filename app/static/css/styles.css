@@ -2141,6 +2141,29 @@ button.picker-row:hover {
     font-size: 0.85rem;
 }
 
+/* The archive's ✓: dim until the session is ticked off, green once it is, and
+   the only thing on a past block that answers a click. */
+.day-slot-done-toggle {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0.35;
+}
+
+.day-slot-done-toggle:hover,
+.day-slot-done-toggle:focus-visible {
+    background: transparent;
+    border-color: var(--border);
+    opacity: 1;
+}
+
+.day-slot.is-done .day-slot-done-toggle {
+    color: var(--success);
+    opacity: 1;
+}
+
 /* Covers the block, mirroring the fill button on an empty card at home. */
 .day-slot-fill {
     position: absolute;

@@ -5,7 +5,7 @@
 {% block title %}Archive{% endblock %}
 
 {% block content %}
-<div class="dashboard-page schedule-archive-page">
+<div class="dashboard-page schedule-archive-page" data-schedule-archive>
     <section class="dashboard-section dashboard-header-section">
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-2">
@@ -13,6 +13,7 @@
                 <span class="text-muted small">Days that have already been · {{ range_label }}</span>
             </div>
             <div class="d-flex align-items-center gap-2">
+                <span class="schedule-status" data-archive-status role="status"></span>
                 {# Each link is worked out from this page's own edges, so the pages
                    meet exactly whatever weekday the newest one ends on. #}
                 {% if earlier_until %}
@@ -26,7 +27,8 @@
         </div>
         <p class="schedule-hint">
             A record, not a board: past blocks cannot be booked, moved or freed. The ✓ marks a
-            session that was ticked off on the day.
+            session that was ticked off — click it to tick one off now, or to reopen it, on any
+            day that has been.
         </p>
     </section>
 
@@ -50,4 +52,8 @@
         </section>
     {% endfor %}
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/schedule-archive.js') }}"></script>
 {% endblock %}

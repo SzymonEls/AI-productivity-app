@@ -573,6 +573,31 @@ def set_session_done(user_id, project_id, day, done):
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
 
 
+def set_block_done(user_id, day, slot, done):
+    """
+    Tick off the session booked in one block, or reopen it, on any day.
+
+    The block rather than the project: this is what the archive ticks, where a
+    day holds three finished sessions and "which project" is not the question -
+    and where the same project may well have been booked again since.
+
+    Returns ``(ok, message, is_done)``; the caller commits.
+    """
+    if slot not in SLOTS:
+        return False, "Unknown slot.", False
+
+    booking = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
+    if booking is None:
+        return False, "That block is free.", False
+
+    booking.is_done = bool(done)
+    return (
+        True,
+        "Session marked done." if booking.is_done else "Session reopened.",
+        booking.is_done,
+    )
+
+
 def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     """
     Move a booking to another day and slot, swapping with whatever sits there.
