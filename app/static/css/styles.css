@@ -1243,11 +1243,16 @@
     font-size: 0.98rem;
 }
 
+/* The toolbar follows a long plan down the screen, which on a phone is the
+   difference between reaching for bold and scrolling back to the top of the
+   editor for it. It sticks below the navbar rather than at 0: the navbar is
+   sticky too and sits far above it, so a toolbar stuck at the very top simply
+   disappears underneath and reads as one that never moved at all. */
 .EasyMDEContainer .editor-toolbar {
     border-color: var(--input);
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
     position: sticky;
-    top: 0;
+    top: var(--app-navbar-height, 0px);
     z-index: 5;
     background: var(--surface);
 }
@@ -1266,8 +1271,11 @@
     border-color: var(--border);
 }
 
+/* Fullscreen takes the toolbar out of the page, navbar and all, so the offset
+   above has to be undone with it. */
 .EasyMDEContainer .editor-toolbar.fullscreen {
     position: fixed;
+    top: 0;
 }
 
 .EasyMDEContainer .CodeMirror-sided {

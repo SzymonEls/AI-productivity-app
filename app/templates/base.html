@@ -291,6 +291,29 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // The navbar is sticky, so anything else that sticks to the top of the
+        // screen - the Markdown toolbar over a long plan, above all - has to start
+        // below it. Its height is published as a CSS variable rather than written
+        // into the stylesheet as a guess: the running-timer link is added to the
+        // bar at runtime, and the bar is a different height on a phone.
+        (() => {
+            const navbar = document.querySelector(".app-navbar");
+            if (!navbar) {
+                return;
+            }
+            const publish = () => document.documentElement.style.setProperty(
+                "--app-navbar-height",
+                `${Math.round(navbar.getBoundingClientRect().height)}px`
+            );
+            publish();
+            if (window.ResizeObserver) {
+                new ResizeObserver(publish).observe(navbar);
+            } else {
+                window.addEventListener("resize", publish);
+            }
+        })();
+    </script>
+    <script>
         // App settings: interface style (modern/classic) + theme + project layout
         (() => {
             const root = document.documentElement;

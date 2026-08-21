@@ -115,6 +115,13 @@
     --bs-primary-rgb: 99, 102, 241;
 }
 
+/* How far down the screen the sticky navbar reaches, for anything that sticks
+   to the top underneath it. base.html measures the bar and overwrites this with
+   the real number; the value here is what the first paint uses. */
+:root {
+    --app-navbar-height: 3.35rem;
+}
+
 /* ------------------------------------------------------------------ *
  * Base
  * ------------------------------------------------------------------ */
