@@ -24,8 +24,8 @@ container, no external services.
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
   "Day off", next to the archive link, asks for a date and frees it: that day and everything
-  planned after it move one day later, and the page shows as many weeks as it takes to keep the
-  last booking in view.
+  planned after it move one day later — bar a session already ticked off, which stays on the day
+  it happened — and the page shows as many weeks as it takes to keep the last booking in view.
   **Archive** shows the same sheets for days already gone, three weeks a page, back to the first
   booking; it is a record, so nothing there can be booked, moved or freed — but its ✓ still works,
   so a session finished on Tuesday can be ticked off on Thursday and counts towards the health

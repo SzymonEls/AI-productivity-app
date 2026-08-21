@@ -26,6 +26,9 @@
     const MOVE_ENDPOINT = "/projects/schedule/move";
     const CLEAR_ENDPOINT = "/projects/schedule/clear";
     const DAY_OFF_ENDPOINT = "/projects/schedule/day-off";
+    // A day off reloads the page, which would throw away the one line saying what
+    // it did - including which blocks it would not move.
+    const DAY_OFF_MESSAGE_KEY = "schedule-day-off-message";
     const statusOutput = root.querySelector("[data-schedule-status]");
 
     let pickedCell = null;
@@ -241,6 +244,19 @@
     // belongs to the script, so the board is set up in one pass.
     cells().forEach(refreshCell);
 
+    // Pick up what the day off had to say before it reloaded the page. It is
+    // worth carrying: "1 stayed put" is the answer to why the day you took off
+    // still has a block on it.
+    try {
+        const carried = window.sessionStorage.getItem(DAY_OFF_MESSAGE_KEY);
+        if (carried) {
+            window.sessionStorage.removeItem(DAY_OFF_MESSAGE_KEY);
+            setStatus(carried, "success");
+        }
+    } catch (error) {
+        /* No session storage: nothing to carry. */
+    }
+
     /**
      * Take a day off: the day named in the dialog, and every day after it, move
      * one day later.
@@ -284,7 +300,14 @@
         setDayOffStatus("Moving the plan…", "");
 
         postJson(DAY_OFF_ENDPOINT, { date }, "Could not take the day off.")
-            .then(() => window.location.reload())
+            .then((payload) => {
+                try {
+                    window.sessionStorage.setItem(DAY_OFF_MESSAGE_KEY, payload.message || "");
+                } catch (error) {
+                    /* No session storage: the board just comes back quiet. */
+                }
+                window.location.reload();
+            })
             .catch((error) => {
                 dayOffSubmit.disabled = false;
                 setDayOffStatus(error.message, "danger");

@@ -118,10 +118,11 @@ The schema in the code matches the latest migration (`20260809_0018`).
     on one day later, so each one lands on the date the booking after it has just left. Walking
     the rows the other way round would hit the unique constraint on `(user, date, slot)` halfway
     through, and so would moving them all in one flush — hence the `flush()` per row. Two
-    consequences: a session marked done loses the flag (it describes a day, like in
-    `move_booking`), and the shift can push a booking past the edge of the schedule page, which is
-    why that page's window grows to the last booked day (`weeks_to_cover`) instead of being a
-    fixed three weeks.
+    consequences: **a booking already marked done does not move at all** — it happened, and "done"
+    belongs to a date, so moving it would file the work under a day it was not done on and quietly
+    undo it (a block with one in its way is held back too, having nowhere to land) — and the shift
+    can push a booking past the edge of the schedule page, which is why that page's window grows to
+    the last booked day (`weeks_to_cover`) instead of being a fixed three weeks.
 
 11. **The home page's health score is a convention, not a measurement.** `system_health`
     ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions

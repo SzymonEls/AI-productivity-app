@@ -668,16 +668,24 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
 
 def shift_bookings_forward(user_id, from_day, days=1):
     """
-    Take a day off: push every booking from ``from_day`` on ``days`` days later.
+    Take a day off: push the bookings from ``from_day`` on ``days`` days later.
 
-    The chosen day is left empty and everything planned for it - and for every
-    day after it - simply happens a day later, so the order of the plan survives
-    a day that does not. Returns ``(ok, message, moved)``; the caller commits.
+    The chosen day is freed and everything planned for it - and for every day
+    after it - simply happens a day later, so the order of the plan survives a
+    day that does not. Returns ``(ok, message, moved)``; the caller commits.
+
+    A session already marked done stays exactly where it is. It happened: moving
+    it would file work already done under a day it was not done on, and would
+    quietly undo it, since "done" belongs to a date and does not travel. So
+    taking today off after finishing block A moves what is left of the day and
+    leaves A on today - which is also why the day is not always empty afterwards.
 
     The rows are moved newest first. Every booking lands on the date the one
     after it has just left, so going the other way round would collide with the
     unique constraint on (user, date, slot) halfway through; the flush per row
-    keeps the same collision from happening inside one statement batch.
+    keeps the same collision from happening inside one statement batch. A block
+    held back by a finished session in the way is held back for the same reason -
+    there is nowhere for it to land - and holds back the one behind it in turn.
     """
     if days < 1:
         return False, "A day off is at least one day.", 0
@@ -694,19 +702,38 @@ def shift_bookings_forward(user_id, from_day, days=1):
     if not entries:
         return True, f"{from_day.strftime('%d %b')} was already free.", 0
 
+    moved = 0
+    # The (date, slot) spots nothing may move onto: a finished session, or a
+    # booking stuck behind one.
+    staying = set()
     for entry in entries:
-        entry.slot_date = entry.slot_date + timedelta(days=days)
-        # "Done" describes a day's session, so it does not travel to another
-        # date - the same rule move_booking() applies to a single booking.
-        entry.is_done = False
-        db.session.flush()
+        target = (entry.slot_date + timedelta(days=days), entry.slot)
+        if entry.is_done or target in staying:
+            staying.add((entry.slot_date, entry.slot))
+            continue
 
-    return (
-        True,
-        f"Day off on {from_day.strftime('%d %b')} — {len(entries)} "
-        f"{'block' if len(entries) == 1 else 'blocks'} moved a day later.",
-        len(entries),
-    )
+        entry.slot_date = target[0]
+        db.session.flush()
+        moved += 1
+
+    return True, _day_off_message(from_day, moved, len(staying)), moved
+
+
+def _day_off_message(from_day, moved, stayed):
+    """What the day off did, in one line: what moved, and what would not.
+
+    "Stayed" is finished sessions and, in principle, whatever was left with
+    nowhere to land behind one, so it is counted rather than named.
+    """
+    day_label = from_day.strftime("%d %b")
+    if not moved:
+        return f"Nothing moved — a finished session stays on the day it happened."
+
+    blocks = "block" if moved == 1 else "blocks"
+    message = f"Day off on {day_label} — {moved} {blocks} moved a day later."
+    if stayed:
+        message += f" {stayed} stayed put: a finished session does not move."
+    return message
 
 
 def clear_slot(user_id, day, slot):
