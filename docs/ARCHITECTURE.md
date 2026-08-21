@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the planner window, the three-week calendar forwards and backwards (schedule and archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later) and the home page's health score. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later) and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |

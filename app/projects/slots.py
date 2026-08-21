@@ -20,10 +20,17 @@ from ..time_tracking.service import app_timezone, utc_now
 SLOTS = ("A", "B", "C")
 # A and B are the day's real work; C is a spare that never shows tracked time.
 TIMED_SLOTS = ("A", "B")
-SCHEDULE_WINDOW_DAYS = 7
-# The schedule page shows three rolling weeks of day cards, empty days included.
-CALENDAR_WEEKS = 3
+# The planner dialog offers a fortnight: a week was short enough that a project
+# with a booking in it had nowhere left to go, and the dialog scrolls anyway.
+SCHEDULE_WINDOW_DAYS = 14
 DAYS_PER_WEEK = 7
+# The schedule page shows a month of rolling weeks of day cards, empty days
+# included - five, because the first week starts today rather than on its Monday.
+SCHEDULE_WEEKS = 5
+# The archive pages back through the same sheets three weeks at a time. Shorter
+# than the schedule on purpose: it is read backwards, a page at a time, and every
+# page costs a click.
+ARCHIVE_WEEKS = 3
 # The schedule page grows past its default when the bookings run further out - a
 # day off pushes them - but not without end: past this it is a scroll through
 # empty sheets.
@@ -99,7 +106,7 @@ def slots_from(user_id, start_day, end_day=None):
     return by_date
 
 
-def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
+def calendar_weeks(user_id, weeks=SCHEDULE_WEEKS, start_day=None):
     """
     The schedule page: ``weeks`` calendar weeks of days, as lists of
     ``(date, {slot: ProjectDaySlot|None})``.
@@ -135,7 +142,7 @@ def calendar_weeks(user_id, weeks=CALENDAR_WEEKS, start_day=None):
     return calendar
 
 
-def past_calendar_weeks(user_id, weeks=CALENDAR_WEEKS, end_day=None):
+def past_calendar_weeks(user_id, weeks=ARCHIVE_WEEKS, end_day=None):
     """
     The archive: ``weeks`` calendar weeks up to and including ``end_day``
     (yesterday by default), newest week first.
@@ -195,7 +202,7 @@ def last_booked_day(user_id):
     )
 
 
-def weeks_to_cover(user_id, start_day=None, minimum=CALENDAR_WEEKS, maximum=MAX_CALENDAR_WEEKS):
+def weeks_to_cover(user_id, start_day=None, minimum=SCHEDULE_WEEKS, maximum=MAX_CALENDAR_WEEKS):
     """How many calendar weeks the schedule has to show to reach the last booking.
 
     The page shows a fixed number of weeks by default, which is fine until

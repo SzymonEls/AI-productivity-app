@@ -16,7 +16,7 @@ from ..time_tracking.service import (
     utc_now,
 )
 from .slots import (
-    CALENDAR_WEEKS,
+    ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
     MAX_CALENDAR_WEEKS,
     SLOTS,
@@ -133,7 +133,8 @@ def _minutes_label(minutes, zero=""):
 def schedule():
     """Rolling weeks of calendar sheets, one card per day, from today on.
 
-    The page shows CALENDAR_WEEKS weeks, and more when there is something to
+    The page shows SCHEDULE_WEEKS weeks - a month - and more when there is
+    something to
     show there: a booking further out - a day off pushes them all a day later -
     stretches the window to reach it, and ``weeks`` stretches it by hand.
     """
@@ -229,14 +230,16 @@ def schedule_archive():
         earlier_until=first_day - timedelta(days=1)
         if earliest is not None and earliest < first_day
         else None,
-        later_until=min(last_day + timedelta(days=CALENDAR_WEEKS * DAYS_PER_WEEK), yesterday)
+        later_until=min(last_day + timedelta(days=ARCHIVE_WEEKS * DAYS_PER_WEEK), yesterday)
         if last_day < yesterday
         else None,
     )
 
 
-# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it.
-_WEEK_LABELS = ("This week", "Next week", "In two weeks")
+# Calendar weeks, Monday to Sunday: "this week" is whatever is left of it. The
+# page runs a month, so the list reaches further than the three weeks it once
+# had; anything past it falls back to "In N weeks".
+_WEEK_LABELS = ("This week", "Next week", "In two weeks", "In three weeks", "In four weeks")
 # The archive counts the other way, and says so from the week's own dates rather
 # than its place on the page - "Last week" has to mean last week on every page.
 # 0 happens on the newest page every day but a Monday: the days of this week that
