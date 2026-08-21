@@ -157,6 +157,10 @@
                     </div>
                     {% if project.is_private %}
                         <div class="private-veil">
+                            {# The padlock lives here rather than beside the project's name: it
+                               says why this card is empty, which is the one place the flag is
+                               worth pointing out. It goes with the veil when it lifts. #}
+                            <i class="fa-solid fa-lock private-veil-lock" aria-hidden="true"></i>
                             <p class="private-veil-note mb-0">This project is private — the plan stays hidden until you ask for it.</p>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-private-reveal>Show plan</button>
                         </div>
@@ -198,6 +202,7 @@
                         </div>
                         {% if project.is_private %}
                             <div class="private-veil">
+                                <i class="fa-solid fa-lock private-veil-lock" aria-hidden="true"></i>
                                 <p class="private-veil-note mb-0">Hidden while this project is private.</p>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" data-private-reveal>Show thoughts</button>
                             </div>
