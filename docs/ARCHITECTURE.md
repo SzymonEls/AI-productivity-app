@@ -51,7 +51,11 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 
 - **User** — username, email (both unique), hashed password.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
-  the flags `is_starred`/`is_private`/`is_archived`.
+  the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
+  the project page renders the plan and the thoughts veiled and
+  [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts them per card, for
+  five minutes at a time (localStorage). The text is in the page all along — nothing is withheld
+  from the browser, and nothing about it is enforced server-side.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).

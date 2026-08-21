@@ -1274,6 +1274,37 @@
     min-height: 220px !important;
 }
 
+/* Private projects: the plan and the thoughts sit behind a button until asked
+   for. The card is rendered veiled, so nothing is on screen for a frame before
+   the script decides; the controls go with the content, since there is nothing
+   to edit while it is hidden. */
+.private-veiled .private-hideable,
+.private-veiled .inline-section-controls,
+.private-veiled .plan-save-status {
+    display: none;
+}
+
+.private-veil {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 1rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.private-veiled .private-veil {
+    display: flex;
+}
+
+.private-veil-note {
+    flex: 1 1 12rem;
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
 .plan-chip {
     display: flex;
     align-items: center;

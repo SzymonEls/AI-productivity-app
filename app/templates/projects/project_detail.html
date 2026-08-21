@@ -135,7 +135,13 @@
 >
     <div class="project-detail-body">
         <div class="project-plan-col">
-            <section class="card shadow-sm inline-edit-card project-plan-card">
+            {# A private project opens with the plan behind a button. The card is
+               rendered veiled and the script lifts it when the reveal is still
+               remembered, so nothing shows for a frame first. #}
+            <section
+                class="card shadow-sm inline-edit-card project-plan-card{% if project.is_private %} private-veiled{% endif %}"
+                {% if project.is_private %}data-private-section="plan" data-project-id="{{ project.id }}"{% endif %}
+            >
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
                         <div>
@@ -149,6 +155,13 @@
                         </div>
                         <span class="plan-save-status" data-plan-blocks data-plan-save-status aria-live="polite"></span>
                     </div>
+                    {% if project.is_private %}
+                        <div class="private-veil">
+                            <p class="private-veil-note mb-0">This project is private — the plan stays hidden until you ask for it.</p>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-private-reveal>Show plan</button>
+                        </div>
+                    {% endif %}
+                    <div class="private-hideable">
                     <div data-edit-display="long-goal" data-plan-classic>
                         <div
                             class="markdown-content long-goal-preview"
@@ -165,11 +178,15 @@
                         >{{ project.long_goal }}</textarea>
                     </div>
                     <div class="plan-block-editor" data-plan-blocks data-plan-block-editor></div>
+                    </div>
                 </div>
             </section>
         </div>
         <div class="project-meta-col">
-                <section class="card shadow-sm inline-edit-card">
+                <section
+                    class="card shadow-sm inline-edit-card{% if project.is_private %} private-veiled{% endif %}"
+                    {% if project.is_private %}data-private-section="thoughts" data-project-id="{{ project.id }}"{% endif %}
+                >
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                             <h2 class="h5 mb-0">Thoughts</h2>
@@ -179,6 +196,13 @@
                                 <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="short-goal">Cancel</button>
                             </div>
                         </div>
+                        {% if project.is_private %}
+                            <div class="private-veil">
+                                <p class="private-veil-note mb-0">Hidden while this project is private.</p>
+                                <button type="button" class="btn btn-outline-secondary btn-sm" data-private-reveal>Show thoughts</button>
+                            </div>
+                        {% endif %}
+                        <div class="private-hideable">
                         <div data-edit-display="short-goal">
                             <p class="mb-0 preserve-lines" data-display-value="short_goal">{{ project.short_goal }}</p>
                         </div>
@@ -191,6 +215,7 @@
                                 data-autoresize="true"
                                 required
                             >{{ project.short_goal }}</textarea>
+                        </div>
                         </div>
                     </div>
                 </section>
@@ -381,6 +406,7 @@
 
 {% block extra_scripts %}
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
+<script src="{{ url_for('static', filename='js/private-reveal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script>

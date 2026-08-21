@@ -36,7 +36,10 @@
                                     {{ card.project.title }}
                                 </a>
                                 {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
-                                {% if card.project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                                {# No padlock: a private project is one nobody looking over your
+                                   shoulder should be able to pick out of today's three cards.
+                                   Privacy shows on the project's own page instead, where the plan
+                                   and the thoughts stay behind a button. #}
                                 {% if card.is_done %}<span class="slot-done-tag">Done</span>{% endif %}
                             </div>
                             {% if card.plan_heading %}
