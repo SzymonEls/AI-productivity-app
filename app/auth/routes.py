@@ -120,9 +120,14 @@ def change_password():
         elif current_user.check_password(new_password):
             flash("The new password must be different from the current one.", "danger")
         else:
-            current_user.set_password(new_password)
+            user = current_user._get_current_object()
+            user.set_password(new_password)
             db.session.commit()
-            flash("Your password has been updated.", "success")
+            # The new password invalidated every cookie for this account, this
+            # browser's included. Signing back in here leaves the person who
+            # made the change logged in and everyone else logged out.
+            login_user(user)
+            flash("Your password has been updated. Other devices were signed out.", "success")
             return redirect(url_for("main.home"))
 
     return render_template("auth/change_password.html")

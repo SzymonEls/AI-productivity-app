@@ -416,6 +416,26 @@ def initialize_database(app):
                 )
                 db.session.commit()
 
+        if "users" in table_names:
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "session_token" not in user_columns:
+                # Pre-Alembic local databases are stamped at head rather than
+                # migrated, so the column has to be added here as well.
+                import secrets
+
+                db.session.execute(
+                    text(
+                        "ALTER TABLE users ADD COLUMN session_token VARCHAR(64) "
+                        "DEFAULT '' NOT NULL"
+                    )
+                )
+                for row in db.session.execute(text("SELECT id FROM users")).fetchall():
+                    db.session.execute(
+                        text("UPDATE users SET session_token = :token WHERE id = :id"),
+                        {"token": secrets.token_hex(32), "id": row.id},
+                    )
+                db.session.commit()
+
         if "project_timeline_groups" not in table_names:
             ProjectTimelineGroup.__table__.create(bind=db.engine)
         else:
