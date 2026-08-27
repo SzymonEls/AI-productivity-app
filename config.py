@@ -77,22 +77,32 @@ class Config:
     REMEMBER_COOKIE_DURATION = timedelta(
         days=int(os.environ.get("REMEMBER_COOKIE_DAYS", "30"))
     )
+    # Both cookies below are the whole of a sign-in: whoever holds one is the
+    # user, no password needed. Secure keeps them off plaintext HTTP, where
+    # anyone sharing the network could copy one straight out of the traffic.
+    # On by default, because the failure it prevents is silent; a deployment
+    # that really is served over HTTP has to say so with SECURE_COOKIES=false.
+    SECURE_COOKIES = parse_bool(os.environ.get("SECURE_COOKIES"), True)
+    SESSION_COOKIE_SECURE = SECURE_COOKIES
+    REMEMBER_COOKIE_SECURE = SECURE_COOKIES
+    # Lax rather than whatever the browser happens to default to: a cookie sent
+    # with a request that another site started is what makes cross-site request
+    # forgery work in the first place.
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    # Already the default for both, set here so it survives a config reshuffle.
+    SESSION_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_HTTPONLY = True
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     APP_VERSION = os.environ.get("APP_VERSION", "").strip() or read_app_version()
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
-    # How often one address, and one email address, may fail to sign in.
-    LOGIN_RATE_LIMIT = (
-        os.environ.get("LOGIN_RATE_LIMIT", "").strip() or "5 per minute"
-    )
-    # Number of reverse proxies in front of the app, none by default. Behind a
-    # proxy every request arrives from the proxy's own address, so the per-IP
-    # limit above would be shared by the whole internet; this makes the app read
-    # X-Forwarded-For instead. Only set it when a proxy really is in front and
-    # overwrites that header, because otherwise a client can forge it and rename
-    # itself between attempts.
-    TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0") or 0)
+    # Failed sign-ins allowed against one account before the door shuts, and for
+    # how long it stays shut. Counted per email address, which is what a guessing
+    # attempt actually aims at, rather than per calling address.
+    LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "3") or 3)
+    LOGIN_BLOCK_MINUTES = int(os.environ.get("LOGIN_BLOCK_MINUTES", "5") or 5)
     # Read-only public demo. Off by default; see app/demo.py.
     DEMO_MODE = parse_bool(os.environ.get("DEMO_MODE"), False)
     DEMO_DOC_PATH = os.environ.get("DEMO_DOC_PATH", "README.md").strip() or "README.md"

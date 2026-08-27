@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text
 
 from config import Config
 
-from .extensions import db, limiter, login_manager, migrate
+from .extensions import db, login_manager, migrate
 from .markdown_utils import render_markdown, render_project_markdown, strip_repeated_title
 
 
@@ -23,14 +23,12 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     os.makedirs(app.instance_path, exist_ok=True)
-    apply_trusted_proxies(app)
 
     db.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
-    limiter.init_app(app)
 
-    from .models import Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
@@ -52,27 +50,6 @@ def create_app(config_class=Config):
         initialize_database(app)
 
     return app
-
-
-def apply_trusted_proxies(app):
-    """Read the forwarded client address when a reverse proxy sets one.
-
-    Off unless TRUSTED_PROXY_COUNT says how many proxies to trust: believing the
-    header without a proxy to overwrite it would let a client pick its own
-    address and walk straight around the login rate limit.
-    """
-    proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
-    if not proxy_count:
-        return
-
-    from werkzeug.middleware.proxy_fix import ProxyFix
-
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app,
-        x_for=proxy_count,
-        x_proto=proxy_count,
-        x_host=proxy_count,
-    )
 
 
 def register_template_context(app):
@@ -206,11 +183,14 @@ def register_json_error_handlers(app):
 
     @app.errorhandler(429)
     def too_many_requests(error):
-        # Only the login POST is rate limited, so a browser is sent back to that
-        # form with the message rather than to a bare error page.
-        from flask import flash
+        # Raised by the login view alone, so a browser is sent back to that form
+        # with the message rather than to a bare error page.
+        from flask import flash, g
 
-        message = "Too many sign-in attempts. Please wait a minute and try again."
+        message = (
+            "Too many failed sign-in attempts. "
+            f"Try again in {describe_wait(getattr(g, 'login_lock_seconds', 0))}."
+        )
         if wants_json_response():
             return jsonify({"ok": False, "message": message}), 429
 
@@ -231,6 +211,15 @@ def redirect_to_login():
 
     login_url = url_for(login_manager.login_view, next=request.url)
     return redirect(login_url)
+
+
+def describe_wait(seconds):
+    """Round the remaining lock up to whole minutes, which is all it promises."""
+    if seconds <= 60:
+        return "a minute"
+
+    minutes = -(-seconds // 60)
+    return f"{minutes} minutes"
 
 
 def redirect_to_login_page():

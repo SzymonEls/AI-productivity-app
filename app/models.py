@@ -252,6 +252,29 @@ class ProjectDaySlot(db.Model):
     )
 
 
+class LoginAttempt(db.Model):
+    """One failed sign-in, remembered only for as long as it locks the door.
+
+    Kept in the database rather than in the process on purpose. Gunicorn runs
+    several workers, and a counter held in memory belongs to one of them: a
+    limit of three would really be three per worker, and which worker answers
+    is up to the operating system. A table is the one place all of them share.
+    """
+
+    __tablename__ = "login_attempts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    # "ip:203.0.113.1" or "email:someone@example.com". One failure writes a row
+    # for both, so a single wrong password spends the caller's budget and the
+    # account's at the same time.
+    scope = db.Column(db.String(255), nullable=False)
+    failed_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.Index("ix_login_attempts_scope_failed_at", "scope", "failed_at"),
+    )
+
+
 @login_manager.user_loader
 def load_user(session_id):
     """Load the user only if the cookie's token still matches the stored one.
