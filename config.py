@@ -77,6 +77,22 @@ class Config:
     REMEMBER_COOKIE_DURATION = timedelta(
         days=int(os.environ.get("REMEMBER_COOKIE_DAYS", "30"))
     )
+    # Both cookies below are the whole of a sign-in: whoever holds one is the
+    # user, no password needed. Secure keeps them off plaintext HTTP, where
+    # anyone sharing the network could copy one straight out of the traffic.
+    # On by default, because the failure it prevents is silent; a deployment
+    # that really is served over HTTP has to say so with SECURE_COOKIES=false.
+    SECURE_COOKIES = parse_bool(os.environ.get("SECURE_COOKIES"), True)
+    SESSION_COOKIE_SECURE = SECURE_COOKIES
+    REMEMBER_COOKIE_SECURE = SECURE_COOKIES
+    # Lax rather than whatever the browser happens to default to: a cookie sent
+    # with a request that another site started is what makes cross-site request
+    # forgery work in the first place.
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SAMESITE = "Lax"
+    # Already the default for both, set here so it survives a config reshuffle.
+    SESSION_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_HTTPONLY = True
     REGISTRATION_ENABLED = parse_bool(os.environ.get("REGISTRATION_ENABLED"), True)
     APP_VERSION = os.environ.get("APP_VERSION", "").strip() or read_app_version()
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
