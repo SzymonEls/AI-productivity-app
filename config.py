@@ -98,10 +98,11 @@ class Config:
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
-    # How often one address, and one email address, may fail to sign in.
-    LOGIN_RATE_LIMIT = (
-        os.environ.get("LOGIN_RATE_LIMIT", "").strip() or "5 per minute"
-    )
+    # Failed sign-ins allowed before the door shuts, and for how long. Counted
+    # separately for the calling address and for the email address, and one
+    # failure is charged to both.
+    LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "3") or 3)
+    LOGIN_BLOCK_MINUTES = int(os.environ.get("LOGIN_BLOCK_MINUTES", "5") or 5)
     # Number of reverse proxies in front of the app, none by default. Behind a
     # proxy every request arrives from the proxy's own address, so the per-IP
     # limit above would be shared by the whole internet; this makes the app read
