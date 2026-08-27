@@ -2243,16 +2243,12 @@ button.picker-row:hover {
 }
 
 /* Tags -------------------------------------------------------------- *
-   A tag is plain text in the plan, so it is only ever painted: same pill in the
-   block editor, in a rendered plan and in the tag list, which is what makes the
-   three read as one thing. */
+   A tag is plain text in the plan, so it is only ever painted: the same violet
+   in the block editor, in a rendered plan and in the tag list, which is what
+   makes the three read as one thing. It is a tint on the words rather than a
+   filled pill - a plan is mostly prose, and a row of pills shouted over it. */
 .plan-tag {
-    display: inline-block;
-    padding: 0 0.35rem;
-    border-radius: var(--radius-pill);
-    background: var(--primary-soft);
-    color: var(--primary);
-    font-size: 0.92em;
+    color: var(--tag-color);
     font-weight: 600;
     white-space: nowrap;
 }
@@ -2286,13 +2282,17 @@ button.picker-row:hover {
     font-size: 0.95rem;
 }
 
-/* Two columns of tags once there is room for them: the page is a whole screen
-   now, not a dialog, and a long single column wastes most of it. */
-@media (min-width: 992px) {
-    .tags-page .tag-list {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        align-items: start;
-    }
+/* The heading names the group, so it is the one tag on the page worth marking
+   out; every #tag in the lines below is the same tag repeated. */
+.tag-group-title .plan-tag {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: var(--tag-soft);
+}
+
+.tag-item .plan-tag {
+    color: inherit;
+    font-weight: inherit;
 }
 
 .tag-group-count {
