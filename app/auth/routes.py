@@ -1,11 +1,30 @@
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
-from ..extensions import db
+from ..extensions import db, limiter
 from ..models import User
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+def login_rate_limit():
+    """Read the limit per request so configuration stays in one place."""
+    return current_app.config.get("LOGIN_RATE_LIMIT", "5 per minute")
+
+
+def login_email_key():
+    """Rate limit the account being guessed at, not only the caller.
+
+    An attacker with a pool of addresses would otherwise get a fresh budget for
+    each one while hammering a single account.
+    """
+    return request.form.get("email", "").strip().lower() or request.remote_addr or ""
+
+
+def login_attempt_failed(response):
+    """Only charge failures: a successful sign-in is the redirect below."""
+    return response.status_code != 302
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
@@ -42,6 +61,17 @@ def register():
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit(
+    login_rate_limit,
+    methods=["POST"],
+    deduct_when=login_attempt_failed,
+)
+@limiter.limit(
+    login_rate_limit,
+    methods=["POST"],
+    key_func=login_email_key,
+    deduct_when=login_attempt_failed,
+)
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.home"))
@@ -90,9 +120,14 @@ def change_password():
         elif current_user.check_password(new_password):
             flash("The new password must be different from the current one.", "danger")
         else:
-            current_user.set_password(new_password)
+            user = current_user._get_current_object()
+            user.set_password(new_password)
             db.session.commit()
-            flash("Your password has been updated.", "success")
+            # The new password invalidated every cookie for this account, this
+            # browser's included. Signing back in here leaves the person who
+            # made the change logged in and everyone else logged out.
+            login_user(user)
+            flash("Your password has been updated. Other devices were signed out.", "success")
             return redirect(url_for("main.home"))
 
     return render_template("auth/change_password.html")

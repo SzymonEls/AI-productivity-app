@@ -8,7 +8,7 @@ from sqlalchemy import inspect, text
 
 from config import Config
 
-from .extensions import db, login_manager, migrate
+from .extensions import db, limiter, login_manager, migrate
 from .markdown_utils import render_markdown, render_project_markdown, strip_repeated_title
 
 
@@ -23,10 +23,12 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     os.makedirs(app.instance_path, exist_ok=True)
+    apply_trusted_proxies(app)
 
     db.init_app(app)
     login_manager.init_app(app)
     migrate.init_app(app, db)
+    limiter.init_app(app)
 
     from .models import Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .auth.routes import auth_bp
@@ -50,6 +52,27 @@ def create_app(config_class=Config):
         initialize_database(app)
 
     return app
+
+
+def apply_trusted_proxies(app):
+    """Read the forwarded client address when a reverse proxy sets one.
+
+    Off unless TRUSTED_PROXY_COUNT says how many proxies to trust: believing the
+    header without a proxy to overwrite it would let a client pick its own
+    address and walk straight around the login rate limit.
+    """
+    proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
+    if not proxy_count:
+        return
+
+    from werkzeug.middleware.proxy_fix import ProxyFix
+
+    app.wsgi_app = ProxyFix(
+        app.wsgi_app,
+        x_for=proxy_count,
+        x_proto=proxy_count,
+        x_host=proxy_count,
+    )
 
 
 def register_template_context(app):
@@ -181,6 +204,19 @@ def register_json_error_handlers(app):
             return jsonify({"ok": False, "message": "A server error occurred while saving."}), 500
         return error
 
+    @app.errorhandler(429)
+    def too_many_requests(error):
+        # Only the login POST is rate limited, so a browser is sent back to that
+        # form with the message rather than to a bare error page.
+        from flask import flash
+
+        message = "Too many sign-in attempts. Please wait a minute and try again."
+        if wants_json_response():
+            return jsonify({"ok": False, "message": message}), 429
+
+        flash(message, "danger")
+        return redirect_to_login_page()
+
 
 def register_login_handlers(manager):
     @manager.unauthorized_handler
@@ -195,6 +231,12 @@ def redirect_to_login():
 
     login_url = url_for(login_manager.login_view, next=request.url)
     return redirect(login_url)
+
+
+def redirect_to_login_page():
+    from flask import redirect
+
+    return redirect(url_for(login_manager.login_view))
 
 
 def wants_json_response():
@@ -372,6 +414,26 @@ def initialize_database(app):
                         "DEFAULT 0 NOT NULL"
                     )
                 )
+                db.session.commit()
+
+        if "users" in table_names:
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "session_token" not in user_columns:
+                # Pre-Alembic local databases are stamped at head rather than
+                # migrated, so the column has to be added here as well.
+                import secrets
+
+                db.session.execute(
+                    text(
+                        "ALTER TABLE users ADD COLUMN session_token VARCHAR(64) "
+                        "DEFAULT '' NOT NULL"
+                    )
+                )
+                for row in db.session.execute(text("SELECT id FROM users")).fetchall():
+                    db.session.execute(
+                        text("UPDATE users SET session_token = :token WHERE id = :id"),
+                        {"token": secrets.token_hex(32), "id": row.id},
+                    )
                 db.session.commit()
 
         if "project_timeline_groups" not in table_names:

@@ -82,6 +82,17 @@ class Config:
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
+    # How often one address, and one email address, may fail to sign in.
+    LOGIN_RATE_LIMIT = (
+        os.environ.get("LOGIN_RATE_LIMIT", "").strip() or "5 per minute"
+    )
+    # Number of reverse proxies in front of the app, none by default. Behind a
+    # proxy every request arrives from the proxy's own address, so the per-IP
+    # limit above would be shared by the whole internet; this makes the app read
+    # X-Forwarded-For instead. Only set it when a proxy really is in front and
+    # overwrites that header, because otherwise a client can forge it and rename
+    # itself between attempts.
+    TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0") or 0)
     # Read-only public demo. Off by default; see app/demo.py.
     DEMO_MODE = parse_bool(os.environ.get("DEMO_MODE"), False)
     DEMO_DOC_PATH = os.environ.get("DEMO_DOC_PATH", "README.md").strip() or "README.md"

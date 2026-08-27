@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 
 from flask_login import UserMixin
@@ -15,6 +16,11 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
+    # Part of what the session and "remember me" cookies carry, so replacing it
+    # invalidates every cookie already handed out. See get_id() below.
+    session_token = db.Column(
+        db.String(64), nullable=False, default=lambda: secrets.token_hex(32)
+    )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     projects = db.relationship(
@@ -53,9 +59,22 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        # A new password must not leave the old sessions signed in - on a shared
+        # or stolen device, changing the password is exactly how you throw the
+        # other party out. Flask-Login writes get_id() into both cookies, so a
+        # fresh token here is enough to make every one of them fail to load.
+        self.session_token = secrets.token_hex(32)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def get_id(self):
+        """Identify the session by user *and* password generation.
+
+        UserMixin would return the bare primary key, which stays the same for
+        the life of the account and so keeps every cookie ever issued valid.
+        """
+        return f"{self.id}:{self.session_token}"
 
 
 class Project(db.Model):
@@ -234,5 +253,19 @@ class ProjectDaySlot(db.Model):
 
 
 @login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
+def load_user(session_id):
+    """Load the user only if the cookie's token still matches the stored one.
+
+    Cookies written before this field existed carry a bare id and no token;
+    they fail the comparison below, which signs those sessions out once.
+    """
+    raw_id, _, token = str(session_id).partition(":")
+    try:
+        user = User.query.get(int(raw_id))
+    except ValueError:
+        return None
+
+    if user is None or not secrets.compare_digest(token, user.session_token or ""):
+        return None
+
+    return user
