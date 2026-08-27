@@ -32,6 +32,11 @@
     --primary-foreground: #ffffff;
     --primary-soft: rgba(79, 70, 229, 0.1);
 
+    /* Tags are their own voice, a shade violet of the indigo accent, so a #tag
+       reads as a tag and not as a link. */
+    --tag-color: #7c3aed;
+    --tag-soft: rgba(124, 58, 237, 0.12);
+
     --success: #16a34a;
     --danger: #dc2626;
     --warning: #d97706;
@@ -70,6 +75,9 @@
     --primary-hover: #818cf8;
     --primary-foreground: #ffffff;
     --primary-soft: rgba(99, 102, 241, 0.18);
+
+    --tag-color: #c4b5fd;
+    --tag-soft: rgba(167, 139, 250, 0.2);
 
     --success: #22c55e;
     --danger: #f87171;
@@ -779,6 +787,9 @@ hr, .dropdown-divider { border-color: var(--border); }
     --primary-hover: #0b5ed7;
     --primary-foreground: #ffffff;
     --primary-soft: #eef5ff;
+
+    --tag-color: #6f42c1;
+    --tag-soft: rgba(111, 66, 193, 0.12);
 
     --success: #198754;
     --danger: #dc3545;
