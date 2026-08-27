@@ -55,10 +55,14 @@ def login():
         password = request.form.get("password", "")
         remember_me = request.form.get("remember_me") == "on"
 
+        # Both checks happen before the password is looked at, so a locked
+        # account cannot be probed by watching how the two answers differ.
         locked_for = lockout.seconds_remaining(email)
+        if not locked_for:
+            max_attempts = current_app.config.get("LOGIN_MAX_ATTEMPTS", 3)
+            if lockout.register_attempt(email) > max_attempts:
+                locked_for = lockout.seconds_remaining(email)
         if locked_for:
-            # Checked before the password, so a locked account cannot be probed
-            # by watching how the two answers differ.
             g.login_lock_seconds = locked_for
             abort(429)
 
@@ -71,7 +75,6 @@ def login():
             next_page = request.args.get("next")
             return redirect(next_page or url_for("main.home"))
 
-        lockout.record_failure(email)
         flash("Invalid email or password.", "danger")
         default_login_email = email
         default_login_password = ""

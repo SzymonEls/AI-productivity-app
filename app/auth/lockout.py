@@ -44,6 +44,8 @@ def seconds_remaining(email):
 
     The lock lifts once the oldest failure still inside the window falls out of
     it, so three failures in quick succession really do cost the full window.
+    Checked before anything is written, which keeps a locked-out account from
+    being held shut indefinitely by someone who simply keeps knocking.
     """
     max_attempts, window = _settings()
     window_start = _utc_now() - window
@@ -67,20 +69,41 @@ def seconds_remaining(email):
     return max(longest, 0)
 
 
-def record_failure(email):
-    """Charge one failure to both budgets."""
+def register_attempt(email):
+    """Charge one attempt to both budgets and report the worse of the two.
+
+    The row is written *before* the count is read, and that order is the whole
+    point. Several Gunicorn workers handle sign-ins at the same time, so if each
+    one counted first it would see the same total as the others and let its own
+    request through - eight workers meant eight attempts got past a limit of
+    three. Writing first makes the counts distinct: whichever request inserts
+    the n-th row is the one that reads a count of at least n, so no more than
+    the allowance can ever read a count inside it, however they interleave.
+
+    Called before the password is known to be wrong, so a sign-in that turns out
+    to be correct clears the rows again through ``clear_failures``.
+    """
     _, window = _settings()
     now = _utc_now()
+    window_start = now - window
 
-    # Rows outside the window can never lock anything again, so this is also
-    # the whole of the table's housekeeping - it never grows past the failures
-    # of one window.
-    LoginAttempt.query.filter(LoginAttempt.failed_at <= now - window).delete(
+    # Rows outside the window can never lock anything again, so this is also the
+    # whole of the table's housekeeping - it never grows past one window.
+    LoginAttempt.query.filter(LoginAttempt.failed_at <= window_start).delete(
         synchronize_session=False
     )
-    for scope in _scopes(email):
+    scopes = _scopes(email)
+    for scope in scopes:
         db.session.add(LoginAttempt(scope=scope, failed_at=now))
     db.session.commit()
+
+    return max(
+        LoginAttempt.query.filter(
+            LoginAttempt.scope == scope,
+            LoginAttempt.failed_at > window_start,
+        ).count()
+        for scope in scopes
+    )
 
 
 def clear_failures(email):
