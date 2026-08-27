@@ -23,7 +23,6 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     os.makedirs(app.instance_path, exist_ok=True)
-    apply_trusted_proxies(app)
 
     db.init_app(app)
     login_manager.init_app(app)
@@ -51,27 +50,6 @@ def create_app(config_class=Config):
         initialize_database(app)
 
     return app
-
-
-def apply_trusted_proxies(app):
-    """Read the forwarded address, scheme and host when a proxy sets them.
-
-    Off unless TRUSTED_PROXY_COUNT says how many proxies to trust: believing
-    those headers without a proxy in front to overwrite them would let a client
-    decide for itself what the app thinks the request was.
-    """
-    proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
-    if not proxy_count:
-        return
-
-    from werkzeug.middleware.proxy_fix import ProxyFix
-
-    app.wsgi_app = ProxyFix(
-        app.wsgi_app,
-        x_for=proxy_count,
-        x_proto=proxy_count,
-        x_host=proxy_count,
-    )
 
 
 def register_template_context(app):

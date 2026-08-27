@@ -103,14 +103,6 @@ class Config:
     # attempt actually aims at, rather than per calling address.
     LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "3") or 3)
     LOGIN_BLOCK_MINUTES = int(os.environ.get("LOGIN_BLOCK_MINUTES", "5") or 5)
-    # Number of reverse proxies in front of the app, none by default. Behind one,
-    # every request appears to arrive from the proxy over plain http, which is
-    # what the app would then put in generated links - including the "next"
-    # address it sends a visitor back to after signing in. Setting this makes it
-    # read the forwarded headers instead. Only set it when a proxy really is in
-    # front and overwrites those headers, because a client can otherwise forge
-    # them and choose what the app believes about the request.
-    TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0") or 0)
     # Read-only public demo. Off by default; see app/demo.py.
     DEMO_MODE = parse_bool(os.environ.get("DEMO_MODE"), False)
     DEMO_DOC_PATH = os.environ.get("DEMO_DOC_PATH", "README.md").strip() or "README.md"
