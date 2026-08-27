@@ -54,11 +54,11 @@ def create_app(config_class=Config):
 
 
 def apply_trusted_proxies(app):
-    """Read the forwarded client address when a reverse proxy sets one.
+    """Read the forwarded address, scheme and host when a proxy sets them.
 
-    Off unless TRUSTED_PROXY_COUNT says how many proxies to trust: believing the
-    header without a proxy to overwrite it would let a client pick its own
-    address and walk straight around the login rate limit.
+    Off unless TRUSTED_PROXY_COUNT says how many proxies to trust: believing
+    those headers without a proxy in front to overwrite them would let a client
+    decide for itself what the app thinks the request was.
     """
     proxy_count = app.config.get("TRUSTED_PROXY_COUNT", 0)
     if not proxy_count:

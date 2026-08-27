@@ -98,17 +98,18 @@ class Config:
     DEFAULT_LOGIN_EMAIL = os.environ.get("DEFAULT_LOGIN_EMAIL", "").strip()
     DEFAULT_LOGIN_PASSWORD = os.environ.get("DEFAULT_LOGIN_PASSWORD", "")
     CALENDAR_TIMEZONE = os.environ.get("CALENDAR_TIMEZONE", "Europe/Warsaw")
-    # Failed sign-ins allowed before the door shuts, and for how long. Counted
-    # separately for the calling address and for the email address, and one
-    # failure is charged to both.
+    # Failed sign-ins allowed against one account before the door shuts, and for
+    # how long it stays shut. Counted per email address, which is what a guessing
+    # attempt actually aims at, rather than per calling address.
     LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "3") or 3)
     LOGIN_BLOCK_MINUTES = int(os.environ.get("LOGIN_BLOCK_MINUTES", "5") or 5)
-    # Number of reverse proxies in front of the app, none by default. Behind a
-    # proxy every request arrives from the proxy's own address, so the per-IP
-    # limit above would be shared by the whole internet; this makes the app read
-    # X-Forwarded-For instead. Only set it when a proxy really is in front and
-    # overwrites that header, because otherwise a client can forge it and rename
-    # itself between attempts.
+    # Number of reverse proxies in front of the app, none by default. Behind one,
+    # every request appears to arrive from the proxy over plain http, which is
+    # what the app would then put in generated links - including the "next"
+    # address it sends a visitor back to after signing in. Setting this makes it
+    # read the forwarded headers instead. Only set it when a proxy really is in
+    # front and overwrites those headers, because a client can otherwise forge
+    # them and choose what the app believes about the request.
     TRUSTED_PROXY_COUNT = int(os.environ.get("TRUSTED_PROXY_COUNT", "0") or 0)
     # Read-only public demo. Off by default; see app/demo.py.
     DEMO_MODE = parse_bool(os.environ.get("DEMO_MODE"), False)

@@ -1,15 +1,16 @@
 """
 Lock sign-in out after too many failures, counted in the database.
 
-Two budgets are spent by every failure: one for the address the request came
-from, one for the account it was aimed at. The first stops one machine working
-through passwords; the second stops a pool of addresses working through one
-account. Either running out locks sign-in for the whole window.
+The budget belongs to the account being signed in to, not to the address the
+request came from. Guessing a password means aiming at one account, and this
+follows it wherever it is attempted from - a pool of addresses buys an attacker
+nothing. Counting per address as well would mostly punish the legitimate user,
+since behind a reverse proxy every request shares one address anyway.
 """
 
 from datetime import datetime, timedelta, timezone
 
-from flask import current_app, request
+from flask import current_app
 
 from ..extensions import db
 from ..models import LoginAttempt
@@ -22,12 +23,13 @@ def _settings():
     )
 
 
-def _scopes(email):
-    """The two keys one attempt is charged to."""
-    scopes = [f"ip:{request.remote_addr or 'unknown'}"]
-    if email:
-        scopes.append(f"email:{email}")
-    return scopes
+def _scope(email):
+    """The key an attempt is charged to, or None when there is no account named.
+
+    A submission with no email address cannot be an attempt at any account, so
+    there is nothing to count - and no password is ever hashed for it either.
+    """
+    return f"email:{email}" if email else None
 
 
 def _utc_now():
@@ -47,30 +49,29 @@ def seconds_remaining(email):
     Checked before anything is written, which keeps a locked-out account from
     being held shut indefinitely by someone who simply keeps knocking.
     """
+    scope = _scope(email)
+    if scope is None:
+        return 0
+
     max_attempts, window = _settings()
     window_start = _utc_now() - window
-
-    longest = 0
-    for scope in _scopes(email):
-        failures = (
-            LoginAttempt.query.filter(
-                LoginAttempt.scope == scope,
-                LoginAttempt.failed_at > window_start,
-            )
-            .order_by(LoginAttempt.failed_at.asc())
-            .all()
+    failures = (
+        LoginAttempt.query.filter(
+            LoginAttempt.scope == scope,
+            LoginAttempt.failed_at > window_start,
         )
-        if len(failures) < max_attempts:
-            continue
+        .order_by(LoginAttempt.failed_at.asc())
+        .all()
+    )
+    if len(failures) < max_attempts:
+        return 0
 
-        unlocks_at = _as_utc(failures[0].failed_at) + window
-        longest = max(longest, int((unlocks_at - _utc_now()).total_seconds()) + 1)
-
-    return max(longest, 0)
+    unlocks_at = _as_utc(failures[0].failed_at) + window
+    return max(int((unlocks_at - _utc_now()).total_seconds()) + 1, 0)
 
 
 def register_attempt(email):
-    """Charge one attempt to both budgets and report the worse of the two.
+    """Charge one attempt to the account's budget and report the running total.
 
     The row is written *before* the count is read, and that order is the whole
     point. Several Gunicorn workers handle sign-ins at the same time, so if each
@@ -83,6 +84,10 @@ def register_attempt(email):
     Called before the password is known to be wrong, so a sign-in that turns out
     to be correct clears the rows again through ``clear_failures``.
     """
+    scope = _scope(email)
+    if scope is None:
+        return 0
+
     _, window = _settings()
     now = _utc_now()
     window_start = now - window
@@ -92,24 +97,22 @@ def register_attempt(email):
     LoginAttempt.query.filter(LoginAttempt.failed_at <= window_start).delete(
         synchronize_session=False
     )
-    scopes = _scopes(email)
-    for scope in scopes:
-        db.session.add(LoginAttempt(scope=scope, failed_at=now))
+    db.session.add(LoginAttempt(scope=scope, failed_at=now))
     db.session.commit()
 
-    return max(
-        LoginAttempt.query.filter(
-            LoginAttempt.scope == scope,
-            LoginAttempt.failed_at > window_start,
-        ).count()
-        for scope in scopes
-    )
+    return LoginAttempt.query.filter(
+        LoginAttempt.scope == scope,
+        LoginAttempt.failed_at > window_start,
+    ).count()
 
 
 def clear_failures(email):
     """Forget the failures once the right password finally arrives."""
-    scopes = _scopes(email)
-    LoginAttempt.query.filter(LoginAttempt.scope.in_(scopes)).delete(
+    scope = _scope(email)
+    if scope is None:
+        return
+
+    LoginAttempt.query.filter(LoginAttempt.scope == scope).delete(
         synchronize_session=False
     )
     db.session.commit()
