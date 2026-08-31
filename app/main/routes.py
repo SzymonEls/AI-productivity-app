@@ -1,3 +1,5 @@
+import os
+
 from flask import Blueprint, current_app, redirect, render_template, send_from_directory, url_for
 from flask_login import current_user
 
@@ -46,6 +48,35 @@ def home():
         # asking for the unscheduled projects a second time.
         health=system_health(current_user.id, unplanned),
     )
+
+
+@main_bp.route("/app")
+@main_bp.route("/app/<path:_client_route>")
+def client(_client_route=None):
+    """Serve the built client.
+
+    There is no Node process in production: `npm run build` writes a hashed
+    bundle into app/static/client and Flask hands out the same index.html for
+    every path under /app, leaving the routing to the History API. The Vite dev
+    server exists only for hot reload while the frontend is being written.
+
+    This lives at /app until the views cover what the Jinja pages do; then it
+    takes over / and those pages go.
+    """
+    built = os.path.join(current_app.static_folder, "client", "index.html")
+    if not os.path.exists(built):
+        return (
+            "The client has not been built. Run: cd client && npm install && npm run build",
+            503,
+        )
+
+    response = send_from_directory(
+        os.path.join(current_app.static_folder, "client"), "index.html"
+    )
+    # The shell names hashed assets, so it is the one file that must never be
+    # served from a stale cache after a deploy.
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @main_bp.route("/manifest.webmanifest")
