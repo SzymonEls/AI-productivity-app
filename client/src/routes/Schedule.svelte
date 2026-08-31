@@ -125,9 +125,10 @@
       </div>
     </div>
     <p class="schedule-hint">
-      Tap the ⇄ on a booking and then tap where it should go. Dropping it on a
-      taken block swaps the two. "Day off" asks for a date and frees it: that day
-      and everything planned after it move one day later.
+      Drag a project onto another block to move it, or tap it and then tap where
+      it should go. Dropping it on a taken block swaps the two. "Day off" asks
+      for a date and frees it: that day and everything planned after it move one
+      day later.
     </p>
   </section>
 

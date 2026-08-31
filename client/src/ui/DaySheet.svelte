@@ -94,42 +94,55 @@
         }}
       >
         <span class="day-slot-letter" aria-hidden="true">{entry.slot}</span>
-        <!-- Dragging is a pointer convenience on top of tapping: the overlay
-             button below is the keyboard path, so this carries no role. -->
-        <div
-          class="day-slot-content"
-          class:is-dragging={dragging?.date === sheet.date && dragging?.slot === entry.slot}
-          draggable={!readonly && Boolean(entry.project)}
-          role="none"
-          ondragstart={(event) => {
-            if (readonly || !entry.project) {
+        {#if entry.project && !readonly}
+          <!-- Booked and editable, this is the thing you take hold of: drag it,
+               or click it to pick it up and click again where it goes. It must
+               not be covered by the overlay below, or the pointer would never
+               reach it and a real drag would never start. -->
+          <div
+            class="day-slot-content"
+            class:is-dragging={dragging?.date === sheet.date && dragging?.slot === entry.slot}
+            draggable="true"
+            role="button"
+            tabindex="0"
+            aria-label={`Move block ${entry.slot}: ${entry.project.title}`}
+            onclick={() => onpick?.(sheet.date, entry.slot, entry)}
+            onkeydown={(event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
               event.preventDefault();
-              return;
-            }
-            ondragbooking?.({ date: sheet.date, slot: entry.slot });
-            event.dataTransfer!.effectAllowed = "move";
-            // Firefox only starts a drag once the payload is set.
-            event.dataTransfer!.setData("text/plain", entry.project.uid);
-          }}
-          ondragend={() => {
-            ondragbooking?.(null);
-            over = null;
-          }}
-        >
-          {#if entry.project && readonly}
-            <a class="day-slot-title" href={`${BASE}/projects/${entry.project.uid}`} use:link>
-              {entry.project.title}
-            </a>
-          {:else if entry.project}
+              onpick?.(sheet.date, entry.slot, entry);
+            }}
+            ondragstart={(event) => {
+              ondragbooking?.({ date: sheet.date, slot: entry.slot });
+              event.dataTransfer!.effectAllowed = "move";
+              // Firefox only starts a drag once the payload is set.
+              event.dataTransfer!.setData("text/plain", entry.project!.uid);
+            }}
+            ondragend={() => {
+              ondragbooking?.(null);
+              over = null;
+            }}
+          >
             <span class="day-slot-title">{entry.project.title}</span>
-            {#if entry.isDone && !readonly}
+            {#if entry.isDone}
               <span class="day-slot-done" title="Session done" aria-label="Session done">✓</span>
             {/if}
             {#if entry.planHeading}<span class="day-slot-step">{entry.planHeading}</span>{/if}
-          {:else}
-            <span class="day-slot-free">Free</span>
-          {/if}
-        </div>
+          </div>
+        {:else}
+          <div class="day-slot-content">
+            {#if entry.project}
+              <!-- The archive keeps the link: nothing there can be moved, so a
+                   click has no other meaning. -->
+              <a class="day-slot-title" href={`${BASE}/projects/${entry.project.uid}`} use:link>
+                {entry.project.title}
+              </a>
+              {#if entry.planHeading}<span class="day-slot-step">{entry.planHeading}</span>{/if}
+            {:else}
+              <span class="day-slot-free">Free</span>
+            {/if}
+          </div>
+        {/if}
 
         {#if readonly && entry.project}
           <!-- The one thing a past block can still be told: that it happened. -->
@@ -155,27 +168,25 @@
               }}
             ><Icon name="x" /></button>
           {/if}
-          <!-- Covers the whole block, booked or not. On the board a click means
-               "move this", not "open it", so the title is not a way out either -
-               tap a booking to pick it up, then tap where it goes. -->
-          <button
-            type="button"
-            class="day-slot-fill"
-            onclick={() =>
-              holding || entry.project
-                ? onpick?.(sheet.date, entry.slot, entry)
-                : onfill?.(sheet.date, entry.slot)}
-          >
-            <span class="visually-hidden">
-              {#if holding}
-                Move here, block {entry.slot}
-              {:else if entry.project}
-                Move block {entry.slot}
-              {:else}
-                Choose a project for block {entry.slot}
-              {/if}
-            </span>
-          </button>
+          <!-- Only over an empty block, so a booked one stays draggable. An
+               empty one is one click from a project, or the place a held
+               booking lands. -->
+          {#if !entry.project}
+            <button
+              type="button"
+              class="day-slot-fill"
+              onclick={() =>
+                holding
+                  ? onpick?.(sheet.date, entry.slot, entry)
+                  : onfill?.(sheet.date, entry.slot)}
+            >
+              <span class="visually-hidden">
+                {holding
+                  ? `Move here, block ${entry.slot}`
+                  : `Choose a project for block ${entry.slot}`}
+              </span>
+            </button>
+          {/if}
         {/if}
       </li>
     {/each}
