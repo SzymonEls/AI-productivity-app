@@ -116,7 +116,10 @@ def change_password():
     return render_template("auth/change_password.html")
 
 
-@auth_bp.route("/logout")
+# POST, not GET. A link another site can point the browser at should not be
+# able to sign the user out - and a GET that changes state is the same shape as
+# the forgery the rest of this module guards against.
+@auth_bp.route("/logout", methods=["POST"])
 @login_required
 def logout():
     logout_user()

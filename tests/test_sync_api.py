@@ -172,3 +172,34 @@ def test_a_cursor_below_the_floor_is_told_to_start_over(app, client, sync):
     # Starting over is always allowed, and the deleted project is simply absent.
     fresh = sync.changes(since=0).get_json()
     assert fresh["changes"]["project"] == []
+
+
+def test_a_write_without_the_token_is_refused(app, sync):
+    from app.models import Project
+
+    response = sync.push(
+        op("project", "01FORGEDAAAAAAAAAAAAAAAAAA", **PROJECT_FIELDS), token=False
+    )
+
+    assert response.status_code == 403
+    assert response.get_json()["reason"] == "csrf"
+    assert Project.query.filter_by(uid="01FORGEDAAAAAAAAAAAAAAAAAA").first() is None
+
+
+def test_a_write_with_the_wrong_token_is_refused(app, sync):
+    response = sync.push(
+        op("project", "01WRONGAAAAAAAAAAAAAAAAAAA", **PROJECT_FIELDS),
+        token="not-the-right-token",
+    )
+    assert response.status_code == 403
+
+
+def test_reading_needs_no_token(app, client):
+    """Pull is a GET and changes nothing; requiring a token there buys nothing."""
+    assert client.get("/api/sync/changes?since=0").status_code == 200
+
+
+def test_logout_is_not_a_link(app, client):
+    """A GET that signs the user out is a link another site can aim at."""
+    assert client.get("/auth/logout").status_code == 405
+    assert client.post("/auth/logout").status_code in (302, 303)

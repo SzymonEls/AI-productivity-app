@@ -115,14 +115,20 @@ def sync(client):
     """Talk to the synchronisation API the way the browser will."""
 
     class Sync:
+        def __init__(self):
+            # The client picks its CSRF token up from /api/me, exactly as the
+            # browser will on boot.
+            self.token = client.get("/api/me").get_json()["csrf_token"]
+
         def changes(self, since=0):
             return client.get(f"/api/sync/changes?since={since}")
 
-        def push(self, *ops, since=0):
+        def push(self, *ops, since=0, token=None):
+            headers = {"X-Requested-With": "XMLHttpRequest"}
+            if token is not False:
+                headers["X-CSRF-Token"] = token or self.token
             return client.post(
-                "/api/sync/push",
-                json={"since": since, "ops": list(ops)},
-                headers={"X-Requested-With": "XMLHttpRequest"},
+                "/api/sync/push", json={"since": since, "ops": list(ops)}, headers=headers
             )
 
     return Sync()

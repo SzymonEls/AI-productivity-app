@@ -9,9 +9,20 @@ from ..extensions import db
 from ..models import Project, ProjectDaySlot, ProjectTimelineGroup, SyncState
 from .protocol import ENTITIES, PUSH_ORDER, from_json, serialise, to_json
 from .pruning import prune_tombstones
-from .revisions import INCLUDE_TOMBSTONES, next_rev, soft_delete, touch
+from .revisions import INCLUDE_TOMBSTONES, soft_delete, touch
+from .security import attach_token_cookie, check_token, issue_token
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+
+@api_bp.before_request
+def _verify_write():
+    return check_token()
+
+
+@api_bp.after_request
+def _publish_token(response):
+    return attach_token_cookie(response)
 
 
 def _all_rows(statement):
@@ -55,6 +66,7 @@ def me():
     return jsonify(
         {
             "ok": True,
+            "csrf_token": issue_token(),
             "user": {"username": current_user.username, "email": current_user.email},
             "app_version": current_app.config.get("APP_VERSION"),
             "demo_mode": bool(current_app.config.get("DEMO_MODE")),
