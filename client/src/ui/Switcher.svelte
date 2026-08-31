@@ -13,7 +13,7 @@
 
   const projects = live(() => database.projects.toArray(), []);
 
-  let open = $state(false);
+  let visible = $state(false);
   let query = $state("");
   let highlighted = $state(0);
   let field = $state<HTMLInputElement | null>(null);
@@ -22,29 +22,37 @@
     [...projects.value]
       .filter((project) => !project.is_archived)
       .filter((project) => project.title.toLowerCase().includes(query.trim().toLowerCase()))
-      .sort((a, b) => Number(b.is_starred) - Number(a.is_starred) ||
-        a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
+      .sort(
+        (a, b) =>
+          Number(b.is_starred) - Number(a.is_starred) ||
+          a.title.toLowerCase().localeCompare(b.title.toLowerCase())
+      )
       .slice(0, 12)
   );
+
+  /** Opened by the navbar button as well as by the keyboard. */
+  export function open(): void {
+    visible = true;
+    query = "";
+    highlighted = 0;
+    queueMicrotask(() => field?.focus());
+  }
 
   $effect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        open = true;
-        query = "";
-        highlighted = 0;
-        queueMicrotask(() => field?.focus());
+        open();
         return;
       }
-      if (event.key === "Escape" && open) open = false;
+      if (event.key === "Escape" && visible) visible = false;
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
   function go(uid: string) {
-    open = false;
+    visible = false;
     router.go(`${BASE}/projects/${uid}`);
   }
 
@@ -62,7 +70,7 @@
   }
 </script>
 
-{#if open}
+{#if visible}
   <div class="overlay">
     <!-- A real button rather than a clickable div, so closing by clicking away
          is reachable from the keyboard too. -->
@@ -70,7 +78,7 @@
       type="button"
       class="backdrop"
       aria-label="Close the project switcher"
-      onclick={() => (open = false)}
+      onclick={() => (visible = false)}
     ></button>
 
     <div class="palette" role="dialog" aria-label="Jump to a project">

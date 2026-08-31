@@ -574,3 +574,91 @@ export function slotCandidates(
     // Available ones first; the rest keep their alphabetical order underneath.
     .sort((a, b) => Number(!a.canTake) - Number(!b.canTake));
 }
+
+// ---------------------------------------------------------------------------
+// The home page's three cards, and how much of today's plan is done.
+// ---------------------------------------------------------------------------
+
+/** "45m" / "2h" / "1h 20m" - _minutes_label(). */
+export function minutesLabel(minutes: number | null | undefined, zero = ""): string {
+  if (!minutes) return zero;
+  const hours = Math.floor(minutes / 60);
+  const rest = Math.trunc(minutes) % 60;
+  if (hours && rest) return `${hours}h ${String(rest).padStart(2, "0")}m`;
+  if (hours) return `${hours}h`;
+  return `${rest}m`;
+}
+
+export interface SlotCard {
+  slot: SlotName;
+  booking: DaySlot | null;
+  project: Project | null;
+  isDone: boolean;
+  planHeading: string;
+  /** Slot C deliberately carries no time. */
+  showsTime: boolean;
+  trackedLabel: string;
+  targetLabel: string;
+  trackedMinutes: number;
+  targetMinutes: number;
+}
+
+export function slotCards(
+  filled: SlotMap,
+  projects: Map<string, Project>,
+  totals: Map<string | null, number>
+): SlotCard[] {
+  return SLOTS.map((slot) => {
+    const booking = filled[slot];
+    const project = booking?.project_uid ? projects.get(booking.project_uid) ?? null : null;
+
+    if (!project) {
+      return {
+        slot, booking, project: null, isDone: false, planHeading: "",
+        showsTime: false, trackedLabel: "", targetLabel: "",
+        trackedMinutes: 0, targetMinutes: 0,
+      };
+    }
+
+    const showsTime = (TIMED_SLOTS as readonly string[]).includes(slot);
+    const trackedMinutes = showsTime ? Math.floor((totals.get(project.uid) ?? 0) / 60) : 0;
+    const targetMinutes = showsTime ? project.daily_target_minutes ?? 0 : 0;
+
+    return {
+      slot,
+      booking,
+      project,
+      isDone: Boolean(booking?.is_done),
+      planHeading: firstPlanSectionTitle(project.long_goal),
+      showsTime,
+      // The same compact format on both sides of the slash: "45m / 2h".
+      trackedLabel: showsTime ? minutesLabel(trackedMinutes, "0m") : "",
+      targetLabel: minutesLabel(targetMinutes),
+      trackedMinutes,
+      targetMinutes,
+    };
+  });
+}
+
+/**
+ * How much of today's planned time is done - day_progress().
+ *
+ * Only slots with a target count, on both sides of the ratio: time spent on a
+ * project you never set a target for is not progress against a plan. Null when
+ * nothing is targeted, so the caller leaves the spot empty.
+ */
+export function dayProgress(
+  cards: SlotCard[]
+): { percent: number; trackedLabel: string; targetLabel: string } | null {
+  const targeted = cards.filter((card) => card.targetMinutes);
+  if (targeted.length === 0) return null;
+
+  const tracked = targeted.reduce((sum, card) => sum + card.trackedMinutes, 0);
+  const target = targeted.reduce((sum, card) => sum + card.targetMinutes, 0);
+
+  return {
+    percent: Math.round((tracked / target) * 100),
+    trackedLabel: minutesLabel(tracked, "0m"),
+    targetLabel: minutesLabel(target),
+  };
+}

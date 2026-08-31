@@ -18,6 +18,7 @@
   import Timeline from "./routes/Timeline.svelte";
   import { sync } from "./sync/store.svelte";
   import ConflictDialog from "./ui/ConflictDialog.svelte";
+  import Icon from "./ui/Icon.svelte";
   import Switcher from "./ui/Switcher.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
 
@@ -27,7 +28,7 @@
   let database = $state<LocalDatabase | null>(null);
   let titles = $state(new Map<string, string>());
   let resolving = $state(false);
-  let theme = $state(readAppearance().theme);
+  let switcher = $state<{ open: () => void } | null>(null);
   let safeMode = $state<"on" | "off">(readAppearance().safeMode);
 
   async function begin() {
@@ -60,92 +61,139 @@
   const route = $derived(router.current);
 
   const nav = [
-    { href: `${BASE}/`, label: "Today", match: "home" },
-    { href: `${BASE}/schedule`, label: "Schedule", match: "schedule" },
-    { href: `${BASE}/timeline`, label: "Projects", match: "timeline" },
-    { href: `${BASE}/time`, label: "Time", match: "time" },
-    { href: `${BASE}/tags`, label: "Tags", match: "tags" },
-    { href: `${BASE}/archive`, label: "Archive", match: "archive" },
-    { href: `${BASE}/archived`, label: "Archived", match: "archived" },
-    { href: `${BASE}/new`, label: "+ New", match: "new" },
+    { href: `${BASE}/`, label: "Home", match: "home", icon: "home" },
+    { href: `${BASE}/schedule`, label: "Schedule", match: "schedule", icon: "calendar" },
+    { href: `${BASE}/timeline`, label: "Projects", match: "timeline", icon: "folder" },
+    { href: `${BASE}/time`, label: "Time tracking", match: "time", icon: "clock" },
+    { href: `${BASE}/tags`, label: "Tags", match: "tags", icon: "sparkles" },
+    { href: `${BASE}/archive`, label: "Archive", match: "archive", icon: "archive" },
+    { href: `${BASE}/new`, label: "New", match: "new", icon: "plus" },
   ];
 </script>
 
-<header class="bar">
-  <nav class="nav">
-    <span class="brand">Productivity</span>
-    {#if status === "ready"}
-      {#each nav as item (item.href)}
-        <a href={item.href} use:link class:active={route.name === item.match}>{item.label}</a>
-      {/each}
-    {/if}
-  </nav>
-
-  {#if status === "ready"}
-    <div class="bar-right">
-      <SyncButton {titleOf} onresolve={() => (resolving = true)} />
-
-      <button
-        type="button"
-        class="icon"
-        title="Toggle theme"
-        aria-label="Toggle colour theme"
-        onclick={() => (theme = toggleTheme())}
-      >{theme === "dark" ? "☀" : "☾"}</button>
-
-      <!-- A curtain, not a lock: it covers a private project's plan and
-           thoughts on this screen, in this room. -->
-      <button
-        type="button"
-        class="icon"
-        title="Safe mode — hide a private project's plan and thoughts"
-        aria-pressed={safeMode === "on"}
-        onclick={() => (safeMode = toggleSafeMode())}
-      >{safeMode === "on" ? "🛡" : "⛨"}</button>
-      <span class="who">{username}</span>
-      <button
-        type="button"
-        class="link"
-        title="Signs out and clears this device's copy"
-        onclick={() => database && signOut(database)}
-      >Sign out</button>
+<nav class="navbar navbar-expand-lg app-navbar">
+  <div class="container">
+    <div class="d-flex align-items-center gap-2">
+      <a class="app-logo" href={`${BASE}/`} use:link aria-label="Home" title="Home">
+        <span class="app-brand-mark" aria-hidden="true">◆</span>
+      </a>
+      {#if status === "ready"}
+        <button
+          type="button"
+          class="project-switcher-button"
+          aria-haspopup="dialog"
+          title="Switch project (Ctrl/⌘ K)"
+          onclick={() => switcher?.open()}
+        >
+          <span class="switcher-label">Switch project</span>
+          <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+               stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="switcher-kbd" aria-hidden="true">⌘K</span>
+        </button>
+      {/if}
     </div>
-  {/if}
-</header>
 
-<main>
+    <div class="collapse navbar-collapse show">
+      {#if status === "ready"}
+        <div class="navbar-nav me-auto">
+          {#each nav as item (item.href)}
+            <a
+              class="nav-link"
+              class:active={route.name === item.match}
+              href={item.href}
+              use:link
+            >
+              <Icon name={item.icon} />{item.label}
+            </a>
+          {/each}
+        </div>
+
+        <div class="app-nav-actions ms-auto">
+          <SyncButton {titleOf} onresolve={() => (resolving = true)} />
+
+          <button
+            type="button"
+            class="icon-button theme-toggle"
+            title="Toggle theme"
+            aria-label="Toggle colour theme"
+            onclick={() => toggleTheme()}
+          >
+            <svg class="theme-toggle-moon" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="theme-toggle-sun" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+          </button>
+
+          <button
+            type="button"
+            class="icon-button safe-mode-toggle"
+            aria-pressed={safeMode === "on"}
+            title="Safe mode — hide a private project's plan and thoughts"
+            onclick={() => (safeMode = toggleSafeMode())}
+          >
+            <svg class="safe-mode-off" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.5 7 9.5 4.1-2 7-5.3 7-9.5V6z"/></svg>
+            <svg class="safe-mode-on" width="17" height="17" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.9 7.5 7 9.5 4.1-2 7-5.3 7-9.5V6z"/><path d="m8.8 11.8 2.2 2.2 4.2-4.2"/></svg>
+          </button>
+
+          <div class="nav-item dropdown">
+            <button class="user-menu-button" type="button" title={username}>
+              <span class="user-avatar" aria-hidden="true">{username.slice(0, 1)}</span>
+              <span class="d-none d-md-inline">{username}</span>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            title="Signs out and clears this device's copy"
+            onclick={() => database && signOut(database)}
+          >Sign out</button>
+        </div>
+      {/if}
+    </div>
+  </div>
+</nav>
+
+<main class="container app-main">
   {#if status === "signedout"}
     <SignIn onsignedin={() => { status = "starting"; void begin(); }} />
   {:else if status === "starting"}
-    <p class="centered muted">Fetching your data…</p>
+    <p class="text-muted text-center py-5">Fetching your data…</p>
   {:else if status === "failed"}
-    <div class="centered">
-      <h1>Could not start</h1>
-      <p class="muted">{message}</p>
+    <div class="text-center py-5">
+      <h1 class="h5">Could not start</h1>
+      <p class="text-muted">{message}</p>
     </div>
   {:else if database}
     {#if route.name === "home"}
       <Home {database} />
     {:else if route.name === "schedule"}
       <Schedule {database} />
+    {:else if route.name === "timeline"}
+      <Timeline {database} />
     {:else if route.name === "archive"}
       <Archive {database} />
     {:else if route.name === "time"}
       <TimeTracking {database} />
-    {:else if route.name === "timeline"}
-      <Timeline {database} />
-    {:else if route.name === "new"}
-      <NewProject {database} />
     {:else if route.name === "archived"}
       <Archived {database} />
+    {:else if route.name === "new"}
+      <NewProject {database} />
     {:else if route.name === "tags"}
       <Tags {database} />
     {:else if route.name === "project"}
       <Project {database} uid={route.uid} />
     {:else}
-      <div class="centered">
-        <h1>Not here</h1>
-        <p class="muted">Nothing lives at that address.</p>
+      <div class="text-center py-5">
+        <h1 class="h5">Not here</h1>
+        <p class="text-muted">Nothing lives at that address.</p>
         <a href={`${BASE}/`} use:link>Back to today</a>
       </div>
     {/if}
@@ -153,7 +201,7 @@
 </main>
 
 {#if database}
-  <Switcher {database} />
+  <Switcher {database} bind:this={switcher} />
 {/if}
 
 {#if resolving && database}
@@ -161,20 +209,7 @@
 {/if}
 
 <style>
-  .bar {
-    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
-    padding: 0.6rem 1rem; border-bottom: 1px solid rgba(127, 127, 127, 0.2);
-    position: sticky; top: 0; background: var(--app-surface, Canvas); z-index: 20;
-  }
-  .nav { display: flex; align-items: center; gap: 1rem; }
-  .brand { font-weight: 700; }
-  .nav a { color: inherit; text-decoration: none; opacity: 0.65; font-size: 0.9rem; }
-  .nav a.active { opacity: 1; font-weight: 600; }
-  .bar-right { display: flex; align-items: center; gap: 0.85rem; }
-  .who { opacity: 0.7; font-size: 0.85rem; }
-  .icon { background: none; border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 999px; width: 1.9rem; height: 1.9rem; color: inherit; cursor: pointer; line-height: 1; }
-  .icon[aria-pressed="true"] { background: var(--bs-primary, #4f46e5); color: #fff; border-color: transparent; }
-  .link { background: none; border: 0; color: inherit; opacity: 0.7; cursor: pointer; font-size: 0.85rem; }
-  .centered { max-width: 40rem; margin: 4rem auto; padding: 0 1rem; text-align: center; }
-  .muted { opacity: 0.65; }
+  /* The application's own stylesheet does the work; this only spaces the page
+     below the navbar, which base.html used to do with a body rule. */
+  .app-main { padding-top: 1.25rem; padding-bottom: 4rem; }
 </style>

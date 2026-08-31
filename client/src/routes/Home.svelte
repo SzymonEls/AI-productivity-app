@@ -1,11 +1,22 @@
 <script lang="ts">
-  /** Today's three slots, what is not scheduled, and the health ring. */
+  /**
+   * Today's three slots, what has no next session, and the health ring.
+   *
+   * The markup is the one from app/templates/home.html, so the stylesheet that
+   * was written for it fits without a line of new CSS.
+   */
   import { updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
-  import { slotsForDate, systemHealth, unscheduledProjects, SLOTS, TIMED_SLOTS } from "../domain/slots";
-  import { dailyTotalsByProject, formatDuration, today } from "../domain/time";
+  import {
+    dayProgress,
+    slotCards,
+    slotsForDate,
+    systemHealth,
+    unscheduledProjects,
+  } from "../domain/slots";
+  import { dailyTotalsByProject, lastSessionLabel, today } from "../domain/time";
   import { live } from "../lib/live.svelte";
-  import { BASE, link } from "../lib/router.svelte";
+  import { BASE, link, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { DaySlot } from "../sync/types";
 
@@ -18,124 +29,212 @@
   const entries = live(() => database.timeEntries.toArray(), []);
 
   const byUid = $derived(new Map(projects.value.map((p) => [p.uid, p])));
-  const filled = $derived(slotsForDate(slots.value, day));
+  const totals = $derived(dailyTotalsByProject(entries.value, day));
+  const cards = $derived(slotCards(slotsForDate(slots.value, day), byUid, totals));
+  const progress = $derived(dayProgress(cards));
   const health = $derived(systemHealth(projects.value, slots.value, day));
   const unplanned = $derived(unscheduledProjects(projects.value, slots.value, day));
-  const totals = $derived(dailyTotalsByProject(entries.value, day));
 
-  async function toggleDone(slot: DaySlot) {
-    await updateRow<DaySlot>(database, "day_slot", slot.uid, { is_done: !slot.is_done });
+  const lastSessionOf = $derived.by(() => {
+    const latest = new Map<string, string>();
+    for (const entry of entries.value) {
+      if (!entry.project_uid) continue;
+      const seen = latest.get(entry.project_uid);
+      if (!seen || entry.started_at > seen) latest.set(entry.project_uid, entry.started_at);
+    }
+    return latest;
+  });
+
+  const heading = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  }).format(new Date(`${day}T12:00:00Z`));
+
+  async function toggleDone(booking: DaySlot) {
+    await updateRow<DaySlot>(database, "day_slot", booking.uid, { is_done: !booking.is_done });
     await sync.refresh();
     void sync.run();
   }
-
-  // The ring is a stroke-dasharray on a circle whose circumference is 100.
-  const ring = $derived(`${health.percent} ${100 - health.percent}`);
-  const timed = TIMED_SLOTS as readonly string[];
 </script>
 
-<section class="home">
-  <div class="home-head">
-    <h1>Today</h1>
-    <div class="ring" data-level={health.level}>
-      <svg viewBox="0 0 36 36" width="72" height="72" aria-hidden="true">
-        <circle class="ring-track" cx="18" cy="18" r="15.9155" pathLength="100" />
-        <circle class="ring-value" cx="18" cy="18" r="15.9155" pathLength="100"
-                stroke-dasharray={ring} />
-      </svg>
-      <div class="ring-text">
-        <strong>{health.percent}</strong>
-        <span>health</span>
+<div class="dashboard-page day-slots-page">
+  <section class="dashboard-section dashboard-header-section">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h5 mb-0">Today</h1>
+        <span class="text-muted small">{heading}</span>
       </div>
+      {#if progress}
+        <div
+          class="day-progress"
+          title="Time tracked today against the targets of the projects in slots A and B"
+        >
+          <span class="day-progress-percent" class:is-complete={progress.percent >= 100}>
+            {progress.percent}%
+          </span>
+          <span class="day-progress-detail">
+            {progress.trackedLabel} / {progress.targetLabel}
+          </span>
+        </div>
+      {/if}
     </div>
-  </div>
+  </section>
 
-  <p class="muted">
-    {health.doneSessions} of {health.bookedSessions} booked sessions ticked off in the
-    last {health.windowDays} days · {health.plannedProjects} of {health.activeProjects}
-    projects have a next session
-  </p>
-
-  <div class="slots">
-    {#each SLOTS as name (name)}
-      {@const booking = filled[name]}
-      {@const project = booking?.project_uid ? byUid.get(booking.project_uid) : undefined}
-      <article class="slot" data-state={booking ? (booking.is_done ? "done" : "booked") : "free"}>
-        <header>
-          <span class="slot-name">{name}</span>
-          {#if booking}
-            <button
-              type="button"
-              class="tick"
-              aria-pressed={booking.is_done}
-              title={booking.is_done ? "Mark as not done" : "Mark this session done"}
-              onclick={() => toggleDone(booking)}
-            >✓</button>
-          {/if}
-        </header>
-
-        {#if project}
-          <h2><a href={`${BASE}/projects/${project.uid}`} use:link>{project.title}</a></h2>
-          {#if project.short_goal}<p class="muted">{project.short_goal}</p>{/if}
-          {#if timed.includes(name)}
-            <p class="tracked">
-              {formatDuration(totals.get(project.uid) ?? 0)}
-              {#if project.daily_target_minutes}
-                <span class="muted"> of {project.daily_target_minutes} min</span>
+  <div class="day-slots-layout">
+    <section class="day-slots-main">
+      {#each cards as card (card.slot)}
+        <article
+          class="slot-card slot-card-linked"
+          class:slot-card-optional={!card.showsTime}
+          class:slot-card-empty={!card.project}
+          class:slot-card-done={card.isDone}
+        >
+          <div class="slot-card-letter" aria-hidden="true">{card.slot}</div>
+          <div class="slot-card-body">
+            {#if card.project}
+              <div class="slot-card-heading">
+                <!-- stretched-link makes the whole card the hit area without
+                     wrapping it in an anchor, which would turn the time and the
+                     badges into link text for a screen reader. -->
+                <a
+                  class="slot-card-title stretched-link"
+                  href={`${BASE}/projects/${card.project.uid}`}
+                  use:link
+                >{card.project.title}</a>
+                {#if card.project.is_starred}
+                  <span class="switcher-badge" title="Starred" aria-hidden="true">★</span>
+                {/if}
+                <!-- No padlock: a private project is one nobody looking over
+                     your shoulder should be able to pick out of today's three
+                     cards. Privacy shows on the project's own page. -->
+                {#if card.isDone}<span class="slot-done-tag">Done</span>{/if}
+              </div>
+              {#if card.planHeading}
+                <p class="slot-card-step mb-0">{card.planHeading}</p>
+              {:else}
+                <p class="slot-card-step slot-card-step-empty mb-0">
+                  No <code>#</code> section in the plan yet
+                </p>
               {/if}
-            </p>
-          {/if}
-        {:else if booking}
-          <h2 class="muted">Unknown project</h2>
-        {:else}
-          <p class="muted">Free</p>
-        {/if}
-      </article>
-    {/each}
-  </div>
-
-  <h2 class="section">Not scheduled ({unplanned.length})</h2>
-  {#if unplanned.length === 0}
-    <p class="muted">Everything active has a next session booked.</p>
-  {:else}
-    <ul class="plain">
-      {#each unplanned as project (project.uid)}
-        <li><a href={`${BASE}/projects/${project.uid}`} use:link>{project.title}</a></li>
+            {:else}
+              <p class="slot-card-step mb-0">Nothing planned — pick a project.</p>
+              <button
+                type="button"
+                class="slot-card-fill"
+                onclick={() => router.go(`${BASE}/schedule`)}
+              >
+                <span class="visually-hidden">Choose a project for slot {card.slot}</span>
+              </button>
+            {/if}
+          </div>
+          <div class="slot-card-side">
+            {#if card.project && card.showsTime}
+              <span class="slot-card-time">
+                {card.trackedLabel}{#if card.targetLabel}
+                  <span class="slot-card-target">/ {card.targetLabel}</span>
+                {/if}
+              </span>
+            {/if}
+            {#if card.booking}
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm slot-card-tick"
+                title={card.isDone ? "Mark as not done" : "Tick this session off"}
+                onclick={() => toggleDone(card.booking!)}
+              >✓</button>
+            {/if}
+          </div>
+        </article>
       {/each}
-    </ul>
-  {/if}
-</section>
+    </section>
 
-<style>
-  .home { max-width: 54rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-  .home-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  h1 { margin: 0; font-size: 1.6rem; }
-  .muted { opacity: 0.65; }
-  .section { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin-top: 2rem; }
+    <aside class="day-slots-aside">
+      <div class="dashboard-section">
+        <h2 class="h6 mb-1">
+          Not scheduled
+          {#if unplanned.length}
+            <span class="text-muted fw-normal">({unplanned.length})</span>
+          {/if}
+        </h2>
+        <p class="text-muted small mb-3">No session planned after today.</p>
+        {#if unplanned.length}
+          <ul class="unplanned-list">
+            {#each unplanned as project (project.uid)}
+              <li class="unplanned-item">
+                <div class="unplanned-item-text">
+                  <a href={`${BASE}/projects/${project.uid}`} use:link>{project.title}</a>
+                  <span class="text-muted small">
+                    {lastSessionLabel(lastSessionOf.get(project.uid))}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() => router.go(`${BASE}/schedule`)}
+                >Plan</button>
+              </li>
+            {/each}
+          </ul>
+        {:else}
+          <p class="text-muted small mb-0">Every project has a next session planned.</p>
+        {/if}
+      </div>
 
-  .ring { position: relative; width: 72px; height: 72px; }
-  .ring svg { transform: rotate(-90deg); }
-  .ring-track, .ring-value { fill: none; stroke-width: 3; }
-  .ring-track { stroke: rgba(127, 127, 127, 0.2); }
-  .ring-value { stroke: #16a34a; stroke-linecap: round; }
-  [data-level="warn"] .ring-value { stroke: #d97706; }
-  [data-level="bad"] .ring-value { stroke: #dc2626; }
-  .ring-text { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; line-height: 1; }
-  .ring-text span { font-size: 0.6rem; opacity: 0.6; }
+      <div class="dashboard-section system-health system-health-{health.level}">
+        <h2 class="h6 mb-1">System health</h2>
+        <p class="text-muted small mb-3">
+          Sessions done and projects planned, over the {health.windowDays} days before today.
+        </p>
+        <div class="system-health-body">
+          <!-- pathLength normalises the ring to 100 units, so the dash is the
+               percentage itself and the radius can change freely. -->
+          <div
+            class="system-health-gauge"
+            role="img"
+            aria-label={`System health ${health.percent} out of 100`}
+          >
+            <svg viewBox="0 0 84 84" aria-hidden="true">
+              <circle class="system-health-track" cx="42" cy="42" r="36" pathLength="100" />
+              <!-- At 0 there is no arc to draw, and the round cap would leave a
+                   dot on the ring that reads as a tiny score. -->
+              {#if health.percent}
+                <circle
+                  class="system-health-value"
+                  cx="42"
+                  cy="42"
+                  r="36"
+                  pathLength="100"
+                  style={`stroke-dasharray: ${health.percent} 100`}
+                />
+              {/if}
+            </svg>
+            <span class="system-health-score">{health.percent}</span>
+          </div>
+          <ul class="system-health-parts">
+            <li>
+              <span class="system-health-part-label">Sessions done</span>
+              <span class="system-health-part-value">
+                {health.doneSessions} / {health.bookedSessions}
+              </span>
+            </li>
+            <li>
+              <span class="system-health-part-label">Projects planned</span>
+              <span class="system-health-part-value">
+                {health.plannedProjects} / {health.activeProjects}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
 
-  .slots { display: grid; gap: 0.85rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); margin-top: 1.25rem; }
-  .slot { border: 1px solid rgba(127, 127, 127, 0.25); border-radius: 0.85rem; padding: 0.9rem; min-height: 8rem; }
-  .slot[data-state="free"] { border-style: dashed; opacity: 0.75; }
-  .slot[data-state="booked"] { border-color: #d97706; }
-  .slot[data-state="done"] { border-color: #16a34a; }
-  .slot header { display: flex; justify-content: space-between; align-items: center; }
-  .slot-name { font-weight: 700; opacity: 0.55; }
-  .slot h2 { font-size: 1.05rem; margin: 0.5rem 0 0.25rem; }
-  .tracked { margin: 0.5rem 0 0; font-variant-numeric: tabular-nums; }
-  .tick { border: 1px solid rgba(127, 127, 127, 0.35); background: transparent; color: inherit; border-radius: 999px; width: 1.75rem; height: 1.75rem; cursor: pointer; }
-  .tick[aria-pressed="true"] { background: #16a34a; border-color: #16a34a; color: #fff; }
-  .plain { list-style: none; padding: 0; margin: 0.5rem 0 0; }
-  .plain li { padding: 0.35rem 0; border-bottom: 1px solid rgba(127, 127, 127, 0.15); }
-  a { color: inherit; text-decoration: none; }
-  a:hover { text-decoration: underline; }
-</style>
+      <div class="dashboard-section">
+        <h2 class="h6 mb-1">Tags</h2>
+        <p class="text-muted small mb-3">
+          Whatever you marked with a <code>#tag</code> in a plan's list.
+        </p>
+        <a href={`${BASE}/tags`} use:link class="btn btn-outline-secondary btn-sm">Show tags</a>
+      </div>
+    </aside>
+  </div>
+</div>
