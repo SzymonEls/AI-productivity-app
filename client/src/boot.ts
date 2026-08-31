@@ -25,7 +25,7 @@ export interface Started {
   pulled: PullResult | null;
 }
 
-class SignedOut extends Error {}
+export class SignedOut extends Error {}
 
 async function askServer(): Promise<Me> {
   const response = await fetch("/api/me", {
@@ -47,9 +47,9 @@ export async function start(): Promise<Started> {
     me = await askServer();
   } catch (error) {
     if (error instanceof SignedOut) {
-      // Signing in stays a server-rendered page: there is nothing to show
-      // before a session exists, and a password has no reason to pass here.
-      window.location.href = "/auth/login";
+      // Handed back to the caller, which shows the sign-in view inside the
+      // application. Leaving for a server-rendered page would drop out of the
+      // shell, which in an installed PWA is a visible seam.
       throw error;
     }
     // Anything else is the network being absent, which is not an error in an
@@ -82,4 +82,57 @@ export async function start(): Promise<Started> {
 
   const pulled = offline ? null : await pull(database);
   return { session: { me, database, offline }, pulled };
+}
+
+
+/**
+ * Sign out, and take the local copy with it.
+ *
+ * This is new, and it is the one thing local-first genuinely adds to signing
+ * out: the data is no longer only in a cookie's reach, it is on the disk of
+ * this browser. Leaving it behind would show the next person at this machine
+ * everything the last one was working on.
+ */
+export async function signOut(database: LocalDatabase): Promise<void> {
+  const name = database.name;
+
+  try {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRF-Token": document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/)?.[1] ?? "",
+      },
+      credentials: "same-origin",
+    });
+  } catch {
+    // No network: the session cookie outlives this, but the copy below does not.
+  }
+
+  database.close();
+  await new Promise<void>((resolve) => {
+    // Bounded on purpose. A live query in another tab holds the database open,
+    // and deleteDatabase then waits for it - which would leave the person
+    // staring at a page that says nothing while apparently still signed in.
+    // The reload below closes this tab's connections either way, so a delete
+    // that has not finished yet finishes then.
+    const giveUp = setTimeout(resolve, 1500);
+    const done = () => {
+      clearTimeout(giveUp);
+      resolve();
+    };
+
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = done;
+    request.onerror = done;
+    request.onblocked = done;
+  });
+
+  try {
+    localStorage.removeItem(LAST_ACCOUNT_KEY);
+  } catch {
+    // Nothing to clean up if storage was never available.
+  }
+
+  window.location.reload();
 }

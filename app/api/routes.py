@@ -7,12 +7,15 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from ..extensions import db
 from ..models import Project, ProjectDaySlot, ProjectTimelineGroup, SyncState
+from .auth import register_auth_api
 from .protocol import ENTITIES, PUSH_ORDER, from_json, serialise, to_json
 from .pruning import prune_tombstones
 from .revisions import INCLUDE_TOMBSTONES, soft_delete, touch, utc_now
 from .security import attach_token_cookie, check_token, issue_token
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+register_auth_api(api_bp)
 
 
 @api_bp.before_request

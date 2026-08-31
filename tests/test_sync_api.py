@@ -274,3 +274,75 @@ def test_a_push_that_would_double_book_saves_nothing(app, sync):
     from app.extensions import db
     db.session.expire_all()
     assert ProjectDaySlot.query.filter_by(uid="01DUPESLOTBBBBBBBBBBBBBBBB").one().slot == original
+
+
+def test_signing_in_returns_a_token_and_a_profile(app, user):
+    with app.test_client() as client:
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "tester@example.com", "password": "correct horse"},
+        )
+        body = response.get_json()
+
+        assert response.status_code == 200, body
+        assert body["user"]["username"] == "tester"
+        assert body["csrf_token"]
+
+
+def test_a_wrong_password_is_refused_without_saying_which_half(app, user):
+    with app.test_client() as client:
+        response = client.post(
+            "/api/auth/login", json={"email": "tester@example.com", "password": "wrong"}
+        )
+        assert response.status_code == 401
+        assert response.get_json()["message"] == "Invalid email or password."
+
+
+def test_the_account_lockout_still_applies_to_the_json_route(app, user):
+    """The lockout stays on the server, whoever draws the form."""
+    with app.test_client() as client:
+        for _ in range(app.config["LOGIN_MAX_ATTEMPTS"] + 1):
+            client.post("/api/auth/login", json={"email": "tester@example.com", "password": "no"})
+
+        # Even the right password is refused while the door is shut.
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "tester@example.com", "password": "correct horse"},
+        )
+        assert response.status_code == 429
+        assert response.get_json()["reason"] == "locked"
+
+
+def test_signing_in_needs_no_csrf_token(app, user):
+    """There is no session yet, so there is no token to have been issued."""
+    with app.test_client() as client:
+        response = client.post(
+            "/api/auth/login",
+            json={"email": "tester@example.com", "password": "correct horse"},
+        )
+        assert response.status_code == 200
+
+
+def test_changing_the_password_signs_other_devices_out(app, user):
+    from app.models import User
+
+    with app.test_client() as client:
+        login = client.post(
+            "/api/auth/login",
+            json={"email": "tester@example.com", "password": "correct horse"},
+        )
+        token = login.get_json()["csrf_token"]
+        before = User.query.filter_by(id=user.id).one().session_token
+
+        response = client.post(
+            "/api/auth/change-password",
+            json={
+                "current_password": "correct horse",
+                "new_password": "battery staple",
+                "confirm_password": "battery staple",
+            },
+            headers={"X-CSRF-Token": token},
+        )
+
+        assert response.status_code == 200, response.get_json()
+        assert User.query.filter_by(id=user.id).one().session_token != before

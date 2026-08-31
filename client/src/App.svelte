@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
 
-  import { start } from "./boot";
+  import { SignedOut, signOut, start } from "./boot";
   import type { LocalDatabase } from "./db/schema";
   import { useTimezone } from "./domain/time";
   import { readAppearance, toggleSafeMode, toggleTheme } from "./lib/appearance";
@@ -12,6 +12,7 @@
   import Archive from "./routes/Archive.svelte";
   import Archived from "./routes/Archived.svelte";
   import Schedule from "./routes/Schedule.svelte";
+  import SignIn from "./routes/SignIn.svelte";
   import TimeTracking from "./routes/TimeTracking.svelte";
   import Tags from "./routes/Tags.svelte";
   import Timeline from "./routes/Timeline.svelte";
@@ -20,7 +21,7 @@
   import Switcher from "./ui/Switcher.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
 
-  let status = $state<"starting" | "ready" | "failed">("starting");
+  let status = $state<"starting" | "ready" | "failed" | "signedout">("starting");
   let message = $state("");
   let username = $state("");
   let database = $state<LocalDatabase | null>(null);
@@ -29,7 +30,7 @@
   let theme = $state(readAppearance().theme);
   let safeMode = $state<"on" | "off">(readAppearance().safeMode);
 
-  onMount(async () => {
+  async function begin() {
     try {
       const { session } = await start();
       useTimezone(session.me.timezone);
@@ -42,10 +43,16 @@
 
       status = "ready";
     } catch (error) {
+      if (error instanceof SignedOut) {
+        status = "signedout";
+        return;
+      }
       status = "failed";
       message = error instanceof Error ? error.message : String(error);
     }
-  });
+  }
+
+  onMount(begin);
 
   onDestroy(() => sync.detach());
 
@@ -96,15 +103,20 @@
         onclick={() => (safeMode = toggleSafeMode())}
       >{safeMode === "on" ? "🛡" : "⛨"}</button>
       <span class="who">{username}</span>
-      <form method="post" action="/auth/logout">
-        <button type="submit" class="link">Sign out</button>
-      </form>
+      <button
+        type="button"
+        class="link"
+        title="Signs out and clears this device's copy"
+        onclick={() => database && signOut(database)}
+      >Sign out</button>
     </div>
   {/if}
 </header>
 
 <main>
-  {#if status === "starting"}
+  {#if status === "signedout"}
+    <SignIn onsignedin={() => { status = "starting"; void begin(); }} />
+  {:else if status === "starting"}
     <p class="centered muted">Fetching your data…</p>
   {:else if status === "failed"}
     <div class="centered">

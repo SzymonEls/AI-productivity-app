@@ -25,6 +25,12 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 # Anything that can change data. GET and HEAD are read-only here by design.
 PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
+# Signing in and signing up cannot present a token: there is no session to have
+# issued one. Neither reads or writes anybody's data - the worst a forged
+# request achieves is logging the browser in as whoever's password it already
+# knew - and both are behind the account lockout.
+UNPROTECTED_ENDPOINTS = {"api.login", "api.register"}
+
 
 def issue_token():
     """Return this session's token, creating one the first time it is asked for."""
@@ -62,6 +68,8 @@ def attach_token_cookie(response):
 def check_token():
     """Refuse a write whose caller could not read the cookie."""
     if request.method not in PROTECTED_METHODS:
+        return None
+    if request.endpoint in UNPROTECTED_ENDPOINTS:
         return None
 
     expected = session.get(CSRF_SESSION_KEY)
