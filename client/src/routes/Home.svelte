@@ -5,6 +5,7 @@
   import { slotsForDate, systemHealth, unscheduledProjects, SLOTS, TIMED_SLOTS } from "../domain/slots";
   import { dailyTotalsByProject, formatDuration, today } from "../domain/time";
   import { live } from "../lib/live.svelte";
+  import { BASE, link } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { DaySlot } from "../sync/types";
 
@@ -74,7 +75,7 @@
         </header>
 
         {#if project}
-          <h2>{project.title}</h2>
+          <h2><a href={`${BASE}/projects/${project.uid}`} use:link>{project.title}</a></h2>
           {#if project.short_goal}<p class="muted">{project.short_goal}</p>{/if}
           {#if timed.includes(name)}
             <p class="tracked">
@@ -99,7 +100,7 @@
   {:else}
     <ul class="plain">
       {#each unplanned as project (project.uid)}
-        <li>{project.title}</li>
+        <li><a href={`${BASE}/projects/${project.uid}`} use:link>{project.title}</a></li>
       {/each}
     </ul>
   {/if}
@@ -135,4 +136,6 @@
   .tick[aria-pressed="true"] { background: #16a34a; border-color: #16a34a; color: #fff; }
   .plain { list-style: none; padding: 0; margin: 0.5rem 0 0; }
   .plain li { padding: 0.35rem 0; border-bottom: 1px solid rgba(127, 127, 127, 0.15); }
+  a { color: inherit; text-decoration: none; }
+  a:hover { text-decoration: underline; }
 </style>

@@ -4,7 +4,10 @@
   import { start } from "./boot";
   import type { LocalDatabase } from "./db/schema";
   import { useTimezone } from "./domain/time";
+  import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
+  import Project from "./routes/Project.svelte";
+  import Tags from "./routes/Tags.svelte";
   import { sync } from "./sync/store.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
 
@@ -21,6 +24,7 @@
       username = session.me.user.username;
       database = session.database;
 
+      router.start();
       await sync.attach(session.database);
       titles = new Map((await session.database.projects.toArray()).map((p) => [p.uid, p.title]));
 
@@ -33,13 +37,25 @@
 
   onDestroy(() => sync.detach());
 
-  function titleOf(uid: string): string {
-    return titles.get(uid) ?? "";
-  }
+  const titleOf = (uid: string) => titles.get(uid) ?? "";
+  const route = $derived(router.current);
+
+  const nav = [
+    { href: BASE, label: "Today", match: "home" },
+    { href: `${BASE}/tags`, label: "Tags", match: "tags" },
+  ];
 </script>
 
 <header class="bar">
-  <span class="brand">Productivity</span>
+  <nav class="nav">
+    <span class="brand">Productivity</span>
+    {#if status === "ready"}
+      {#each nav as item (item.href)}
+        <a href={item.href} use:link class:active={route.name === item.match}>{item.label}</a>
+      {/each}
+    {/if}
+  </nav>
+
   {#if status === "ready"}
     <div class="bar-right">
       <SyncButton {titleOf} />
@@ -60,20 +76,32 @@
       <p class="muted">{message}</p>
     </div>
   {:else if database}
-    <Home {database} />
+    {#if route.name === "home"}
+      <Home {database} />
+    {:else if route.name === "tags"}
+      <Tags {database} />
+    {:else if route.name === "project"}
+      <Project {database} uid={route.uid} />
+    {:else}
+      <div class="centered">
+        <h1>Not here</h1>
+        <p class="muted">Nothing lives at that address.</p>
+        <a href={BASE} use:link>Back to today</a>
+      </div>
+    {/if}
   {/if}
 </main>
 
 <style>
   .bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.6rem 1rem;
-    border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    padding: 0.6rem 1rem; border-bottom: 1px solid rgba(127, 127, 127, 0.2);
+    position: sticky; top: 0; background: var(--app-surface, Canvas); z-index: 20;
   }
+  .nav { display: flex; align-items: center; gap: 1rem; }
   .brand { font-weight: 700; }
+  .nav a { color: inherit; text-decoration: none; opacity: 0.65; font-size: 0.9rem; }
+  .nav a.active { opacity: 1; font-weight: 600; }
   .bar-right { display: flex; align-items: center; gap: 0.85rem; }
   .who { opacity: 0.7; font-size: 0.85rem; }
   .link { background: none; border: 0; color: inherit; opacity: 0.7; cursor: pointer; font-size: 0.85rem; }

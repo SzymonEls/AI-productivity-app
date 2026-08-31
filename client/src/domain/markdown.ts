@@ -52,8 +52,11 @@ marked.use({
     // "disabled" is not a typo - it is what the Python f-string produced.
     listitem(item) {
       // parse(), not parseInline(): a list item can contain a nested list, and
-      // the inline parser has no rule for a block token.
-      const text = this.parser.parse(item.tokens, !!item.loose);
+      // the inline parser has no rule for a block token. The second argument is
+      // marked's "top" flag, which decides whether a tight item gets wrapped in
+      // a paragraph; its type declaration omits it, hence the cast.
+      const parse = this.parser.parse as (tokens: unknown[], top: boolean) => string;
+      const text = parse.call(this.parser, item.tokens, !!item.loose);
       if (!item.task) return `<li>${text}</li>\n`;
       return (
         `<li class="task-list-item">` +
