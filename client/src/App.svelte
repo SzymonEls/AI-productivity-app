@@ -14,6 +14,7 @@
   import Schedule from "./routes/Schedule.svelte";
   import TimeTracking from "./routes/TimeTracking.svelte";
   import Tags from "./routes/Tags.svelte";
+  import Timeline from "./routes/Timeline.svelte";
   import { sync } from "./sync/store.svelte";
   import ConflictDialog from "./ui/ConflictDialog.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
@@ -53,6 +54,7 @@
   const nav = [
     { href: BASE, label: "Today", match: "home" },
     { href: `${BASE}/schedule`, label: "Schedule", match: "schedule" },
+    { href: `${BASE}/timeline`, label: "Projects", match: "timeline" },
     { href: `${BASE}/time`, label: "Time", match: "time" },
     { href: `${BASE}/tags`, label: "Tags", match: "tags" },
     { href: `${BASE}/archive`, label: "Archive", match: "archive" },
@@ -117,6 +119,8 @@
       <Archive {database} />
     {:else if route.name === "time"}
       <TimeTracking {database} />
+    {:else if route.name === "timeline"}
+      <Timeline {database} />
     {:else if route.name === "new"}
       <NewProject {database} />
     {:else if route.name === "archived"}
