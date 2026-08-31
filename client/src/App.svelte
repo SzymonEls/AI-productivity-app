@@ -34,6 +34,21 @@
   let switcher = $state<{ open: () => void } | null>(null);
   let settingsOpen = $state(false);
   let menuOpen = $state(false);
+
+  $effect(() => {
+    if (!menuOpen) return;
+    const close = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".nav-item.dropdown")) menuOpen = false;
+    };
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && (menuOpen = false);
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
   let safeMode = $state<"on" | "off">(readAppearance().safeMode);
 
   async function begin() {

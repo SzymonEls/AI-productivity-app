@@ -14,6 +14,28 @@
   }: { titleOf: (uid: string) => string; onresolve: () => void } = $props();
 
   let open = $state(false);
+  let root = $state<HTMLElement | null>(null);
+
+  // A panel that only closes by pressing the same button again is a panel that
+  // gets left open; clicking away is how every other menu here behaves.
+  $effect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (root && !root.contains(event.target as Node)) open = false;
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") open = false;
+    }
+
+    // Captured, so a click on something that stops propagation still closes it.
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
 
   const tone = $derived(
     sync.conflicts > 0
@@ -35,7 +57,7 @@
   }
 </script>
 
-<div class="sync">
+<div class="sync" bind:this={root}>
   <button
     type="button"
     class="sync-button"

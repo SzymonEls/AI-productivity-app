@@ -45,6 +45,8 @@
 
   let picking = $state<{ date: string; slot: string } | null>(null);
   let holding = $state<{ date: string; slot: string } | null>(null);
+  // A drag crosses sheets, so the board holds what is being dragged.
+  let dragging = $state<{ date: string; slot: string } | null>(null);
   let dayOffOpen = $state(false);
   let dayOffDate = $state(day);
   let status = $state("");
@@ -68,6 +70,17 @@
     await after(`Slot ${entry.slot} cleared.`);
   }
 
+  /** A drag that landed: the same move a pair of taps makes. */
+  async function move(from: { date: string; slot: string }, to: { date: string; slot: string }) {
+    holding = null;
+    const plan = planMove(projects.value, slots.value, from.date, from.slot, to.date, to.slot, day);
+    if (!plan.ok) return announce(plan.message);
+    for (const update of plan.updates ?? []) {
+      await updateRow<DaySlot>(database, "day_slot", update.uid, update.changes);
+    }
+    await after(plan.message);
+  }
+
   async function pick(date: string, slot: string, entry: SheetSlot) {
     if (!holding) {
       if (entry.project) holding = { date, slot };
@@ -77,13 +90,7 @@
     const from = holding;
     holding = null;
     if (from.date === date && from.slot === slot) return;
-
-    const plan = planMove(projects.value, slots.value, from.date, from.slot, date, slot, day);
-    if (!plan.ok) return announce(plan.message);
-    for (const update of plan.updates ?? []) {
-      await updateRow<DaySlot>(database, "day_slot", update.uid, update.changes);
-    }
-    await after(plan.message);
+    await move(from, { date, slot });
   }
 
   async function takeDayOff() {
@@ -135,9 +142,12 @@
           <DaySheet
             {sheet}
             {holding}
+            {dragging}
             onfill={(date, slot) => (picking = { date, slot })}
             onclear={clear}
             onpick={pick}
+            ondragbooking={(from) => (dragging = from)}
+            ondropmove={move}
           />
         {/each}
       </div>

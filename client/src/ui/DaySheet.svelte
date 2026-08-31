@@ -19,6 +19,9 @@
     onclear,
     ontoggledone,
     onpick,
+    dragging = null,
+    ondragbooking,
+    ondropmove,
   }: {
     sheet: Sheet;
     readonly?: boolean;
@@ -27,7 +30,15 @@
     onclear?: (entry: SheetSlot) => void;
     ontoggledone?: (entry: SheetSlot) => void;
     onpick?: (date: string, slot: string, entry: SheetSlot) => void;
+    /** The booking being dragged, if any - the board owns it, since a drag
+        starts in one sheet and ends in another. */
+    dragging?: { date: string; slot: string } | null;
+    ondragbooking?: (from: { date: string; slot: string } | null) => void;
+    ondropmove?: (from: { date: string; slot: string }, to: { date: string; slot: string }) => void;
   } = $props();
+
+  // Which block the pointer is over, so it can light up.
+  let over = $state<string | null>(null);
 
   const weekday = (iso: string) =>
     new Intl.DateTimeFormat("en-GB", { weekday: "short", timeZone: "UTC" }).format(
@@ -62,9 +73,49 @@
         class:is-free={!entry.project}
         class:is-done={entry.isDone}
         class:is-picked={holding?.date === sheet.date && holding?.slot === entry.slot}
+        class:is-drag-over={over === entry.slot}
+        ondragover={(event) => {
+          if (readonly || !dragging) return;
+          // Without preventDefault the browser refuses the drop.
+          event.preventDefault();
+          event.dataTransfer!.dropEffect = "move";
+          over = entry.slot;
+        }}
+        ondragleave={() => (over = over === entry.slot ? null : over)}
+        ondrop={(event) => {
+          if (readonly || !dragging) return;
+          event.preventDefault();
+          over = null;
+          const from = dragging;
+          ondragbooking?.(null);
+          if (from.date !== sheet.date || from.slot !== entry.slot) {
+            ondropmove?.(from, { date: sheet.date, slot: entry.slot });
+          }
+        }}
       >
         <span class="day-slot-letter" aria-hidden="true">{entry.slot}</span>
-        <div class="day-slot-content">
+        <!-- Dragging is a pointer convenience on top of tapping: the overlay
+             button below is the keyboard path, so this carries no role. -->
+        <div
+          class="day-slot-content"
+          class:is-dragging={dragging?.date === sheet.date && dragging?.slot === entry.slot}
+          draggable={!readonly && Boolean(entry.project)}
+          role="none"
+          ondragstart={(event) => {
+            if (readonly || !entry.project) {
+              event.preventDefault();
+              return;
+            }
+            ondragbooking?.({ date: sheet.date, slot: entry.slot });
+            event.dataTransfer!.effectAllowed = "move";
+            // Firefox only starts a drag once the payload is set.
+            event.dataTransfer!.setData("text/plain", entry.project.uid);
+          }}
+          ondragend={() => {
+            ondragbooking?.(null);
+            over = null;
+          }}
+        >
           {#if entry.project && readonly}
             <a class="day-slot-title" href={`${BASE}/projects/${entry.project.uid}`} use:link>
               {entry.project.title}

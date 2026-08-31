@@ -122,7 +122,7 @@
       <div class="modal-body">
         <div class="project-timer-actions mb-3">
           <button type="button" class="btn btn-success" disabled={Boolean(mineRunning)} onclick={start}>
-            Start session
+            {mineRunning ? "Session in progress" : "Start new session"}
           </button>
           <button type="button" class="btn btn-outline-secondary" disabled={!mineRunning} onclick={stop}>
             End session
@@ -130,10 +130,15 @@
         </div>
 
         <label class="form-label" for="projectTimerDescription">Current session description</label>
+        <!-- A description belongs to a session, so there is nothing to write
+             into until one is running. -->
         <textarea
           id="projectTimerDescription"
           class="form-control timer-description-field"
-          placeholder="What was done in this session..."
+          disabled={!mineRunning}
+          placeholder={mineRunning
+            ? "What was done in this session..."
+            : "Start a new session to add its description."}
           bind:value={description}
         ></textarea>
 
@@ -159,9 +164,12 @@
 
       <div class="modal-footer justify-content-between">
         <span class="small text-muted">{saved}</span>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick={saveDescription}>
-          Save description
-        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary btn-sm"
+          disabled={!mineRunning}
+          onclick={saveDescription}
+        >Save description</button>
       </div>
     </div>
   </div>

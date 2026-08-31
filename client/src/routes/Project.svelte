@@ -21,7 +21,6 @@
   import { BASE, link, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { Project } from "../sync/types";
-  import Icon from "../ui/Icon.svelte";
   import PlanEditor from "../ui/PlanEditor.svelte";
   import Planner from "../ui/Planner.svelte";
   import ProjectTimer from "../ui/ProjectTimer.svelte";
@@ -55,6 +54,21 @@
   let planning = $state(false);
   let timing = $state(false);
   let menuOpen = $state(false);
+
+  $effect(() => {
+    if (!menuOpen) return;
+    const close = (event: Event) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(".project-detail-actions .dropdown")) menuOpen = false;
+    };
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && (menuOpen = false);
+    document.addEventListener("pointerdown", close, true);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", close, true);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
@@ -231,7 +245,7 @@
               type="button"
               class="btn btn-outline-secondary btn-sm"
               onclick={() => startEdit("title", project.title)}
-            ><Icon name="pencil" />Rename</button>
+            ><i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Rename</button>
           </div>
         {/if}
       </div>
@@ -242,10 +256,10 @@
 
     <div class="project-detail-actions">
       <button type="button" class="btn btn-primary project-timer-toggle" onclick={() => (timing = true)}>
-        <Icon name="clock" /><span>Track time</span>
+        <i class="fa-regular fa-clock" aria-hidden="true"></i><span>Track time</span>
       </button>
       <button type="button" class="btn btn-outline-secondary" onclick={() => (planning = true)}>
-        <Icon name="calendar" /><span>Plan next session</span>
+        <i class="fa-regular fa-calendar" aria-hidden="true"></i><span>Plan next session</span>
       </button>
 
       {#if todaySlot}
@@ -262,7 +276,7 @@
               .then(() => sync.refresh())
               .then(() => void sync.run())}
         >
-          <Icon name="check" /><span>{todaySlot.is_done ? "Done" : "Mark done"}</span>
+          <i class="fa-regular fa-circle-check" aria-hidden="true"></i><span>{todaySlot.is_done ? "Done" : "Mark done"}</span>
         </button>
       {/if}
 
@@ -273,29 +287,27 @@
           aria-label="More"
           aria-expanded={menuOpen}
           onclick={() => (menuOpen = !menuOpen)}
-        >⋯</button>
+        ><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
         {#if menuOpen}
           <ul class="dropdown-menu dropdown-menu-end show">
             <li>
-              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; downloadMarkdown(); }}>
-                Download markdown
-              </button>
+              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; downloadMarkdown(); }}><i class="fa-solid fa-download" aria-hidden="true"></i>Download markdown</button>
             </li>
             <li>
               <button
                 type="button"
                 class="dropdown-item"
                 onclick={() => { menuOpen = false; save({ is_starred: !project.is_starred }); }}
-              >{project.is_starred ? "Remove star" : "Star project"}</button>
+              ><i class="fa-solid fa-star" aria-hidden="true"></i>{project.is_starred ? "Remove star" : "Star project"}</button>
             </li>
             <li>
               <button
                 type="button"
                 class="dropdown-item"
                 onclick={() => { menuOpen = false; save({ is_private: !project.is_private }); }}
-              >{project.is_private ? "Make public" : "Make private"}</button>
+              ><i class="fa-solid fa-lock" aria-hidden="true"></i>{project.is_private ? "Make public" : "Make private"}</button>
             </li>
-            <li><a class="dropdown-item" href={`${BASE}/`} use:link onclick={() => (menuOpen = false)}>Back to home</a></li>
+            <li><a class="dropdown-item" href={`${BASE}/`} use:link onclick={() => (menuOpen = false)}><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to home</a></li>
             <li><hr class="dropdown-divider" /></li>
             <li>
               <button
@@ -306,12 +318,10 @@
                   save({ is_archived: !project.is_archived },
                     project.is_archived ? "Restored." : "Archived.");
                 }}
-              >{project.is_archived ? "Unarchive project" : "Archive project"}</button>
+              ><i class="fa-solid fa-box-archive" aria-hidden="true"></i>{project.is_archived ? "Unarchive project" : "Archive project"}</button>
             </li>
             <li>
-              <button type="button" class="dropdown-item text-danger" onclick={() => { menuOpen = false; removeProject(); }}>
-                Delete project
-              </button>
+              <button type="button" class="dropdown-item text-danger" onclick={() => { menuOpen = false; removeProject(); }}><i class="fa-solid fa-trash" aria-hidden="true"></i>Delete project</button>
             </li>
           </ul>
         {/if}
@@ -381,7 +391,7 @@
               <!-- The padlock lives here rather than beside the project's name:
                    it says why this card is empty, which is the one place the
                    flag is worth pointing out. -->
-              <span class="private-veil-lock" aria-hidden="true">🔒</span>
+              <i class="fa-solid fa-lock private-veil-lock" aria-hidden="true"></i>
               <p class="private-veil-note mb-0">
                 This project is private — the plan stays hidden until you ask for it.
               </p>
@@ -429,7 +439,7 @@
             <div class="d-flex justify-content-between align-items-center mb-2">
               <h2 class="h5 mb-0">Archived sections</h2>
               <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => restoreSection(0)}>
-                <Icon name="restore" />Restore the first
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>Restore the first
               </button>
             </div>
             <div class="markdown-content opacity-75">{@html archivedHtml}</div>
@@ -459,7 +469,7 @@
 
           {#if veiled("thoughts")}
             <div class="private-veil">
-              <span class="private-veil-lock" aria-hidden="true">🔒</span>
+              <i class="fa-solid fa-lock private-veil-lock" aria-hidden="true"></i>
               <p class="private-veil-note mb-0">
                 This project is private — the thoughts stay hidden until you ask.
               </p>
