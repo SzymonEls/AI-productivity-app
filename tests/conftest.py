@@ -97,16 +97,15 @@ def today():
 def client(app, user):
     """A signed-in test client.
 
-    Goes through the real login form rather than forcing the session, so the
-    API is exercised behind the same cookie the browser will carry.
+    Goes through the real sign-in endpoint rather than forcing the session, so
+    everything below is exercised behind the same cookie the browser carries.
     """
     with app.test_client() as test_client:
         response = test_client.post(
-            "/auth/login",
-            data={"email": "tester@example.com", "password": "correct horse"},
-            follow_redirects=False,
+            "/api/auth/login",
+            json={"email": "tester@example.com", "password": "correct horse"},
         )
-        assert response.status_code in (302, 303), "login did not succeed"
+        assert response.status_code == 200, "login did not succeed"
         yield test_client
 
 

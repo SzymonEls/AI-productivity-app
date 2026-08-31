@@ -60,7 +60,7 @@
   const route = $derived(router.current);
 
   const nav = [
-    { href: BASE, label: "Today", match: "home" },
+    { href: `${BASE}/`, label: "Today", match: "home" },
     { href: `${BASE}/schedule`, label: "Schedule", match: "schedule" },
     { href: `${BASE}/timeline`, label: "Projects", match: "timeline" },
     { href: `${BASE}/time`, label: "Time", match: "time" },
@@ -146,7 +146,7 @@
       <div class="centered">
         <h1>Not here</h1>
         <p class="muted">Nothing lives at that address.</p>
-        <a href={BASE} use:link>Back to today</a>
+        <a href={`${BASE}/`} use:link>Back to today</a>
       </div>
     {/if}
   {/if}

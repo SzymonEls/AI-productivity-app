@@ -1,229 +1,190 @@
 # Architecture
 
-A Flask web app for managing productivity: projects with goals (Markdown), three project slots
-per day, a timeline, and time tracking. Data lives in SQLite (a single file).
+A local-first planning application. Everything you see is drawn from a copy of
+your data held in the browser; the server keeps the shared copy and hands out
+the differences. Projects with a Markdown plan, three slots a day, a timeline
+board and time tracking.
+
+## The shape of it
+
+Two halves, and one thing crossing between them.
+
+- **The client** (`client/`) — Svelte 5 and TypeScript, built by Vite into
+  `app/static/client/`. It owns every view, every rule about what may be booked
+  when, and its own copy of the data in IndexedDB. It works with no network.
+- **The server** (`app/`) — Flask. It authenticates, stores the shared copy, and
+  answers two questions: what changed since a given point, and here is what I
+  changed, what of it can you take. It renders no pages.
+- **The protocol** (`app/api/protocol.py` and `client/src/sync/types.ts`) — the
+  same description of the same tables, written twice. Changing one without the
+  other is the mistake this codebase is most exposed to.
 
 ## Startup
 
-- The app is assembled by the factory function `create_app()` in [app/__init__.py:15](../app/__init__.py#L15).
-  The ready object is created in [run.py:4](../run.py#L4) (`app = create_app()`), and Gunicorn uses it (`run:app`).
-- Settings live in the `Config` class in [config.py:57](../config.py#L57), read from `.env` files
-  (`app/instance/.env`, then `.env` in the repo root — [config.py:12-13](../config.py#L12-L13)).
-- The extensions (`db`, `login_manager`, `migrate`) are shared objects in [app/extensions.py](../app/extensions.py),
-  attached to the app in [app/__init__.py:27-29](../app/__init__.py#L27-L29).
-- **On startup the app updates the database itself** ([app/__init__.py:47-49](../app/__init__.py#L47-L49)).
-  On a server (Docker) this is disabled via `SKIP_DB_BOOTSTRAP=1`. Details in "Non-obvious things".
+- Factory `create_app()` in [app/__init__.py](../app/__init__.py); `run.py` makes
+  `app = create_app()`; Gunicorn serves `run:app`.
+- `Config` in [config.py](../config.py), fed from `app/instance/.env` then `.env`.
+- The application migrates its own database at startup, disabled in Docker with
+  `SKIP_DB_BOOTSTRAP=1` so several workers do not race.
+- The client is **built, not served live**: `cd client && npm run build`. There
+  is no Node process in production. `npm run dev` exists for working on the
+  frontend and proxies `/api` and `/auth` to Flask.
 
 ## Directory map
 
 | Path | What it does |
 |---|---|
-| [app/__init__.py](../app/__init__.py) | Assembles the app; error handling, Jinja filters, database update at startup. |
-| [config.py](../config.py) | Settings and reading environment variables from `.env`. |
-| [app/extensions.py](../app/extensions.py) | Shared Flask extension objects. |
-| [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
-| [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
-| [app/ulid.py](../app/ulid.py) | ULID generation, so a row created in a browser with no network can name itself. |
-| [app/api/](../app/api/) | The synchronisation API. `routes.py` (pull, push, export), `protocol.py` (what the wire carries), `revisions.py` (stamping writes, tombstones, hiding them from reads), `pruning.py` (clearing tombstones away). |
-| [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
-| [app/auth/](../app/auth/) | Registration, login, logout, password change. |
-| [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
-| [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
-| [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
-| [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
-| [app/instance/](../app/instance/) | Local `.env`, secrets, the SQLite database file (not in git). |
+| [app/__init__.py](../app/__init__.py) | Assembles the app; JSON errors, database update at startup. |
+| [app/models.py](../app/models.py) | Every table, and the synchronisation columns on most of them. |
+| [app/api/](../app/api/) | The whole of the server's job. `routes.py` (pull, push, export), `auth.py` (signing in), `protocol.py` (what crosses the wire), `revisions.py` (stamping writes, tombstones), `pruning.py`, `security.py` (CSRF). |
+| [app/auth/lockout.py](../app/auth/lockout.py) | Failed sign-ins, counted per email address in the database. |
+| [app/clock.py](../app/clock.py) | The configured time zone, and what "today" means. |
+| [app/main/routes.py](../app/main/routes.py) | The shell, the manifest and the service worker. Nothing else. |
+| [app/demo.py](../app/demo.py) | Read-only demo mode and the `seed-demo` command. Inert when off. |
+| [app/markdown_utils.py](../app/markdown_utils.py) | Only the demo document still needs this; the plan is rendered in the client. |
+| [client/src/domain/](../client/src/domain/) | The rules, ported from Python: `slots.ts`, `time.ts`, `markdown.ts`, `tags.ts`, `plan-sections.ts`. |
+| [client/src/db/](../client/src/db/) | The local copy, and the outbox every change passes through. |
+| [client/src/sync/](../client/src/sync/) | Pull, push, conflicts, and what the button knows. |
+| [client/src/routes/](../client/src/routes/) | One file per view. |
 | [migrations/](../migrations/) | Database change history (Alembic). |
 
-Each app feature = a blueprint package `app/<name>/` with an empty `__init__.py` and `routes.py`.
-Blueprints are registered in [app/__init__.py:38-42](../app/__init__.py#L38-L42).
+## How a change travels
 
-## Request flow
-
-The same pattern everywhere (example: editing a project):
-1. URL → a function in `routes.py`.
-2. `@login_required` checks the login; the helper `_get_user_project_or_404`
-   ([app/projects/routes.py:15](../app/projects/routes.py#L15)) checks it is the current user's resource.
-3. Read from `request.form`, manual validation, save: `db.session.commit()` inside `try/except SQLAlchemyError` with `rollback()`.
-4. Response: an HTML page (`render_template`/`redirect` + `flash`) **or** JSON (`jsonify`) when the request comes in the background (fetch).
+1. A view calls `createRow`, `updateRow` or `deleteRow` in
+   [client/src/db/mutate.ts](../client/src/db/mutate.ts). The row and an entry in
+   the outbox are written in **one** IndexedDB transaction. The screen updates
+   from the local copy; nothing waited for a network.
+2. `sync.run()` pulls, then pushes. It runs on start-up, on regaining a
+   connection, when the tab comes back, once a minute, and when the button is
+   pressed.
+3. `POST /api/sync/push` applies what it can. Anything built on a version the
+   server has moved past comes back as a conflict, and **the change stays in the
+   outbox**: it is still the person's, still unsent.
+4. The person settles the conflict in the dialog. Nothing is merged silently.
 
 ## Data model
 
-All tables are in [app/models.py](../app/models.py). All of them have `created_at`/`updated_at` (UTC).
+All tables are in [app/models.py](../app/models.py), all with UTC
+`created_at`/`updated_at`.
 
-- **User** — username, email (both unique), hashed password.
-- **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
-  the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
-  the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
-  only drawn while **safe mode** is on — a browser-side switch (`app-safe-mode` in localStorage,
-  `data-safe-mode` on `<html>`, toggled by the shield in the navbar) that lives entirely in
-  [app/templates/base.html](../app/templates/base.html) and the two CSS rules keyed on it.
-  [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts a card for five
-  minutes at a time and re-veils everything when safe mode is switched on again. The text is in
-  the page all along — nothing is withheld from the browser, and nothing about it is enforced
-  server-side.
-- **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
-  `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
-  `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
-- **ProjectTimelineGroup** — a group (column) on the timeline; the `is_backlog` flag = "off timeline".
-- **ProjectTimelineItem** — a tile: a project or a note (`item_type` = `"project"`/`"note"`).
-- **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
-  `is_done` marks that day's session finished - it lives on the slot, so it clears itself tomorrow.
-  Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
-  `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
-  empty booking, not history. The rule "one slot today plus one in the future" is enforced in
-  [app/projects/slots.py](../app/projects/slots.py), not by the schema.
+- **User** — username, email (both unique), hashed password, `session_token`
+  (changing a password rotates it, which signs every other device out).
+- **Project** — `title`, `short_goal` ("thoughts"), `frequency`, `long_goal`
+  (Markdown), `archived_long_goal`, flags `is_starred`/`is_private`/`is_archived`.
+- **ProjectTimeEntry** — `started_at`/`ended_at`/`description`. `project_id` is
+  optional and does **not** cascade: deleting a project detaches its entries
+  rather than destroying them, and `project_title_snapshot` keeps past weeks
+  readable.
+- **ProjectTimelineGroup** / **ProjectTimelineItem** — the board's columns and
+  cards; `is_backlog` marks the off-timeline column.
+- **ProjectDaySlot** — one project in one slot (A, B or the optional C), with
+  `is_done` per slot so it resets by itself tomorrow.
+- **SyncState** — per account: `last_rev`, the counter every write draws from,
+  and `tombstone_floor`, how far deleted rows have been cleared away.
+- **LoginAttempt** — one failed sign-in, kept only as long as it locks the door.
 
-- **SyncState** — one row per account. `last_rev` is the counter every write draws from;
-  `tombstone_floor` records how far deleted rows have already been cleared away, so a client
-  whose cursor sits below it is told to fetch everything instead of a difference that can no
-  longer be given correctly.
+Every table except `User`, `LoginAttempt` and `SyncState` also carries three
+columns from `SyncMixin`. The integer primary key stays where it was; these live
+beside it:
 
-Every table except `User`, `LoginAttempt` and `SyncState` also carries three synchronisation
-columns, from the `SyncMixin` in the same file. The integer primary key stays exactly where it
-was — foreign keys and relationships still run on it — and these live alongside it:
+- **`uid`** — a ULID minted by whoever created the row. Identity that does not
+  need a server. The API never exposes the integer id; every reference across
+  the wire is a uid.
+- **`rev`** — the per-account counter, stamped by the server. An ordering rather
+  than a clock, because two devices disagree about the time but not about which
+  change came second.
+- **`deleted_at`** — a tombstone. See "non-obvious things" below.
 
-- **`uid`** — a ULID minted by whoever created the row. Identity that does not need a server:
-  a browser offline cannot wait for SQLite to hand out a key. The API never exposes the integer
-  id, and every reference across the wire is a uid.
-- **`rev`** — the per-account counter, stamped by the server. An ordering rather than a clock,
-  because two devices disagree about the time but not about which change came second. It is
-  what makes "everything above my cursor" an exact question, and what makes a conflict
-  detectable at all.
-- **`deleted_at`** — a tombstone. A row that simply vanished is indistinguishable from one that
-  never changed, so the other device would never learn of the deletion and would push its copy
-  back. See non-obvious things 13 and 14.
-
-The schema in the code matches the latest migration (`20260901_0021`).
+The schema in the code matches migration `20260901_0021`.
 
 ## Responsibility boundaries
 
-- **Business logic and database access live inside the `routes.py` functions.** There is no separate service/repository layer.
-- **The only exception:** time and timezone calculations are extracted into [app/time_tracking/service.py](../app/time_tracking/service.py).
-- **And synchronisation**, in [app/api/](../app/api/): every blueprint that writes goes through the same stamping rules, and five copies of them would not stay identical.
-- **Presentation:** [app/markdown_utils.py](../app/markdown_utils.py) (Markdown→HTML) + Jinja templates.
-- **Configuration:** only [config.py](../config.py) reads environment variables.
+- **The rules live in the client**, in `client/src/domain/`, as pure functions
+  that work out what should change and hand it back. The caller writes it
+  through `db/mutate.ts`.
+- **The server enforces one invariant**: one live booking per (user, date, slot),
+  as a partial unique index. The two-block rule and everything else about
+  planning is a client rule now. For a single-person self-hosted application
+  that is a deliberate trade; it is a real change to the trust model.
+- **Configuration**: only [config.py](../config.py) reads environment variables.
 
 ## Non-obvious things
 
 0. **In Docker the instance directory is `/app/app/instance`, not `/app/instance`.**
-   The image puts the repository root at `/app` ([Dockerfile:10](../Dockerfile#L10)), so the
-   repo's own `app/instance` sits one level deeper — and that is where
-   [config.py:8-13](../config.py#L8-L13) looks for `.env` and the database. The volume in
-   [docker-compose.yml](../docker-compose.yml), the entrypoint and `DATABASE_URL` all have to
-   name the same path. Until 1.5.0 they did not, and the mounted `.env` was read by nobody.
-1. **The database updates itself when the app starts.** Importing `app` runs migrations + possibly table creation
-   ([app/__init__.py:47-49](../app/__init__.py#L47-L49)). Disabled by `SKIP_DB_BOOTSTRAP=1` (Docker) so workers don't race.
-2. **Two parallel ways of changing the schema.** Besides Alembic migrations, the `initialize_database` function
-   ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) adds missing columns with raw `ALTER TABLE`.
-   This duplicates migrations — it exists so that old local SQLite files keep working. **Do not extend this block** — make new changes with a migration.
-3. **`OPENAI_API_KEY` and the `requests` library are read but unused** ([config.py](../config.py),
-   [requirements.txt](../requirements.txt)). The `ai` blueprint they were named after is gone as of 1.5.0;
-   the variables stay until the repo owner decides otherwise.
-4. **The plan-section "archive" is not a table.** When you archive a project plan section, the text is cut out of `long_goal` and appended to `archived_long_goal`
-   via character offsets ([app/projects/routes.py:596-630](../app/projects/routes.py#L596-L630)).
-5. **`_get_or_create_timeline` writes to the database during a GET** — it seeds the timeline when
-   the user has none ([app/projects/routes.py](../app/projects/routes.py)). It used to exist in two
-   copies; removing the `ai` blueprint in 1.5.0 left just this one.
-6. **The side menu queries the database on every render** ([app/__init__.py:57-173](../app/__init__.py#L57-L173)) —
-   a few queries added to every HTML page; wrapped in `try/except` so it doesn't break the view.
-7. **Save on tab close** — `edit_project` recognizes the `_beacon=1` field and responds "silently"
-   (204/400/500 without `flash`/redirect, [app/projects/routes.py:150-184](../app/projects/routes.py#L150-L184)).
-8. **Time is stored in UTC (naive)**, converted to `CALENDAR_TIMEZONE` only at display time
-   ([app/time_tracking/service.py](../app/time_tracking/service.py)). Sensitive — easy to get wrong when changing things.
-9. **Demo mode installs nothing when it is off.** `register_demo_mode` ([app/demo.py](../app/demo.py)),
-   called once from `create_app`, returns straight after setting `demo_mode = False` in `app.jinja_env.globals`
-   unless `DEMO_MODE` is set. Only then does it register the `before_request` write guard, render
-   `DEMO_DOC_PATH` (once, at startup) and add the `seed-demo` command. It deliberately stays out of
-   `inject_feature_flags` — that context processor runs on every render and already queries the database,
-   so the flag is a Jinja global instead. Point 5 still applies in demo mode: the guard only stops writes
-   on `POST`/`PUT`/`PATCH`/`DELETE`, so the timeline still seeds itself on a GET. `seed-demo` builds the
-   timeline up front, which makes that a no-op.
+   The image puts the repository root at `/app`, so the repo's own `app/instance`
+   sits one level deeper - and that is where config.py looks for `.env` and the
+   database. The volume, the entrypoint and `DATABASE_URL` must all name it.
 
-10. **A day off moves the bookings newest first.** `shift_bookings_forward`
-    ([app/projects/slots.py](../app/projects/slots.py)) pushes every booking from the chosen day
-    on one day later, so each one lands on the date the booking after it has just left. Walking
-    the rows the other way round would hit the unique constraint on `(user, date, slot)` halfway
-    through, and so would moving them all in one flush — hence the `flush()` per row. Two
-    consequences: **a booking already marked done does not move at all** — it happened, and "done"
-    belongs to a date, so moving it would file the work under a day it was not done on and quietly
-    undo it (a block with one in its way is held back too, having nowhere to land) — and the shift
-    can push a booking past the edge of the schedule page, which is why that page's window grows to
-    the last booked day (`weeks_to_cover`) instead of being a fixed three weeks.
+1. **The database updates itself at startup**, disabled in Docker with
+   `SKIP_DB_BOOTSTRAP=1`. Don't change that in passing.
 
-11. **A tag is not stored anywhere.** `#shop` in "- [ ] call the printer #shop" is text in
-    `Project.long_goal` and nothing else — no table, no column, nothing to keep in step. The tag
-    tag page (`/projects/tags`, linked from the home page) carries no tags of its own: it arrives
-    with a spinner in the HTML and asks `/projects/tags/search`, which reads every active plan and
-    groups what it finds (`_collect_tags` in [app/projects/routes.py](../app/projects/routes.py)). Three rules follow the same `TAG_PATTERN`
-    ([app/markdown_utils.py](../app/markdown_utils.py)) so the views cannot disagree: a tag starts
-    with a letter, may not follow a word character or "(" (so `C#` and a `](#anchor)` link target
-    are not tags), and **only counts inside a list item** — which is why the block editor paints
-    them in list blocks alone. The JavaScript copies of the pattern
-    ([plan-block-editor.js](../app/static/js/plan-block-editor.js),
-    [tag-list.js](../app/static/js/tag-list.js)) spell it with Unicode property escapes, because
-    JavaScript's `\w` is ASCII and would cut `#dom-i-ogród` short.
+2. **Two parallel schema mechanisms.** `initialize_database` in
+   [app/__init__.py](../app/__init__.py) adds missing columns with raw
+   `ALTER TABLE`, kept so old local files still open. **Do not extend it** - make
+   new changes with a migration.
 
-12. **The home page's health score is a convention, not a measurement.** `system_health`
-    ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
-    booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
-    counts on neither side of it), and the share of active projects that have a next session booked —
-    weighted 60/40, with the bands at 75 and 50 deciding the colour. The window and those four
-    numbers are constants at the top of the file; change them there, not in the template. Two
-    consequences worth knowing: today is deliberately outside the window, so the score moves in the
-    morning only when yesterday was left unfinished, and a week with nothing booked scores zero on
-    the sessions half rather than dividing by zero.
+3. **A deletion is a row, not an absence.** `soft_delete` in
+   [app/api/revisions.py](../app/api/revisions.py) sets `deleted_at`, stamps a
+   revision, and **empties the content columns immediately** (`__sync_payload__`
+   on each model), so a deleted private plan stops existing on the server at the
+   next sync. What is kept for the retention window is the bare fact that the
+   uid is gone. `NOT NULL` columns are emptied to `""`.
 
-13. **A deletion is a row, not an absence.** Nothing is removed with `db.session.delete` any more;
-    `soft_delete` in [app/api/revisions.py](../app/api/revisions.py) sets `deleted_at`, stamps a
-    revision, and **empties the content columns immediately** (the `__sync_payload__` tuple on each
-    model). A deleted private plan therefore stops existing on the server at the next sync — what is
-    kept for the retention window is the bare fact that the uid is gone. `NOT NULL` columns are
-    emptied to `""` rather than nulled. Deleting a project carries the deletion to its day slots and
-    timeline tiles, but **not** to its time entries: those outlive it holding
-    `project_title_snapshot`, exactly as before, so past weeks stay correct.
+4. **Tombstones are hidden from every read by one listener, not by forty
+   filters.** `register_tombstone_filter` attaches `with_loader_criteria` to
+   `do_orm_execute`, which reaches relationship lazy loads that a hand-written
+   `deleted_at IS NULL` could not - there is no line of code there to edit. The
+   pull endpoint asks for them with `execution_options(include_tombstones=True)`.
 
-14. **Tombstones are hidden from every read by one listener, not by forty filters.**
-    `register_tombstone_filter` attaches `with_loader_criteria` to `do_orm_execute`, so
-    `Model.query`, `select()` **and relationship lazy loads** all skip deleted rows without a single
-    query being edited. A hand-written `deleted_at IS NULL` could not have reached a lazy load of
-    `project.day_slots` at all — there is no line of code there. The one caller that needs the dead
-    rows, the pull endpoint, asks with `execution_options(include_tombstones=True)`.
+5. **A revision belongs to a transaction.** `next_rev` claims one number per
+   account per transaction and releases it on commit. The claim is a single
+   `UPDATE ... RETURNING`: across Gunicorn workers, read-then-write hands the
+   same number out twice.
 
-15. **A revision belongs to a transaction, not to a request or a row.** `next_rev` claims one number
-    per account per transaction and releases it on commit or rollback. Every row written in one
-    commit shares it, which is safe because a commit is atomic — a client sees all of those rows or
-    none. The claim is a single `UPDATE ... RETURNING`, not a read followed by a write: across
-    Gunicorn workers the two-step version hands the same number out twice. Writes are stamped
-    automatically from a `before_flush` listener, so no route has to remember to call `touch`.
+6. **`uq_project_day_slot` is a partial unique index**, counting only rows where
+   `deleted_at IS NULL`. Without that, freeing a slot would leave it permanently
+   unbookable.
 
-16. **`uq_project_day_slot` is a partial unique index now, not a table constraint.** It counts only
-    rows where `deleted_at IS NULL`. Without that, freeing a slot would leave it permanently
-    unbookable: the dead row would still occupy `(user_id, slot_date, slot)`. The same change let
-    `move_booking` stop deleting and re-creating the displaced row when two bookings swap — it now
-    marks it deleted for the length of two statements and puts it back, so the row keeps its uid and
-    the other device sees a move rather than a destruction and an unrelated creation.
+7. **A push parks bookings that are changing places.** Two bookings swapping
+   arrive as two updates; applied one at a time the first lands where the second
+   has not left yet. `_park_moving_bookings` marks them deleted for the length of
+   two statements, and a sweep afterwards still refuses two rows that genuinely
+   want one spot.
 
-17. **The migration had to give existing rows revision 1, not 0.** A client's first pull asks for
-    everything above cursor 0. Rows left at the column default would sit above nothing, and an
-    account with years of projects would look empty to a device that had just been set up. See
-    `tests/test_migration_0021.py`, which exists for that bug.
+8. **After a push, the client records the revision the server assigned.** Without
+   it the local row keeps the revision it was created with, and the next edit is
+   sent against a version the server has already moved past - a conflict with
+   nobody on the other side of it.
+
+9. **A tag is not stored anywhere.** `#shop` is text inside `long_goal`.
+   `client/src/domain/tags.ts` reads the plans and groups what it finds. A tag
+   starts with a letter, may not follow a word character or `(`, and only counts
+   inside a list item. The JavaScript pattern uses `\p{L}` rather than `\w`,
+   which in JavaScript is ASCII and would cut `#dom-i-ogród` short.
+
+10. **The health score is a convention, not a measurement.** `systemHealth` in
+    `client/src/domain/slots.ts` mixes the done-ratio over the seven days *before
+    today* with the share of active projects having a next session, weighted
+    60/40, banded at 75 and 50. Today is deliberately outside the window.
+
+11. **A day off moves bookings newest first.** Each lands on the date the one
+    after it has just vacated. A session already marked done does not move - it
+    happened - and holds back whatever would land on it.
+
+12. **`is_private` is a curtain, not a permission.** Safe mode is browser-side,
+    as it always was. The difference now is that the text it covers really is on
+    this device rather than sent by a server.
+
+13. **Signing out deletes the local copy.** It has to: the data is no longer
+    only within a cookie's reach.
 
 ## What not to touch (and why)
 
-- **The raw `ALTER TABLE` in `initialize_database`** ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) —
-  an older backward-compatibility mechanism for local databases. Change the schema with an
-  Alembic MIGRATION, not here.
-- **The database auto-bootstrap at startup** ([app/__init__.py:47-49](../app/__init__.py#L47-L49)) and the
-  `SKIP_DB_BOOTSTRAP` switch — deliberately disabled in Docker so workers don't race.
-  Don't change this logic in passing.
-- **`OPENAI_API_KEY` and the `requests` package** — present but unused. Don't build assumptions
-  on them; don't remove them without confirming with the repo owner.
-- **UTC time handling** in [app/time_tracking/service.py](../app/time_tracking/service.py) — dates are stored
-  naive as UTC and converted only at display time. Keep this pattern (`ensure_utc`); don't mix
-  timezones in the database.
-
-Things not determined (literally "I don't know"):
-- [app/templates/icons.html](../app/templates/icons.html) is not rendered by anything — purpose unknown.
-- `app.config.get("SKIP_DB_BOOTSTRAP")` in [app/__init__.py:221](../app/__init__.py#L221) references a key
-  that `Config` never sets — only the environment-variable variant works.
+- **The raw `ALTER TABLE` in `initialize_database`** - backward compatibility for
+  old local databases. Change the schema with a migration.
+- **The startup bootstrap and `SKIP_DB_BOOTSTRAP`** - deliberately disabled in
+  Docker so workers don't race.
+- **`OPENAI_API_KEY` and the `requests` package** - present but unused. Don't
+  build on them; don't remove them without asking the repo owner.
+- **Naive UTC in the database.** The client converts at the edges; the server
+  stores instants and nothing else.

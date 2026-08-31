@@ -1,12 +1,14 @@
 /**
  * Routing, by History API.
  *
- * The client is served from /app, and Flask hands the same shell back for every
- * path beneath it, so a reload or a shared link lands where it says it does
- * rather than bouncing to the top.
+ * The client owns every address now, and Flask hands the same shell back for
+ * all of them, so a reload or a shared link lands where it says it does rather
+ * than bouncing to the top. BASE is empty rather than removed: it keeps every
+ * link in one shape, and gives one place to change if the client is ever served
+ * from somewhere other than the root.
  */
 
-export const BASE = "/app";
+export const BASE: string = "";
 
 export type Route =
   | { name: "home" }
@@ -21,7 +23,7 @@ export type Route =
   | { name: "unknown"; path: string };
 
 function parse(pathname: string): Route {
-  const rest = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname;
+  const rest = BASE && pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname;
   const parts = rest.split("/").filter(Boolean);
 
   if (parts.length === 0) return { name: "home" };
@@ -47,7 +49,7 @@ class Router {
   }
 
   go(path: string): void {
-    const target = path.startsWith(BASE) ? path : `${BASE}${path}`;
+    const target = path.startsWith("/") ? path : `${BASE}/${path}`;
     if (target !== window.location.pathname) {
       window.history.pushState({}, "", target);
     }
@@ -63,7 +65,8 @@ export function link(node: HTMLAnchorElement) {
   function onClick(event: MouseEvent) {
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
     const href = node.getAttribute("href");
-    if (!href || !href.startsWith(BASE)) return;
+    // Same-origin, client-owned addresses only; anything else is a real link.
+    if (!href || !href.startsWith("/") || href.startsWith("/api/")) return;
     event.preventDefault();
     router.go(href);
   }

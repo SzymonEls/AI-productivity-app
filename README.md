@@ -41,24 +41,50 @@ container, no external services.
 
 ## Stack
 
-Flask 3 · SQLAlchemy + Alembic · Flask-Login · SQLite · Jinja templates with vanilla JS ·
+Svelte 5 · TypeScript · Vite · Dexie (IndexedDB) in the browser ·
+Flask 3 · SQLAlchemy + Alembic · Flask-Login · SQLite on the server ·
 Gunicorn in Docker behind nginx.
 
+**Local-first since 2.0.0.** Every view is drawn from a copy of your data held
+in the browser, so the whole application works with the network off - reading,
+booking, ticking off, editing a plan, running the timer. Changes queue up and
+the button in the top right says what is waiting. When the same thing has been
+changed in two places, it asks you which version stands rather than picking one.
+
 ## Run it locally
+
+Two steps, because the interface is built rather than served live:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate   # .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 cp app/instance/.env.example app/instance/.env      # every setting is documented in there
+```
+
+```bash
+cd client && npm install && npm run build && cd ..
+```
+
+```bash
 python run.py
 ```
 
-The app starts at `http://127.0.0.1:5001` and creates the SQLite database and its tables on
-first run. Register an account, or set `DEFAULT_LOGIN_EMAIL` / `DEFAULT_LOGIN_PASSWORD` to
-pre-fill the login form.
+The app starts at `http://127.0.0.1:5001` and creates the SQLite database and
+its tables on first run. Register an account from the sign-in screen.
 
-> Port 5001 rather than Flask's usual 5000: on macOS the AirPlay Receiver in Control Center
-> listens on `*:5000` and answers every request with a 403.
+> Port 5001 rather than Flask's usual 5000: on macOS the AirPlay Receiver in
+> Control Center listens on `*:5000` and answers every request with a 403.
+
+Working on the frontend? `npm run dev` in `client/` gives hot reload on
+`http://localhost:5173` and proxies the API to Flask; run `python run.py`
+alongside it. There is no Node process in production - `npm run build` writes
+static files that Flask serves.
+
+Tests:
+
+```bash
+pytest && cd client && npm run test
+```
 
 ## Deployment
 

@@ -1,3 +1,19 @@
+# The client is built here and only its output is carried forward, so Node
+# never reaches the image that runs in production.
+FROM node:26-slim AS client
+
+WORKDIR /client
+
+COPY client/package.json client/package-lock.json ./
+RUN npm ci
+
+COPY client/ ./
+# A hard ceiling rather than growing until the machine runs out: the build
+# happens on the deployment host, alongside the container it is replacing.
+ENV NODE_OPTIONS=--max-old-space-size=512
+RUN npm run build
+
+
 FROM python:3.13-slim
 
 ARG APP_UID=1000
@@ -13,6 +29,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+# vite.config.ts writes here; the directory is git-ignored, so it arrives only
+# from the stage above.
+COPY --from=client /app/static/client ./app/static/client
 
 # The repository root is /app, so its app/instance directory is /app/app/instance.
 # That is where config.py looks for .env and the database - keep the volume,

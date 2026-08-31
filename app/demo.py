@@ -354,7 +354,7 @@ def _seed_day_slots(user, projects):
     Deliberately leaves several projects without a future slot so the
     "Not scheduled" list on the dashboard has something in it.
     """
-    from .projects.slots import today_local
+    from .clock import today_local
 
     active = [project for project in projects if not project.is_archived]
     if len(active) < 3:

@@ -21,3 +21,7 @@ app/instance/*.db
 app/instance/*.sqlite3
 Thumbs.db
 .DS_Store
+
+# The client is built in its own stage; its dependencies never enter the context.
+client/node_modules/
+app/static/client/

@@ -18,62 +18,51 @@ plainly "I don't know" / "TODO: to be confirmed" instead of guessing.
 
 Derived from the existing code, not from general best practices. Each one has a reference file.
 
-### Module structure (blueprint)
-Each app feature is a package `app/<name>/` with an empty `__init__.py` and a `routes.py` file.
-In `routes.py` the blueprint variable is named `<name>_bp` and has `url_prefix="/<name>"`.
-Register the blueprint in [app/__init__.py:38-42](../app/__init__.py#L38-L42).
-**Reference:** [app/time_tracking/routes.py:28](../app/time_tracking/routes.py#L28).
+### Where a change belongs
+The server does three things: authenticate, store, and answer what changed. If a
+change is about **a rule** - when a slot may be booked, how a plan renders, what
+a tag is - it belongs in `client/src/domain/`, not in Python. The server has no
+opinion about those any more.
+**Reference:** [client/src/domain/slots.ts](../client/src/domain/slots.ts).
+
+### Server module structure
+`app/api/` holds the whole API: `routes.py` for pull/push/export, `auth.py` for
+signing in, and the supporting modules beside them. New endpoints go there
+rather than into a new blueprint.
+**Reference:** [app/api/routes.py](../app/api/routes.py).
 
 ### Naming
-- Route files: always `routes.py` inside the module package.
-- Module-private helper functions: `_` prefix (e.g. `_get_user_project_or_404`,
-  `_serialize_timeline_group`). **Reference:** [app/projects/routes.py:15](../app/projects/routes.py#L15).
-- Models: `CamelCase` class, `__tablename__` in plural snake_case
-  (`projects`, `project_time_entries`). **Reference:** [app/models.py:60-63](../app/models.py#L60-L63).
-- Boolean flags: `is_*`, `nullable=False`, `default=False`. **Reference:** [app/models.py:72-74](../app/models.py#L72-L74).
-- Timestamps: `created_at`/`updated_at` with `default=lambda: datetime.now(timezone.utc)`
-  (and `onupdate` for `updated_at`). **Reference:** [app/models.py:75-81](../app/models.py#L75-L81).
+- Module-private helpers: `_` prefix.
+- Models: `CamelCase` class, plural snake_case `__tablename__`.
+- Boolean flags: `is_*`, `nullable=False`, `default=False`.
+- Timestamps: `default=lambda: datetime.now(timezone.utc)` (and `onupdate`).
 
 ### Models
-All models are in a SINGLE file [app/models.py](../app/models.py). Don't create per-model files.
-Owner relationships: `back_populates` + `cascade="all, delete-orphan"` on the `User` side.
-**Reference:** [app/models.py:20-25](../app/models.py#L20-L25).
+All models are in a SINGLE file [app/models.py](../app/models.py). A new
+synchronised table inherits `SyncMixin` and calls `sync_table_args("<table>")`,
+and names its content columns in `__sync_payload__` so a deletion empties them.
 
 ### Endpoints
-A function in `routes.py` with the decorators `@<bp>.route(...)` **and** `@login_required`
-(except the auth pages and the public `main` pages).
-Access to a user's data ALWAYS goes through a helper filtering by `current_user.id`
-(`Project.query.filter_by(id=..., user_id=current_user.id).first_or_404()`).
-**Reference:** [app/projects/routes.py:123-131](../app/projects/routes.py#L123-L131).
+`@api_bp.route(...)` **and** `@login_required`. Access to a user's data always
+filters by `current_user.id`. Success is `jsonify({"ok": True, ...})`; failure is
+`jsonify({"ok": False, "message": "..."}), <code>`, with a `reason` when the
+client has to tell cases apart.
 
-### API response shape (JSON)
-Endpoints answering fetch return a dict with an `ok` key:
-- success: `jsonify({"ok": True, ...})`
-- error: `jsonify({"ok": False, "message": "..."}), <HTTP code>`
+### Writes
+Never `db.session.delete` on a synchronised row - use `soft_delete`. Never set
+`rev` by hand: the `before_flush` listener stamps every write. Wrap saves in
+`try/except SQLAlchemyError` with `rollback()`.
 
-**Reference:** [app/projects/routes.py:159-207](../app/projects/routes.py#L159-L207) (`edit_project`).
-"HTML" endpoints use `flash(...)` + `redirect(...)` instead of JSON.
-**Reference:** [app/projects/routes.py:55-62](../app/projects/routes.py#L55-L62) (`archive_project`).
-
-### Database error handling
-Wrap saves in `try/except SQLAlchemyError:` with `db.session.rollback()` in the `except` block,
-then return an error (JSON `500` or a `flash` "danger").
-**Reference:** [app/projects/routes.py:99-111](../app/projects/routes.py#L99-L111).
-Global 404/500 errors for fetch are turned into JSON in
-[app/__init__.py:176-189](../app/__init__.py#L176-L189) — don't duplicate that in handlers.
+### Client
+Every write goes through `client/src/db/mutate.ts`, so the change and its outbox
+entry land in one transaction. Views read through `live()` from
+[client/src/lib/live.svelte.ts](../client/src/lib/live.svelte.ts) and never
+fetch. Domain functions stay pure: they return what should change, and the view
+writes it.
 
 ### Validation
-Manual, inside the handler function. You read `request.form.get("field", "").strip()`,
-check conditions with `if/elif`, and on error `flash(..., "danger")` (HTML) or
-`jsonify({"ok": False, ...}), 400` (JSON). **The repo has NO** WTForms/marshmallow/pydantic — don't add them.
-**Reference (HTML):** [app/projects/routes.py:80-88](../app/projects/routes.py#L80-L88) (`create_project`),
-**(JSON):** `assign_project_slot` in [app/projects/routes.py](../app/projects/routes.py).
-Parse booleans from the form with the `_form_bool` helper ([app/projects/routes.py:633](../app/projects/routes.py#L633)).
-
-### Business logic vs. database access
-By default everything sits in `routes.py` (`Model.query...` queries directly in the function).
-Create a separate `service.py` file only for time/timezone/aggregation logic — like in
-[app/time_tracking/service.py](../app/time_tracking/service.py). Don't introduce a service layer for the rest.
+Manual, inside the handler. The repo has NO WTForms/marshmallow/pydantic -
+don't add them.
 
 ### ⚠️ Conflicting convention in the repo (resolution)
 
@@ -98,34 +87,46 @@ Tests build their database **by running the migrations**, never `db.create_all()
 `create_all` passes happily while the migration that has to run on the production database is
 broken, which is the one failure that actually costs data.
 
-When changing anything in `app/api/` or adding a migration, run `pytest` before finishing.
+Run **both** suites before finishing: `pytest` for the server, and
+`cd client && npm run test` for the ports and the write path. A port from Python
+is checked against output captured from the Python it replaces - see
+`client/src/domain/__golden__*.json`; regenerate those rather than editing them
+by hand.
 
 ## B. Definition of done
 
 Tick off the sections matching your change. Each item is a specific file/command.
 
 ### Model change (new/changed field or table)
-- [ ] Change the class in [app/models.py](../app/models.py) (name and type per the conventions in part A).
+- [ ] Change the class in [app/models.py](../app/models.py).
+- [ ] If it is synchronised: inherit `SyncMixin`, use `sync_table_args`, and list
+      its content columns in `__sync_payload__`.
+- [ ] Describe it on **both** sides of the wire:
+      [app/api/protocol.py](../app/api/protocol.py) and
+      [client/src/sync/types.ts](../client/src/sync/types.ts). These two drifting
+      apart is the failure this codebase is most exposed to.
+- [ ] Add the store to [client/src/db/schema.ts](../client/src/db/schema.ts).
 - [ ] Generate the migration: `flask --app run.py db migrate -m "..."`.
-- [ ] Open the new file in [migrations/versions/](../migrations/versions/) and review it; for a
-      `nullable=False` column make sure there is a `server_default` (see `20260704_0012`).
+- [ ] Review it; for a `nullable=False` column make sure there is a
+      `server_default` (see `20260704_0012`). Backfill in batches, and make it
+      safe to run twice (see `20260901_0021`).
 - [ ] Apply it: `flask --app run.py db upgrade`.
-- [ ] Confirm the model and the database agree: `flask --app run.py db check` against a copy of
-      a real database. It has to say "No new upgrade operations detected". If autogenerate
-      proposes dropping something the database genuinely needs, DECLARE it on the model —
-      deleting the proposal from the migration by hand leaves the drift in place, and the next
-      real diff arrives buried in the same false ones.
-- [ ] If you added a model, add it to the import in [app/__init__.py:31](../app/__init__.py#L31).
-- [ ] Update the model list in [ARCHITECTURE.md](ARCHITECTURE.md), the "Data model" section.
+- [ ] Confirm the model and the database agree: `flask --app run.py db check`
+      against a copy of a real database. It has to say "No new upgrade
+      operations detected". If autogenerate proposes dropping something the
+      database genuinely needs, DECLARE it on the model - deleting the proposal
+      from the migration by hand leaves the drift in place.
+- [ ] If you added a model, add it to the import in `app/__init__.py`.
+- [ ] Update the Data model section in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-### New or changed endpoint
-- [ ] Add a function in the right `app/<module>/routes.py` with `@<bp>.route(...)` and `@login_required`.
-- [ ] Guard access with the `_get_user_project_or_404` helper (or an equivalent filter by `current_user.id`).
-- [ ] Return the response per the convention: JSON `{"ok": ...}` for fetch or `flash`+`redirect` for HTML.
-- [ ] Wrap the save in `try/except SQLAlchemyError` with `rollback()` if it can fail.
-- [ ] If it's a NEW module: register the blueprint in [app/__init__.py:38-42](../app/__init__.py#L38-L42) and add the import in [app/__init__.py:32-36](../app/__init__.py#L32-L36).
-- [ ] Wire the action into a template in [app/templates/](../app/templates/).
-- [ ] Add the endpoint to the table in [ARCHITECTURE.md](ARCHITECTURE.md) (if you keep the list there).
+### New or changed view
+- [ ] A file in [client/src/routes/](../client/src/routes/), reading through
+      `live()` and writing through `db/mutate.ts`.
+- [ ] Add the route to
+      [client/src/lib/router.svelte.ts](../client/src/lib/router.svelte.ts) and
+      the navigation in `client/src/App.svelte`.
+- [ ] If it shows a private project's own words, wrap them in `PrivateVeil`.
+- [ ] `npm run build`, or the server serves the previous bundle.
 
 ### New environment variable
 - [ ] Add the read in [config.py](../config.py), the `Config` class (`os.environ.get(...)` with a sensible default).
@@ -136,7 +137,7 @@ Tick off the sections matching your change. Each item is a specific file/command
 
 ### User-visible behavior change
 - [ ] Update the relevant template in [app/templates/](../app/templates/) and/or the style in [app/static/css/](../app/static/css/).
-- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `1.6.0`) — it's shown in the UI.
+- [ ] If you change how a feature works: bump the number in [VERSION](../VERSION) (currently `2.0.0`) — it's shown in the UI.
       One number per release, not per change: a batch of features that ship together share it.
 - [ ] Check whether the change requires updating the feature description in [ARCHITECTURE.md](ARCHITECTURE.md).
 

@@ -1,2 +1,0 @@
-"""Time tracking blueprint package."""
-

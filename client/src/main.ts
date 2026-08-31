@@ -13,3 +13,11 @@ import { applyAppearance } from "./lib/appearance";
 applyAppearance();
 
 mount(App, { target: document.getElementById("app")! });
+
+// Root-scoped, so the shell answers for every address the client owns. Only
+// over https or on localhost - a service worker refuses anything else.
+if ("serviceWorker" in navigator && window.isSecureContext) {
+  navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {
+    // Not being installable is not a reason for the application to fail.
+  });
+}

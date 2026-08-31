@@ -6,5 +6,6 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 migrate = Migrate()
 login_manager = LoginManager()
-login_manager.login_view = "auth.login"
-login_manager.login_message_category = "warning"
+# No login_view: there is no page to send a browser to. Signing in happens
+# inside the client, so an unauthenticated request is answered with 401 and the
+# client shows its own form - see register_login_handlers().

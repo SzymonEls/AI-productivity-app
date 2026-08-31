@@ -199,11 +199,6 @@ def test_reading_needs_no_token(app, client):
     assert client.get("/api/sync/changes?since=0").status_code == 200
 
 
-def test_logout_is_not_a_link(app, client):
-    """A GET that signs the user out is a link another site can aim at."""
-    assert client.get("/auth/logout").status_code == 405
-    assert client.post("/auth/logout").status_code in (302, 303)
-
 
 def test_two_bookings_can_swap_places_in_one_push(app, sync):
     """A swap is two updates that each land where the other is leaving.

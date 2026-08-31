@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timezone
 
-from flask import Flask, jsonify, request, url_for
+from flask import Flask, jsonify, request
 from flask_login import current_user
 from flask_migrate import stamp as stamp_migrations, upgrade as apply_migrations
 from sqlalchemy import inspect, text
@@ -10,7 +10,6 @@ from config import Config
 
 from .extensions import db, login_manager, migrate
 from .api.revisions import register_tombstone_filter, register_write_stamping
-from .markdown_utils import render_markdown, render_project_markdown, strip_repeated_title
 
 
 def create_app(config_class=Config):
@@ -34,19 +33,12 @@ def create_app(config_class=Config):
     from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, SyncState, User  # noqa: F401
     from .api.routes import api_bp
     from .api.pruning import register_pruning_command
-    from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
-    from .projects.routes import projects_bp
-    from .time_tracking.routes import time_tracking_bp
 
-    app.register_blueprint(main_bp)
-    app.register_blueprint(auth_bp)
     app.register_blueprint(api_bp)
-    app.register_blueprint(projects_bp)
-    app.register_blueprint(time_tracking_bp)
-    register_template_context(app)
-    register_template_filters(app)
+    # Last, because it answers every address the others did not claim.
+    app.register_blueprint(main_bp)
     register_json_error_handlers(app)
     register_login_handlers(login_manager)
     # No-op unless DEMO_MODE is set: it registers nothing on the request path.
@@ -59,118 +51,6 @@ def create_app(config_class=Config):
     return app
 
 
-def register_template_context(app):
-    """Expose shared feature flags to templates."""
-
-    @app.context_processor
-    def inject_feature_flags():
-        active_time_entry = None
-        active_time_elapsed_seconds = 0
-        active_time_elapsed_label = ""
-        nav_project_groups = []
-        nav_current_project = None
-        if current_user.is_authenticated:
-            from .time_tracking.service import active_entry_for_user, today_project_summary
-
-            active_time_entry = active_entry_for_user(current_user.id)
-            if active_time_entry:
-                active_time_elapsed_seconds = today_project_summary(
-                    current_user.id,
-                    active_time_entry.project_id,
-                )["total_seconds"]
-                elapsed_minutes = active_time_elapsed_seconds // 60
-                elapsed_hours = elapsed_minutes // 60
-                remaining_minutes = elapsed_minutes % 60
-                if elapsed_hours:
-                    active_time_elapsed_label = f"{elapsed_hours}h {remaining_minutes:02d}m"
-                else:
-                    active_time_elapsed_label = f"{elapsed_minutes}m"
-
-            nav_project_groups, nav_current_project = build_project_switcher_context()
-
-        return {
-            "app_version": app.config.get("APP_VERSION", "local"),
-            "registration_enabled": app.config.get("REGISTRATION_ENABLED", True),
-            "active_time_entry": active_time_entry,
-            "active_time_elapsed_seconds": active_time_elapsed_seconds,
-            "active_time_elapsed_label": active_time_elapsed_label,
-            "nav_project_groups": nav_project_groups,
-            "nav_current_project": nav_current_project,
-        }
-
-
-def build_project_switcher_context():
-    """Today's slotted projects first, then everything else alphabetically.
-
-    Runs on every authenticated render, so it stays at two queries with a fixed
-    cost - projects, then today's slots. The previous timeline-grouped version
-    queried the items of each group in a loop, which grew with the number of
-    sections.
-    """
-    from sqlalchemy import func
-
-    from .models import Project, ProjectDaySlot
-    from .projects.slots import SLOTS, today_local
-
-    try:
-        projects = (
-            Project.query.filter_by(user_id=current_user.id, is_archived=False)
-            .order_by(func.lower(Project.title).asc())
-            .all()
-        )
-        booked_today = (
-            ProjectDaySlot.query.filter_by(user_id=current_user.id, slot_date=today_local()).all()
-        )
-    except Exception:  # noqa: BLE001 - never let the nav break a page render
-        return [], None
-
-    projects_by_id = {project.id: project for project in projects}
-    current_project_id = None
-    if request.view_args:
-        current_project_id = request.view_args.get("project_id")
-
-    def entry(project, slot=""):
-        return {
-            "id": project.id,
-            "title": project.title,
-            "url": url_for("projects.project_detail", project_id=project.id),
-            "is_starred": bool(project.is_starred),
-            "is_private": bool(project.is_private),
-            "is_current": project.id == current_project_id,
-            "slot": slot,
-        }
-
-    slot_by_letter = {booking.slot: booking for booking in booked_today}
-    today_entries = []
-    scheduled_ids = set()
-    for letter in SLOTS:
-        booking = slot_by_letter.get(letter)
-        project = projects_by_id.get(booking.project_id) if booking else None
-        if project and project.id not in scheduled_ids:
-            today_entries.append(entry(project, slot=letter))
-            scheduled_ids.add(project.id)
-
-    nav_groups = []
-    if today_entries:
-        nav_groups.append({"name": "Today", "projects": today_entries, "is_backlog": False})
-
-    rest = [entry(project) for project in projects if project.id not in scheduled_ids]
-    if rest:
-        nav_groups.append(
-            {
-                "name": "All projects" if today_entries else "",
-                "projects": rest,
-                "is_backlog": False,
-            }
-        )
-
-    current_project = projects_by_id.get(current_project_id)
-    current = (
-        {"id": current_project.id, "title": current_project.title}
-        if current_project
-        else None
-    )
-    return nav_groups, current
 
 
 def register_json_error_handlers(app):
@@ -190,34 +70,32 @@ def register_json_error_handlers(app):
 
     @app.errorhandler(429)
     def too_many_requests(error):
-        # Raised by the login view alone, so a browser is sent back to that form
-        # with the message rather than to a bare error page.
-        from flask import flash, g
+        from flask import g
 
-        message = (
-            "Too many failed sign-in attempts. "
-            f"Try again in {describe_wait(getattr(g, 'login_lock_seconds', 0))}."
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "reason": "locked",
+                    "message": (
+                        "Too many failed sign-in attempts. Try again in "
+                        f"{describe_wait(getattr(g, 'login_lock_seconds', 0))}."
+                    ),
+                }
+            ),
+            429,
         )
-        if wants_json_response():
-            return jsonify({"ok": False, "message": message}), 429
-
-        flash(message, "danger")
-        return redirect_to_login_page()
 
 
 def register_login_handlers(manager):
     @manager.unauthorized_handler
     def unauthorized():
-        if wants_json_response():
-            return jsonify({"ok": False, "message": "Session expired. Please log in again."}), 401
-        return redirect_to_login()
+        """Always 401, never a redirect.
 
-
-def redirect_to_login():
-    from flask import redirect
-
-    login_url = url_for(login_manager.login_view, next=request.url)
-    return redirect(login_url)
+        There is no sign-in page to send anyone to any more: the client asks
+        /api/me on start-up and draws its own form when the answer is this.
+        """
+        return jsonify({"ok": False, "message": "Session expired. Please sign in again."}), 401
 
 
 def describe_wait(seconds):
@@ -228,11 +106,6 @@ def describe_wait(seconds):
     minutes = -(-seconds // 60)
     return f"{minutes} minutes"
 
-
-def redirect_to_login_page():
-    from flask import redirect
-
-    return redirect(url_for(login_manager.login_view))
 
 
 def wants_json_response():
@@ -256,62 +129,6 @@ def should_initialize_database(app):
 
     return True
 
-
-def register_template_filters(app):
-    """Register shared Jinja filters used across the UI."""
-
-    @app.template_filter("markdown")
-    def markdown_filter(value):
-        return render_markdown(value)
-
-    @app.template_filter("project_markdown")
-    def project_markdown_filter(value):
-        return render_project_markdown(value)
-
-    @app.template_filter("without_repeated_title")
-    def without_repeated_title_filter(value, title):
-        return strip_repeated_title(value, title)
-
-    @app.template_filter("naturaltime")
-    def naturaltime_filter(value):
-        if not value:
-            return ""
-
-        current_time = datetime.now(timezone.utc)
-        timestamp = value if value.tzinfo else value.replace(tzinfo=timezone.utc)
-        seconds = int(max((current_time - timestamp).total_seconds(), 0))
-
-        if seconds < 10:
-            return "just now"
-        if seconds < 60:
-            return f"{seconds} seconds ago"
-
-        minutes = seconds // 60
-        if minutes == 1:
-            return "1 minute ago"
-        if minutes < 60:
-            return f"{minutes} minutes ago"
-
-        hours = minutes // 60
-        if hours == 1:
-            return "1 hour ago"
-        if hours < 24:
-            return f"{hours} hours ago"
-
-        days = hours // 24
-        if days == 1:
-            return "1 day ago"
-        if days < 30:
-            return f"{days} days ago"
-
-        months = days // 30
-        if months == 1:
-            return "1 month ago"
-        if months < 12:
-            return f"{months} months ago"
-
-        years = days // 365
-        return "1 year ago" if years == 1 else f"{years} years ago"
 
 
 def run_database_migrations(app):
