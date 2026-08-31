@@ -23,6 +23,8 @@
   import type { Project } from "../sync/types";
   import PlanEditor from "../ui/PlanEditor.svelte";
   import Planner from "../ui/Planner.svelte";
+  import ArchivedSections from "../ui/ArchivedSections.svelte";
+  import ProjectSettings from "../ui/ProjectSettings.svelte";
   import ProjectTimer from "../ui/ProjectTimer.svelte";
 
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
@@ -54,6 +56,8 @@
   let planning = $state(false);
   let timing = $state(false);
   let menuOpen = $state(false);
+  let settingsOpen = $state(false);
+  let archiveOpen = $state(false);
 
   $effect(() => {
     if (!menuOpen) return;
@@ -72,7 +76,6 @@
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
-  const archivedHtml = $derived(project ? renderPlan(project.archived_long_goal) : "");
 
   $effect(() => {
     const onSafeMode = () => {
@@ -291,21 +294,13 @@
         {#if menuOpen}
           <ul class="dropdown-menu dropdown-menu-end show">
             <li>
+              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; settingsOpen = true; }}><i class="fa-solid fa-gear" aria-hidden="true"></i>Settings</button>
+            </li>
+            <li>
               <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; downloadMarkdown(); }}><i class="fa-solid fa-download" aria-hidden="true"></i>Download markdown</button>
             </li>
             <li>
-              <button
-                type="button"
-                class="dropdown-item"
-                onclick={() => { menuOpen = false; save({ is_starred: !project.is_starred }); }}
-              ><i class="fa-solid fa-star" aria-hidden="true"></i>{project.is_starred ? "Remove star" : "Star project"}</button>
-            </li>
-            <li>
-              <button
-                type="button"
-                class="dropdown-item"
-                onclick={() => { menuOpen = false; save({ is_private: !project.is_private }); }}
-              ><i class="fa-solid fa-lock" aria-hidden="true"></i>{project.is_private ? "Make public" : "Make private"}</button>
+              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; archiveOpen = true; }}><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
             </li>
             <li><a class="dropdown-item" href={`${BASE}/`} use:link onclick={() => (menuOpen = false)}><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to home</a></li>
             <li><hr class="dropdown-divider" /></li>
@@ -433,19 +428,6 @@
         </div>
       </section>
 
-      {#if project.archived_long_goal.trim()}
-        <section class="card shadow-sm inline-edit-card mt-3">
-          <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h2 class="h5 mb-0">Archived sections</h2>
-              <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => restoreSection(0)}>
-                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>Restore the first
-              </button>
-            </div>
-            <div class="markdown-content opacity-75">{@html archivedHtml}</div>
-          </div>
-        </section>
-      {/if}
     </div>
 
     <div class="project-meta-col">
@@ -561,5 +543,21 @@
     projectUid={project.uid}
     projectTitle={project.title}
     onclose={() => (timing = false)}
+  />
+{/if}
+
+{#if settingsOpen && project}
+  <ProjectSettings
+    {project}
+    onsave={(changes) => save(changes, "Saved.")}
+    onclose={() => (settingsOpen = false)}
+  />
+{/if}
+
+{#if archiveOpen && project}
+  <ArchivedSections
+    markdown={project.archived_long_goal}
+    onrestore={restoreSection}
+    onclose={() => (archiveOpen = false)}
   />
 {/if}
