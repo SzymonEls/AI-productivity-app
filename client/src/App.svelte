@@ -4,6 +4,7 @@
   import { start } from "./boot";
   import type { LocalDatabase } from "./db/schema";
   import { useTimezone } from "./domain/time";
+  import { readAppearance, toggleSafeMode, toggleTheme } from "./lib/appearance";
   import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
   import Project from "./routes/Project.svelte";
@@ -22,6 +23,8 @@
   let database = $state<LocalDatabase | null>(null);
   let titles = $state(new Map<string, string>());
   let resolving = $state(false);
+  let theme = $state(readAppearance().theme);
+  let safeMode = $state<"on" | "off">(readAppearance().safeMode);
 
   onMount(async () => {
     try {
@@ -68,6 +71,24 @@
   {#if status === "ready"}
     <div class="bar-right">
       <SyncButton {titleOf} onresolve={() => (resolving = true)} />
+
+      <button
+        type="button"
+        class="icon"
+        title="Toggle theme"
+        aria-label="Toggle colour theme"
+        onclick={() => (theme = toggleTheme())}
+      >{theme === "dark" ? "☀" : "☾"}</button>
+
+      <!-- A curtain, not a lock: it covers a private project's plan and
+           thoughts on this screen, in this room. -->
+      <button
+        type="button"
+        class="icon"
+        title="Safe mode — hide a private project's plan and thoughts"
+        aria-pressed={safeMode === "on"}
+        onclick={() => (safeMode = toggleSafeMode())}
+      >{safeMode === "on" ? "🛡" : "⛨"}</button>
       <span class="who">{username}</span>
       <form method="post" action="/auth/logout">
         <button type="submit" class="link">Sign out</button>
@@ -125,6 +146,8 @@
   .nav a.active { opacity: 1; font-weight: 600; }
   .bar-right { display: flex; align-items: center; gap: 0.85rem; }
   .who { opacity: 0.7; font-size: 0.85rem; }
+  .icon { background: none; border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 999px; width: 1.9rem; height: 1.9rem; color: inherit; cursor: pointer; line-height: 1; }
+  .icon[aria-pressed="true"] { background: var(--bs-primary, #4f46e5); color: #fff; border-color: transparent; }
   .link { background: none; border: 0; color: inherit; opacity: 0.7; cursor: pointer; font-size: 0.85rem; }
   .centered { max-width: 40rem; margin: 4rem auto; padding: 0 1rem; text-align: center; }
   .muted { opacity: 0.65; }
