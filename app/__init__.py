@@ -9,6 +9,7 @@ from sqlalchemy import inspect, text
 from config import Config
 
 from .extensions import db, login_manager, migrate
+from .api.revisions import register_tombstone_filter, register_write_stamping
 from .markdown_utils import render_markdown, render_project_markdown, strip_repeated_title
 
 
@@ -25,6 +26,8 @@ def create_app(config_class=Config):
     os.makedirs(app.instance_path, exist_ok=True)
 
     db.init_app(app)
+    register_tombstone_filter(db)
+    register_write_stamping(db)
     login_manager.init_app(app)
     migrate.init_app(app, db)
 

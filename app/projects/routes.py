@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
+from ..api.revisions import soft_delete
 from ..extensions import db
 from ..markdown_utils import TAG_PATTERN, render_project_markdown
 from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
@@ -873,10 +874,10 @@ def restore_project_section(project_id):
 @login_required
 def delete_project(project_id):
     project = _get_user_project_or_404(project_id)
-    for entry in project.time_entries:
-        if entry.ended_at is None:
-            entry.ended_at = utc_now()
-    db.session.delete(project)
+    # Closing a running timer and detaching the time entries - which outlive the
+    # project, holding a snapshot of its title - both happen inside soft_delete,
+    # along with the day slots and timeline tiles that do not outlive it.
+    soft_delete(project)
     db.session.commit()
     flash("Project deleted.", "info")
     return redirect(url_for("main.home"))
@@ -1009,11 +1010,11 @@ def save_timeline():
 
         for item_id, item in existing_items.items():
             if item_id not in saved_item_ids:
-                db.session.delete(item)
+                soft_delete(item)
 
         for group_id, group in existing_groups.items():
             if group_id not in saved_group_ids:
-                db.session.delete(group)
+                soft_delete(group)
 
         db.session.commit()
     except SQLAlchemyError:

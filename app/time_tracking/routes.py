@@ -4,6 +4,7 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
+from ..api.revisions import soft_delete
 from ..extensions import db
 from ..models import Project, ProjectTimeEntry
 from .service import (
@@ -294,7 +295,7 @@ def edit_entry(entry_id):
 def delete_entry(entry_id):
     entry = ProjectTimeEntry.query.filter_by(id=entry_id, user_id=current_user.id).first_or_404()
     project_id = entry.project_id
-    db.session.delete(entry)
+    soft_delete(entry)
     try:
         db.session.commit()
         flash("The time session was deleted.", "info")

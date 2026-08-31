@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 
 import sqlalchemy as sa
 from flask import g
+from sqlalchemy.orm import with_loader_criteria
 
 from ..extensions import db
-from ..models import Project, ProjectTimelineGroup, SyncState
+from ..models import Project, ProjectTimelineGroup, SyncMixin, SyncState
 from ..ulid import new_ulid
 
 
@@ -45,18 +46,24 @@ def next_rev(user_id):
     if user_id in claimed:
         return claimed[user_id]
 
+    # Core statements against the table, not the ORM entity. This runs from
+    # inside before_flush, where the session refuses to flush again and an
+    # ORM-enabled statement would try to synchronise one.
+    table = SyncState.__table__
+
     revision = db.session.execute(
-        sa.update(SyncState)
-        .where(SyncState.user_id == user_id)
-        .values(last_rev=SyncState.last_rev + 1)
-        .returning(SyncState.last_rev)
+        sa.update(table)
+        .where(table.c.user_id == user_id)
+        .values(last_rev=table.c.last_rev + 1)
+        .returning(table.c.last_rev)
     ).scalar()
 
     if revision is None:
-        # First write this account has ever made. Start at 1, so that a client
-        # cursor of 0 means "I have nothing yet" and always trails a real row.
-        db.session.add(SyncState(user_id=user_id, last_rev=1, tombstone_floor=0))
-        db.session.flush()
+        # First write this account has ever made. Start at 1, so a client cursor
+        # of 0 means "I have nothing yet" and always trails a real row.
+        db.session.execute(
+            sa.insert(table).values(user_id=user_id, last_rev=1, tombstone_floor=0)
+        )
         revision = 1
 
     claimed[user_id] = revision
@@ -135,10 +142,64 @@ def _cascade_delete(instance):
             soft_delete(item)
 
 
-def live(model):
-    """Query for a model, with tombstones filtered out.
+# Reads that deliberately want the dead rows too - the only one is the pull
+# endpoint, whose whole job is to report deletions.
+INCLUDE_TOMBSTONES = "include_tombstones"
 
-    Every read has to exclude deleted rows; going through here means no query
-    can forget to and quietly resurrect one on screen.
+
+def register_tombstone_filter(db_):
+    """Hide tombstones from every ORM read, everywhere, by default.
+
+    The alternative was a deleted_at filter added by hand to some forty query
+    sites. One of them would eventually be missed, and the symptom - a deleted
+    project back on screen - would not look like a missing filter.
+
+    It also reaches what a hand-written filter cannot: a lazy load of
+    ``project.day_slots`` builds its own query, and there is no line of code
+    there to edit.
     """
-    return model.query.filter(model.deleted_at.is_(None))
+
+    @sa.event.listens_for(db_.session, "do_orm_execute")
+    def _hide_tombstones(execute_state):
+        if not execute_state.is_select:
+            return
+
+        # A column load is SQLAlchemy refreshing an object it already holds;
+        # filtering there would fail to refresh a row we just deleted ourselves.
+        if execute_state.is_column_load or execute_state.is_relationship_load:
+            return
+
+        if execute_state.execution_options.get(INCLUDE_TOMBSTONES, False):
+            return
+
+        execute_state.statement = execute_state.statement.options(
+            with_loader_criteria(
+                SyncMixin,
+                lambda cls: cls.deleted_at.is_(None),
+                include_aliases=True,
+            )
+        )
+
+def register_write_stamping(db_):
+    """Give every written row a revision, without asking the caller to remember.
+
+    The alternative was a touch() call at every create and update across the
+    blueprints. Missing one would not raise anything - the row would simply
+    change on the server and never reach the other device, which is the hardest
+    kind of bug to notice.
+
+    Rows already carrying a tombstone are left alone: soft_delete() stamped them
+    on the way past, and within one request that is the same number anyway.
+    """
+
+    @sa.event.listens_for(db_.session, "before_flush")
+    def _stamp_writes(session, flush_context, instances):
+        for instance in session.new:
+            if isinstance(instance, SyncMixin) and instance.deleted_at is None:
+                touch(instance)
+
+        for instance in session.dirty:
+            if not isinstance(instance, SyncMixin) or instance.deleted_at is not None:
+                continue
+            if session.is_modified(instance, include_collections=False):
+                touch(instance)

@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
 
+from ..api.revisions import soft_delete
 from ..extensions import db
 from ..models import Project, ProjectDaySlot
 from ..time_tracking.service import app_timezone, utc_now
@@ -634,12 +635,15 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
             return False, f"{entry.project.title}: {_blocked_reason(blocker, day, today)}"
 
     # Updating both rows in one flush would collide with the unique constraint on
-    # (user, date, slot), so the displaced row leaves the table and comes back on
-    # the spot the moved one has just vacated.
-    # Read off what the displaced row has to say before deleting it.
-    displaced = (target.project_id, target.is_done, target.project.title) if target is not None else None
+    # (user, date, slot), so the displaced row steps aside first. It used to be
+    # deleted and re-created, which now would cost it its uid: the other device
+    # would see a booking destroyed and an unrelated one appear. Since the
+    # constraint only counts live rows, marking it deleted for the length of two
+    # statements frees the key while the row - and its identity - stay put.
+    displaced_title = target.project.title if target is not None else None
     if target is not None:
-        db.session.delete(target)
+        was_done = target.is_done
+        target.deleted_at = utc_now()
         db.session.flush()
 
     # "Done" describes a day's session, so it travels within a day and is
@@ -650,17 +654,12 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         source.is_done = False
     db.session.flush()
 
-    if displaced is not None:
-        project_id, was_done, displaced_title = displaced
-        db.session.add(
-            ProjectDaySlot(
-                user_id=user_id,
-                project_id=project_id,
-                slot_date=from_day,
-                slot=from_slot,
-                is_done=was_done if to_day == from_day else False,
-            )
-        )
+    if target is not None:
+        target.slot_date = from_day
+        target.slot = from_slot
+        target.is_done = was_done if to_day == from_day else False
+        target.deleted_at = None
+        db.session.flush()
         return True, f"Swapped with {displaced_title}."
 
     return True, f"Moved to {to_day.strftime('%d %b')}, slot {to_slot}."
@@ -745,5 +744,5 @@ def clear_slot(user_id, day, slot):
     if booking is None:
         return True, "That slot is already free."
 
-    db.session.delete(booking)
+    soft_delete(booking)
     return True, f"Slot {slot} cleared."
