@@ -87,6 +87,19 @@ when the `ai` blueprint was removed. Only the version in `app/projects/routes.py
 
 ---
 
+### Tests
+
+There is a `tests/` directory now, run with `pytest` (dependencies in `requirements-dev.txt`,
+which includes `requirements.txt`). It is not exhaustive and does not cover the Jinja pages; what
+it does cover is the part with no other safety net — the synchronisation rules and the migration
+that runs against real data.
+
+Tests build their database **by running the migrations**, never `db.create_all()`. A suite built on
+`create_all` passes happily while the migration that has to run on the production database is
+broken, which is the one failure that actually costs data.
+
+When changing anything in `app/api/` or adding a migration, run `pytest` before finishing.
+
 ## B. Definition of done
 
 Tick off the sections matching your change. Each item is a specific file/command.

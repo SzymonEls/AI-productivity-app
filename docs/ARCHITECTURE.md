@@ -23,6 +23,8 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/extensions.py](../app/extensions.py) | Shared Flask extension objects. |
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
+| [app/ulid.py](../app/ulid.py) | ULID generation, so a row created in a browser with no network can name itself. |
+| [app/api/](../app/api/) | The synchronisation API. `routes.py` (pull, push, export), `protocol.py` (what the wire carries), `revisions.py` (stamping writes, tombstones, hiding them from reads), `pruning.py` (clearing tombstones away). |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change. |
@@ -72,12 +74,33 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 
-The schema in the code matches the latest migration (`20260809_0018`).
+- **SyncState** — one row per account. `last_rev` is the counter every write draws from;
+  `tombstone_floor` records how far deleted rows have already been cleared away, so a client
+  whose cursor sits below it is told to fetch everything instead of a difference that can no
+  longer be given correctly.
+
+Every table except `User`, `LoginAttempt` and `SyncState` also carries three synchronisation
+columns, from the `SyncMixin` in the same file. The integer primary key stays exactly where it
+was — foreign keys and relationships still run on it — and these live alongside it:
+
+- **`uid`** — a ULID minted by whoever created the row. Identity that does not need a server:
+  a browser offline cannot wait for SQLite to hand out a key. The API never exposes the integer
+  id, and every reference across the wire is a uid.
+- **`rev`** — the per-account counter, stamped by the server. An ordering rather than a clock,
+  because two devices disagree about the time but not about which change came second. It is
+  what makes "everything above my cursor" an exact question, and what makes a conflict
+  detectable at all.
+- **`deleted_at`** — a tombstone. A row that simply vanished is indistinguishable from one that
+  never changed, so the other device would never learn of the deletion and would push its copy
+  back. See non-obvious things 13 and 14.
+
+The schema in the code matches the latest migration (`20260901_0021`).
 
 ## Responsibility boundaries
 
 - **Business logic and database access live inside the `routes.py` functions.** There is no separate service/repository layer.
 - **The only exception:** time and timezone calculations are extracted into [app/time_tracking/service.py](../app/time_tracking/service.py).
+- **And synchronisation**, in [app/api/](../app/api/): every blueprint that writes goes through the same stamping rules, and five copies of them would not stay identical.
 - **Presentation:** [app/markdown_utils.py](../app/markdown_utils.py) (Markdown→HTML) + Jinja templates.
 - **Configuration:** only [config.py](../config.py) reads environment variables.
 
@@ -150,6 +173,41 @@ The schema in the code matches the latest migration (`20260809_0018`).
     consequences worth knowing: today is deliberately outside the window, so the score moves in the
     morning only when yesterday was left unfinished, and a week with nothing booked scores zero on
     the sessions half rather than dividing by zero.
+
+13. **A deletion is a row, not an absence.** Nothing is removed with `db.session.delete` any more;
+    `soft_delete` in [app/api/revisions.py](../app/api/revisions.py) sets `deleted_at`, stamps a
+    revision, and **empties the content columns immediately** (the `__sync_payload__` tuple on each
+    model). A deleted private plan therefore stops existing on the server at the next sync — what is
+    kept for the retention window is the bare fact that the uid is gone. `NOT NULL` columns are
+    emptied to `""` rather than nulled. Deleting a project carries the deletion to its day slots and
+    timeline tiles, but **not** to its time entries: those outlive it holding
+    `project_title_snapshot`, exactly as before, so past weeks stay correct.
+
+14. **Tombstones are hidden from every read by one listener, not by forty filters.**
+    `register_tombstone_filter` attaches `with_loader_criteria` to `do_orm_execute`, so
+    `Model.query`, `select()` **and relationship lazy loads** all skip deleted rows without a single
+    query being edited. A hand-written `deleted_at IS NULL` could not have reached a lazy load of
+    `project.day_slots` at all — there is no line of code there. The one caller that needs the dead
+    rows, the pull endpoint, asks with `execution_options(include_tombstones=True)`.
+
+15. **A revision belongs to a transaction, not to a request or a row.** `next_rev` claims one number
+    per account per transaction and releases it on commit or rollback. Every row written in one
+    commit shares it, which is safe because a commit is atomic — a client sees all of those rows or
+    none. The claim is a single `UPDATE ... RETURNING`, not a read followed by a write: across
+    Gunicorn workers the two-step version hands the same number out twice. Writes are stamped
+    automatically from a `before_flush` listener, so no route has to remember to call `touch`.
+
+16. **`uq_project_day_slot` is a partial unique index now, not a table constraint.** It counts only
+    rows where `deleted_at IS NULL`. Without that, freeing a slot would leave it permanently
+    unbookable: the dead row would still occupy `(user_id, slot_date, slot)`. The same change let
+    `move_booking` stop deleting and re-creating the displaced row when two bookings swap — it now
+    marks it deleted for the length of two statements and puts it back, so the row keeps its uid and
+    the other device sees a move rather than a destruction and an unrelated creation.
+
+17. **The migration had to give existing rows revision 1, not 0.** A client's first pull asks for
+    everything above cursor 0. Rows left at the column default would sit above nothing, and an
+    account with years of projects would look empty to a device that had just been set up. See
+    `tests/test_migration_0021.py`, which exists for that bug.
 
 ## What not to touch (and why)
 
