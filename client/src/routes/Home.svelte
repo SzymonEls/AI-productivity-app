@@ -5,7 +5,6 @@
    * The markup is the one from app/templates/home.html, so the stylesheet that
    * was written for it fits without a line of new CSS.
    */
-  import { updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
     dayProgress,
@@ -17,9 +16,7 @@
   import { dailyTotalsByProject, lastSessionLabel, today } from "../domain/time";
   import { live } from "../lib/live.svelte";
   import { BASE, link } from "../lib/router.svelte";
-  import { sync } from "../sync/store.svelte";
   import Planner from "../ui/Planner.svelte";
-  import type { DaySlot } from "../sync/types";
 
   let { database }: { database: LocalDatabase } = $props();
 
@@ -57,11 +54,6 @@
   let planningProject = $state<{ uid: string; title: string } | null>(null);
   let fillingSlot = $state<{ date: string; slot: string } | null>(null);
 
-  async function toggleDone(booking: DaySlot) {
-    await updateRow<DaySlot>(database, "day_slot", booking.uid, { is_done: !booking.is_done });
-    await sync.refresh();
-    void sync.run();
-  }
 </script>
 
 <div class="dashboard-page day-slots-page">
@@ -141,14 +133,6 @@
                   <span class="slot-card-target">/ {card.targetLabel}</span>
                 {/if}
               </span>
-            {/if}
-            {#if card.booking}
-              <button
-                type="button"
-                class="btn btn-outline-secondary btn-sm slot-card-tick"
-                title={card.isDone ? "Mark as not done" : "Tick this session off"}
-                onclick={() => toggleDone(card.booking!)}
-              >✓</button>
             {/if}
           </div>
         </article>

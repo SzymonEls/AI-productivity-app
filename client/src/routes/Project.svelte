@@ -15,7 +15,8 @@
   import type { LocalDatabase } from "../db/schema";
   import { renderPlan } from "../domain/markdown";
   import { NoSuchSection, appendSection, removeSection } from "../domain/plan-sections";
-  import { lastSessionLabel } from "../domain/time";
+  import { slotsForDate } from "../domain/slots";
+  import { lastSessionLabel, today } from "../domain/time";
   import { live } from "../lib/live.svelte";
   import { BASE, link, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
@@ -28,7 +29,16 @@
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
 
   const projects = live(() => database.projects.toArray(), []);
+  const slots = live(() => database.daySlots.toArray(), []);
   const project = $derived(projects.value.find((candidate) => candidate.uid === uid));
+
+  // Only today's booking, because "done" lives on the slot and so clears itself
+  // tomorrow - there is nothing to finish on a day this project is not booked.
+  const todaySlot = $derived(
+    Object.values(slotsForDate(slots.value, today())).find(
+      (booking) => booking?.project_uid === uid
+    ) ?? null
+  );
 
   const REVEAL_MINUTES = 5;
 
@@ -237,6 +247,24 @@
       <button type="button" class="btn btn-outline-secondary" onclick={() => (planning = true)}>
         <Icon name="calendar" /><span>Plan next session</span>
       </button>
+
+      {#if todaySlot}
+        <!-- Only when the project actually has a session today; there is nothing
+             to finish otherwise. -->
+        <button
+          type="button"
+          class="btn"
+          class:btn-success={todaySlot.is_done}
+          class:btn-outline-secondary={!todaySlot.is_done}
+          title={`Today's session is in slot ${todaySlot.slot}`}
+          onclick={() =>
+            updateRow(database, "day_slot", todaySlot.uid, { is_done: !todaySlot.is_done })
+              .then(() => sync.refresh())
+              .then(() => void sync.run())}
+        >
+          <Icon name="check" /><span>{todaySlot.is_done ? "Done" : "Mark done"}</span>
+        </button>
+      {/if}
 
       <div class="dropdown">
         <button
