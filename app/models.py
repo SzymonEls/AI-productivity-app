@@ -5,6 +5,7 @@ from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db, login_manager
+from .ulid import new_ulid
 
 
 class User(UserMixin, db.Model):
@@ -56,6 +57,13 @@ class User(UserMixin, db.Model):
         lazy=True,
         order_by=lambda: (ProjectDaySlot.slot_date, ProjectDaySlot.slot),
     )
+    sync_state = db.relationship(
+        "SyncState",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        uselist=False,
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -77,7 +85,50 @@ class User(UserMixin, db.Model):
         return f"{self.id}:{self.session_token}"
 
 
-class Project(db.Model):
+def sync_table_args(table_name, *extra):
+    """The constraints every synchronised table needs, named after the table."""
+    return (
+        db.UniqueConstraint("user_id", "uid", name=f"uq_{table_name}_user_uid"),
+        # Pull asks for "everything above this counter", which is this index.
+        db.Index(f"ix_{table_name}_user_rev", "user_id", "rev"),
+        # Partial, so it holds only tombstones: pruning then seeks a handful of
+        # rows instead of scanning a table of live ones.
+        db.Index(
+            f"ix_{table_name}_user_deleted",
+            "user_id",
+            "deleted_at",
+            sqlite_where=db.text("deleted_at IS NOT NULL"),
+        ),
+    ) + extra
+
+
+class SyncMixin:
+    """What a table needs before it can be synchronised with a local copy.
+
+    The integer primary key stays exactly where it is - foreign keys and every
+    relationship below still run on it. These three columns live alongside it
+    and are what the protocol speaks, because the primary key cannot answer any
+    of the three questions synchronisation asks.
+    """
+
+    # Who am I, when SQLite has not assigned anything yet? Minted by whoever
+    # creates the row, so a browser with no network can still make one.
+    uid = db.Column(db.String(26), nullable=False, default=new_ulid)
+    # Have you seen this version? A per-user counter stamped by the server, not
+    # a clock: two devices disagree about the time, but not about an ordering.
+    rev = db.Column(db.Integer, nullable=False, default=0)
+    # Am I gone? A deletion has to be a fact the next pull can carry. A row that
+    # simply vanished is indistinguishable from one that never changed, and the
+    # other device would push it back.
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    # Columns holding what the user actually wrote. Cleared the moment the row
+    # is deleted - the tombstone only has to say "this uid is gone", and keeping
+    # the text would mean a deleted private plan still sat on the server.
+    __sync_payload__ = ()
+
+
+class Project(SyncMixin, db.Model):
     """Project model kept intentionally small for easy expansion later."""
 
     __tablename__ = "projects"
@@ -122,8 +173,18 @@ class Project(db.Model):
         lazy=True,
     )
 
+    __sync_payload__ = (
+        "title",
+        "short_goal",
+        "frequency",
+        "long_goal",
+        "archived_long_goal",
+    )
 
-class ProjectTimeEntry(db.Model):
+    __table_args__ = sync_table_args("projects")
+
+
+class ProjectTimeEntry(SyncMixin, db.Model):
     """A server-side work timer session for a project.
 
     ``project_id`` is nullable and has no delete cascade: deleting a project
@@ -158,8 +219,12 @@ class ProjectTimeEntry(db.Model):
             return self.project.title
         return self.project_title_snapshot or "Unknown project"
 
+    __sync_payload__ = ("description", "project_title_snapshot")
 
-class ProjectTimelineGroup(db.Model):
+    __table_args__ = sync_table_args("project_time_entries")
+
+
+class ProjectTimelineGroup(SyncMixin, db.Model):
     """User-owned group on the project timeline."""
 
     __tablename__ = "project_timeline_groups"
@@ -186,8 +251,12 @@ class ProjectTimelineGroup(db.Model):
         order_by=lambda: ProjectTimelineItem.position,
     )
 
+    __sync_payload__ = ("name",)
 
-class ProjectTimelineItem(db.Model):
+    __table_args__ = sync_table_args("project_timeline_groups")
+
+
+class ProjectTimelineItem(SyncMixin, db.Model):
     """Project or custom note placed inside a project timeline group."""
 
     __tablename__ = "project_timeline_items"
@@ -213,8 +282,12 @@ class ProjectTimelineItem(db.Model):
     group = db.relationship("ProjectTimelineGroup", back_populates="items")
     project = db.relationship("Project", back_populates="timeline_items")
 
+    __sync_payload__ = ("title", "body")
 
-class ProjectDaySlot(db.Model):
+    __table_args__ = sync_table_args("project_timeline_items")
+
+
+class ProjectDaySlot(SyncMixin, db.Model):
     """One project booked into one of a day's three slots.
 
     Slots are A, B and the optional C. The unique constraint is what actually
@@ -245,11 +318,55 @@ class ProjectDaySlot(db.Model):
     owner = db.relationship("User", back_populates="day_slots")
     project = db.relationship("Project", back_populates="day_slots")
 
-    __table_args__ = (
-        db.UniqueConstraint("user_id", "slot_date", "slot", name="uq_project_day_slot"),
+    # A booking carries nothing the user typed - freeing a slot has nothing to
+    # clear beyond the row itself.
+    __sync_payload__ = ()
+
+    __table_args__ = sync_table_args(
+        "project_day_slots",
+        # Was a plain UniqueConstraint. It has to skip tombstones, or a freed
+        # slot would stay unbookable: the dead row still occupies the key.
+        db.Index(
+            "uq_project_day_slot",
+            "user_id",
+            "slot_date",
+            "slot",
+            unique=True,
+            sqlite_where=db.text("deleted_at IS NULL"),
+        ),
         db.Index("ix_project_day_slots_user_date", "user_id", "slot_date"),
         db.Index("ix_project_day_slots_project_date", "project_id", "slot_date"),
     )
+
+
+class SyncState(db.Model):
+    """Per-user bookkeeping for synchronisation.
+
+    ``last_rev`` is the counter every write draws from, and the reason a client
+    can ask for "everything above 412" and get an exact answer.
+
+    ``tombstone_floor`` is what makes pruning safe: it records how far the
+    deletions have already been cleared away, so a client whose cursor sits
+    below it is told to fetch the whole set instead of a difference it can no
+    longer be given correctly.
+    """
+
+    __tablename__ = "sync_states"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, unique=True)
+    last_rev = db.Column(db.Integer, nullable=False, default=0)
+    tombstone_floor = db.Column(db.Integer, nullable=False, default=0)
+    last_pruned_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="sync_state")
 
 
 class LoginAttempt(db.Model):
