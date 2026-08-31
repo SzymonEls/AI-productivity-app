@@ -1,50 +1,91 @@
 <script lang="ts">
-  /** One project: its details, its thoughts, and its plan. */
+  /**
+   * One project: its details, its thoughts, and its plan.
+   *
+   * The veil is the original's: the card carries `private-veiled` and the
+   * stylesheet hides its contents while safe mode is on, so nothing shows for a
+   * frame before it is covered. Revealing drops the class for five minutes.
+   */
   import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import { renderPlan } from "../domain/markdown";
   import { NoSuchSection, appendSection, removeSection, sectionRanges } from "../domain/plan-sections";
+  import { lastSessionLabel } from "../domain/time";
   import { live } from "../lib/live.svelte";
-  import { BASE, router } from "../lib/router.svelte";
+  import { BASE, link, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { Project } from "../sync/types";
+  import Icon from "../ui/Icon.svelte";
   import PlanEditor from "../ui/PlanEditor.svelte";
-  import PrivateVeil from "../ui/PrivateVeil.svelte";
 
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
 
   const projects = live(() => database.projects.toArray(), []);
   const project = $derived(projects.value.find((candidate) => candidate.uid === uid));
 
+  const REVEAL_MINUTES = 5;
+
+  let safeMode = $state(document.documentElement.getAttribute("data-safe-mode") === "on");
+  let revealed = $state<Record<string, boolean>>({});
   let editingPlan = $state(false);
-  // Which editor: the block editor, or raw Markdown in a textarea. The same
-  // localStorage key and the same default the previous frontend used.
-  let blockEditor = $state(
-    (document.documentElement.getAttribute("data-plan-editor") ?? "blocks") === "blocks"
-  );
   let editingDetails = $state(false);
-  let planDraft = $state("");
   let details = $state<Partial<Project>>({});
   let notice = $state("");
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
-  // The renderer emits checkboxes disabled, matching the server. A disabled
-  // input dispatches no click, so the attribute goes for display only.
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
   const archivedHtml = $derived(project ? renderPlan(project.archived_long_goal) : "");
   const sections = $derived(project ? sectionRanges(project.long_goal) : []);
   const archivedSections = $derived(project ? sectionRanges(project.archived_long_goal) : []);
+
+  $effect(() => {
+    const onChange = () => {
+      safeMode = document.documentElement.getAttribute("data-safe-mode") === "on";
+      // Reaching for the shield again drops every reveal.
+      if (safeMode) revealed = {};
+    };
+    window.addEventListener("safe-mode-change", onChange);
+    return () => window.removeEventListener("safe-mode-change", onChange);
+  });
+
+  $effect(() => {
+    const now = Date.now();
+    const next: Record<string, boolean> = {};
+    for (const section of ["plan", "thoughts"]) {
+      try {
+        next[section] = Number(localStorage.getItem(`app-private-reveal:${uid}:${section}`)) > now;
+      } catch {
+        // Private browsing, or storage off: ask every time.
+        next[section] = false;
+      }
+    }
+    revealed = next;
+  });
+
+  function veiled(section: string): boolean {
+    return Boolean(project?.is_private) && safeMode && !revealed[section];
+  }
+
+  function reveal(section: string) {
+    const until = Date.now() + REVEAL_MINUTES * 60_000;
+    revealed = { ...revealed, [section]: true };
+    try {
+      localStorage.setItem(`app-private-reveal:${uid}:${section}`, String(until));
+    } catch {
+      // The reveal still works for this page view.
+    }
+  }
+
+  function announce(message: string) {
+    notice = message;
+    setTimeout(() => (notice = notice === message ? "" : notice), 4000);
+  }
 
   async function save(changes: Partial<Project>, message = "") {
     await updateRow<Project>(database, "project", uid, changes);
     if (message) announce(message);
     await sync.refresh();
     void sync.run();
-  }
-
-  function announce(message: string) {
-    notice = message;
-    setTimeout(() => (notice = notice === message ? "" : notice), 4000);
   }
 
   function startDetails() {
@@ -64,11 +105,6 @@
     if (!details.title?.trim()) return announce("A project needs a title.");
     await save({ ...details, title: details.title.trim() }, "Saved.");
     editingDetails = false;
-  }
-
-  async function savePlan() {
-    await save({ long_goal: planDraft }, "Plan saved.");
-    editingPlan = false;
   }
 
   /** A finished section leaves the plan and joins the archive - both are text. */
@@ -104,7 +140,7 @@
     await deleteRow(database, "project", uid);
     await sync.refresh();
     void sync.run();
-    router.go(BASE);
+    router.go(`${BASE}/`);
   }
 
   /** Tick a box by rewriting the plan: a ticked box is "[x]" in the Markdown. */
@@ -129,170 +165,239 @@
   }
 </script>
 
-<section class="page">
-  {#if !project}
-    <p class="muted">No such project in the local copy.</p>
-  {:else}
-    <header class="head">
-      <div class="titles">
-        <h1>{project.is_starred ? "★ " : ""}{project.title}</h1>
-        <p class="muted">
-          {project.frequency || "no cadence"}
-          {#if project.daily_target_minutes} · {project.daily_target_minutes} min a day{/if}
-          {#if project.is_archived} · archived{/if}
-        </p>
-      </div>
-      <div class="tools">
-        <button type="button" class="btn ghost" onclick={startDetails}>Edit details</button>
-        <button
-          type="button"
-          class="btn ghost"
-          onclick={() => save({ is_archived: !project.is_archived },
-            project.is_archived ? "Restored." : "Archived.")}
-        >{project.is_archived ? "Restore" : "Archive"}</button>
-        <button type="button" class="btn danger" onclick={removeProject}>Delete</button>
-      </div>
-    </header>
-
-    {#if notice}<p class="notice">{notice}</p>{/if}
-
-    {#if editingDetails}
-      <div class="form">
-        <label>Title<input type="text" bind:value={details.title} /></label>
-        <label>Cadence<input type="text" bind:value={details.frequency} /></label>
-        <label>
-          Daily target (minutes)
-          <input type="number" min="0" bind:value={details.daily_target_minutes} />
-        </label>
-        <label class="wide">
-          Thoughts
-          <textarea rows="3" bind:value={details.short_goal}></textarea>
-        </label>
-        <label class="check"><input type="checkbox" bind:checked={details.is_starred} /> Starred</label>
-        <label class="check"><input type="checkbox" bind:checked={details.is_private} /> Private</label>
-        <div class="wide">
-          <button type="button" class="btn" onclick={saveDetails}>Save</button>
-          <button type="button" class="btn ghost" onclick={() => (editingDetails = false)}>Cancel</button>
+{#if !project}
+  <p class="text-muted">No such project in the local copy.</p>
+{:else}
+  <header class="project-detail-header mb-4">
+    <div class="project-detail-heading min-w-0">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <h1 class="project-detail-title mb-0">{project.title}</h1>
+        {#if project.is_starred}<span class="project-badge project-badge-star">★ Starred</span>{/if}
+        {#if project.is_private}<span class="project-badge">🔒 Private</span>{/if}
+        {#if project.is_archived}<span class="project-badge project-badge-archived">Archived</span>{/if}
+        <div class="inline-section-controls">
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={startDetails}>
+            <Icon name="pencil" />Edit
+          </button>
         </div>
       </div>
-    {:else if project.short_goal}
-      <h2 class="section">Thoughts</h2>
-      <PrivateVeil projectUid={uid} section="thoughts" isPrivate={project.is_private} label="thoughts">
-        <p class="thoughts">{project.short_goal}</p>
-      </PrivateVeil>
-    {/if}
+      <p class="text-muted mb-0 mt-1">
+        {lastSessionLabel(project.updated_at).replace("Last session:", "Last modified")}
+      </p>
+    </div>
 
-    <div class="plan-head">
-      <h2 class="section">Plan</h2>
-      {#if editingPlan}
-        <div class="plan-actions">
-          <button
-            type="button"
-            class="btn ghost"
-            title="Switch between blocks and raw Markdown"
-            onclick={() => {
-              blockEditor = !blockEditor;
-              planDraft = project.long_goal;
-              try {
-                localStorage.setItem("app-plan-editor", blockEditor ? "blocks" : "markdown");
-              } catch {
-                // The choice still holds for this page view.
-              }
-            }}
-          >{blockEditor ? "Markdown" : "Blocks"}</button>
-          {#if !blockEditor}
-            <button type="button" class="btn" onclick={savePlan}>Save</button>
+    <div class="project-detail-actions">
+      <a href={`${BASE}/time`} use:link class="btn btn-primary project-timer-toggle">
+        <Icon name="clock" /><span>Track time</span>
+      </a>
+      <a href={`${BASE}/schedule`} use:link class="btn btn-outline-secondary">
+        <Icon name="calendar" /><span>Plan next session</span>
+      </a>
+      <button
+        type="button"
+        class="btn btn-outline-secondary"
+        onclick={() => save({ is_archived: !project.is_archived },
+          project.is_archived ? "Restored." : "Archived.")}
+      >
+        <Icon name="archive" />{project.is_archived ? "Unarchive" : "Archive"}
+      </button>
+      <button type="button" class="btn btn-outline-danger" onclick={removeProject}>Delete</button>
+    </div>
+  </header>
+
+  {#if project.is_archived}
+    <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>This project is archived. It's hidden from your dashboard.</span>
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        onclick={() => save({ is_archived: false }, "Restored.")}
+      >Unarchive Project</button>
+    </div>
+  {/if}
+
+  {#if notice}<div class="alert alert-info py-2">{notice}</div>{/if}
+
+  {#if editingDetails}
+    <section class="card shadow-sm inline-edit-card mb-3">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Edit project</h2>
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label small text-muted" for="p-title">Title</label>
+            <input id="p-title" type="text" class="form-control" bind:value={details.title} />
+          </div>
+          <div class="col-12">
+            <label class="form-label small text-muted" for="p-thoughts">Thoughts</label>
+            <textarea id="p-thoughts" class="form-control" rows="3" bind:value={details.short_goal}></textarea>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted" for="p-freq">Cadence</label>
+            <input id="p-freq" type="text" class="form-control" bind:value={details.frequency} />
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label small text-muted" for="p-target">Daily target (minutes)</label>
+            <input id="p-target" type="number" min="0" class="form-control" bind:value={details.daily_target_minutes} />
+          </div>
+          <div class="col-12 d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="p-star" bind:checked={details.is_starred} />
+              <label class="form-check-label" for="p-star">Starred</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="p-private" bind:checked={details.is_private} />
+              <label class="form-check-label" for="p-private">Private</label>
+            </div>
+          </div>
+          <div class="col-12">
+            <button type="button" class="btn btn-primary btn-sm" onclick={saveDetails}>Save</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editingDetails = false)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  {/if}
+
+  <div class="project-detail-body">
+    <div class="project-plan-col">
+      <section
+        class="card shadow-sm inline-edit-card project-plan-card"
+        class:private-veiled={veiled("plan")}
+      >
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
+            <div>
+              <h2 class="h4 mb-0">Plan</h2>
+              <p class="text-muted small mb-0">
+                Your working roadmap. Each heading becomes a step on the timeline.
+              </p>
+            </div>
+            <div class="inline-section-controls">
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm"
+                onclick={() => (editingPlan = !editingPlan)}
+              >{editingPlan ? "Done" : "Edit"}</button>
+            </div>
+          </div>
+
+          {#if veiled("plan")}
+            <div class="private-veil">
+              <!-- The padlock lives here rather than beside the project's name:
+                   it says why this card is empty, which is the one place the
+                   flag is worth pointing out. -->
+              <span class="private-veil-lock" aria-hidden="true">🔒</span>
+              <p class="private-veil-note mb-0">
+                This project is private — the plan stays hidden until you ask for it.
+              </p>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => reveal("plan")}>
+                Show plan
+              </button>
+            </div>
           {/if}
-          <button type="button" class="btn ghost" onclick={() => (editingPlan = false)}>Done</button>
+
+          <div class="private-hideable">
+            {#if editingPlan}
+              {#key uid}
+                <div class="plan-block-editor">
+                  <PlanEditor
+                    markdown={project.long_goal}
+                    onsave={async (next) => {
+                      await save({ long_goal: next });
+                      return true;
+                    }}
+                  />
+                </div>
+              {/key}
+            {:else if project.long_goal.trim()}
+              <div
+                class="markdown-content long-goal-preview"
+                role="presentation"
+                onclick={onPlanClick}
+              >{@html interactive}</div>
+
+              {#if sections.length}
+                <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                  <span class="text-muted small">Archive a finished section:</span>
+                  {#each sections as heading, index (heading.start)}
+                    <button
+                      type="button"
+                      class="btn btn-outline-secondary btn-sm"
+                      onclick={() => archiveSection(index)}
+                    >{heading.title} ×</button>
+                  {/each}
+                </div>
+              {/if}
+            {:else}
+              <p class="text-muted mb-0">This plan is empty.</p>
+            {/if}
+          </div>
         </div>
-      {:else}
-        <button
-          type="button"
-          class="btn ghost"
-          onclick={() => {
-            planDraft = project.long_goal;
-            editingPlan = true;
-          }}
-        >Edit</button>
+      </section>
+
+      {#if project.archived_long_goal.trim()}
+        <section class="card shadow-sm inline-edit-card mt-3">
+          <div class="card-body">
+            <h2 class="h5 mb-2">Archived sections</h2>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              {#each archivedSections as heading, index (heading.start)}
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() => restoreSection(index)}
+                >↺ {heading.title}</button>
+              {/each}
+            </div>
+            <div class="markdown-content opacity-75">{@html archivedHtml}</div>
+          </div>
+        </section>
       {/if}
     </div>
 
-    <PrivateVeil projectUid={uid} section="plan" isPrivate={project.is_private} label="plan">
-      {#if editingPlan && blockEditor}
-        <!-- Saves itself as you type; the outbox carries it onward. -->
-        {#key uid}
-          <PlanEditor
-            markdown={project.long_goal}
-            onsave={async (next) => {
-              await save({ long_goal: next });
-              return true;
-            }}
-          />
-        {/key}
-      {:else if editingPlan}
-        <textarea class="editor" bind:value={planDraft} spellcheck="false"></textarea>
-      {:else if project.long_goal.trim()}
-        <div class="markdown" role="presentation" onclick={onPlanClick}>{@html interactive}</div>
-
-        {#if sections.length}
-          <div class="section-tools">
-            <span class="muted small">Archive a finished section:</span>
-            {#each sections as heading, index (heading.start)}
-              <button type="button" class="chip" onclick={() => archiveSection(index)}>
-                {heading.title} ×
-              </button>
-            {/each}
+    <div class="project-meta-col">
+      <section class="card shadow-sm inline-edit-card" class:private-veiled={veiled("thoughts")}>
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <h2 class="h5 mb-0">Thoughts</h2>
           </div>
-        {/if}
-      {:else}
-        <p class="muted">This plan is empty.</p>
-      {/if}
-    </PrivateVeil>
 
-    {#if project.archived_long_goal.trim()}
-      <h2 class="section">Archived sections</h2>
-      <div class="section-tools">
-        {#each archivedSections as heading, index (heading.start)}
-          <button type="button" class="chip" onclick={() => restoreSection(index)}>
-            ↺ {heading.title}
-          </button>
-        {/each}
-      </div>
-      <div class="markdown archived">{@html archivedHtml}</div>
-    {/if}
-  {/if}
-</section>
+          {#if veiled("thoughts")}
+            <div class="private-veil">
+              <span class="private-veil-lock" aria-hidden="true">🔒</span>
+              <p class="private-veil-note mb-0">
+                This project is private — the thoughts stay hidden until you ask.
+              </p>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => reveal("thoughts")}>
+                Show thoughts
+              </button>
+            </div>
+          {/if}
 
-<style>
-  .page { max-width: 54rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-  .head { display: flex; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
-  h1 { font-size: 1.6rem; margin: 0 0 0.2rem; }
-  .muted { opacity: 0.65; }
-  .small { font-size: 0.82rem; }
-  .thoughts { white-space: pre-wrap; margin: 0.3rem 0 0; }
-  .section { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 2rem 0 0.6rem; }
-  .plan-head { display: flex; align-items: center; justify-content: space-between; }
-  .plan-actions { display: flex; gap: 0.4rem; }
-  .tools { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-  .notice { background: rgba(217, 119, 6, 0.12); border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.88rem; }
+          <div class="private-hideable">
+            {#if project.short_goal.trim()}
+              <p class="preserve-lines mb-0">{project.short_goal}</p>
+            {:else}
+              <p class="text-muted small mb-0">Nothing written here yet.</p>
+            {/if}
+          </div>
+        </div>
+      </section>
 
-  .btn { border: 1px solid rgba(127, 127, 127, 0.35); background: var(--bs-primary, #4f46e5); color: #fff; border-radius: 0.5rem; padding: 0.3rem 0.8rem; cursor: pointer; font-size: 0.88rem; }
-  .btn.ghost { background: transparent; color: inherit; }
-  .btn.danger { background: transparent; color: #b3261e; border-color: rgba(179, 38, 30, 0.4); }
-
-  .form { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); margin-top: 1rem; }
-  .form label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; opacity: 0.75; }
-  .form .wide { grid-column: 1 / -1; }
-  .form .check { flex-direction: row; align-items: center; gap: 0.4rem; }
-  .form input[type="text"], .form input[type="number"], .form textarea {
-    font: inherit; background: transparent; color: inherit;
-    border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 0.45rem; padding: 0.35rem 0.5rem;
-  }
-
-  .editor { width: 100%; min-height: 24rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; padding: 0.75rem; border-radius: 0.6rem; border: 1px solid rgba(127, 127, 127, 0.35); background: transparent; color: inherit; }
-
-  .section-tools { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin: 0.75rem 0; }
-  .chip { border: 1px solid rgba(127, 127, 127, 0.3); background: transparent; color: inherit; border-radius: 999px; padding: 0.15rem 0.65rem; font-size: 0.8rem; cursor: pointer; }
-  .archived { opacity: 0.7; }
-  .markdown :global(input.task-list-checkbox) { cursor: pointer; pointer-events: auto; }
-</style>
+      <section class="card shadow-sm inline-edit-card mt-3">
+        <div class="card-body">
+          <h2 class="h5 mb-3">Details</h2>
+          <dl class="mb-0">
+            <dt class="small text-muted">Cadence</dt>
+            <dd>{project.frequency || "—"}</dd>
+            <dt class="small text-muted">Daily target</dt>
+            <dd class="mb-0">
+              {project.daily_target_minutes ? `${project.daily_target_minutes} min` : "—"}
+            </dd>
+          </dl>
+        </div>
+      </section>
+    </div>
+  </div>
+{/if}
