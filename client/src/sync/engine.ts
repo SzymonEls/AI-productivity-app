@@ -166,3 +166,109 @@ async function recordConflict(
   });
   return 1;
 }
+
+/** The token the server set in a readable cookie; echoing it back proves origin. */
+function csrfToken(): string {
+  const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : "";
+}
+
+export interface PushResult {
+  cursor: number;
+  sent: number;
+  applied: number;
+  conflicts: number;
+  /** Set when the whole push was refused, so nothing was queued away. */
+  refused?: string;
+}
+
+/**
+ * Send what is queued, and file whatever comes back as a question.
+ *
+ * An operation the server rejects stays in the outbox. That is deliberate: the
+ * change is still the person's, still unsent, and dropping it because the
+ * server disagreed would lose work without telling anyone.
+ */
+export async function push(database: LocalDatabase): Promise<PushResult> {
+  const queued = await database.outbox.orderBy("changed_at").toArray();
+  const cursor = await readMeta(database, CURSOR_KEY, 0);
+
+  if (queued.length === 0) {
+    return { cursor, sent: 0, applied: 0, conflicts: 0 };
+  }
+
+  const order = new Map(ENTITIES.map((entity, index) => [entity, index]));
+  const ops = [...queued]
+    .sort((a, b) => (order.get(a.entity) ?? 0) - (order.get(b.entity) ?? 0))
+    .map((entry) => ({
+      entity: entry.entity,
+      uid: entry.uid,
+      op: entry.op,
+      base_rev: entry.base_rev,
+      fields: entry.fields,
+      client_ts: entry.changed_at,
+    }));
+
+  const response = await fetch("/api/sync/push", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Requested-With": "XMLHttpRequest",
+      "X-CSRF-Token": csrfToken(),
+    },
+    credentials: "same-origin",
+    body: JSON.stringify({ since: cursor, ops }),
+  });
+
+  if (response.status === 401) throw new SyncError("Session expired. Please sign in again.");
+  if (response.status === 403) {
+    // Demo mode refuses writes, and so does a stale CSRF token. Neither is
+    // worth discarding the queue over.
+    const body = await response.json().catch(() => ({}));
+    return { cursor, sent: ops.length, applied: 0, conflicts: 0, refused: body?.message };
+  }
+  if (!response.ok) throw new SyncError(`The server answered ${response.status}.`);
+
+  const body = await response.json();
+  const applied = new Set<string>(body.applied ?? []);
+
+  for (const entry of queued) {
+    if (applied.has(entry.uid)) await database.outbox.delete(entry.id!);
+  }
+
+  for (const conflict of body.conflicts ?? []) {
+    const already = await database.conflicts
+      .where("[entity+uid]")
+      .equals([conflict.entity, conflict.uid])
+      .first();
+    if (already !== undefined) continue;
+
+    await database.conflicts.add({
+      entity: conflict.entity,
+      uid: conflict.uid,
+      reason: conflict.reason,
+      server: conflict.server,
+      client: conflict.client,
+      seen_at: new Date().toISOString(),
+    });
+  }
+
+  await writeMeta(database, CURSOR_KEY, body.rev);
+  await writeMeta(database, LAST_SYNC_KEY, new Date().toISOString());
+
+  return {
+    cursor: body.rev,
+    sent: ops.length,
+    applied: applied.size,
+    conflicts: (body.conflicts ?? []).length,
+  };
+}
+
+/** Pull then push, which is the order that lets a conflict be spotted first. */
+export async function synchronise(
+  database: LocalDatabase
+): Promise<{ pulled: PullResult; pushed: PushResult }> {
+  const pulled = await pull(database);
+  const pushed = await push(database);
+  return { pulled, pushed };
+}
