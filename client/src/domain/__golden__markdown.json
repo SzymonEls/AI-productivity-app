@@ -1,0 +1,70 @@
+{
+ "headings_and_paragraph": {
+  "source": "# Plan\n\nSome text here.\n",
+  "inline": "<h1>Plan</h1>\n<p>Some text here.</p>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Plan</h1><p>Some text here.</p></div></section></div>"
+ },
+ "simple_list": {
+  "source": "# Steps\n\n- first\n- second\n",
+  "inline": "<h1>Steps</h1>\n<ul>\n<li>first</li>\n<li>second</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Steps</h1><ul>\n<li>first</li>\n<li>second</li>\n</ul></div></section></div>"
+ },
+ "task_list": {
+  "source": "# Steps\n\n- [ ] call the printer #shop\n- [x] done thing\n",
+  "inline": "<h1>Steps</h1>\n<ul>\n<li class=\"task-list-item\"><input class=\"task-list-checkbox\" type=\"checkbox\" disabled > call the printer <span class=\"plan-tag\">#shop</span></li>\n<li class=\"task-list-item\"><input class=\"task-list-checkbox\" type=\"checkbox\" disabled checked> done thing</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Steps</h1><ul>\n<li class=\"task-list-item\"><input class=\"task-list-checkbox\" type=\"checkbox\" disabled > call the printer <span class=\"plan-tag\">#shop</span></li>\n<li class=\"task-list-item\"><input class=\"task-list-checkbox\" type=\"checkbox\" disabled checked> done thing</li>\n</ul></div></section></div>"
+ },
+ "nested_two_space": {
+  "source": "# Steps\n\n- outer\n  - inner\n    - deeper\n",
+  "inline": "<h1>Steps</h1>\n<ul>\n<li>outer<ul>\n<li>inner<ul>\n<li>deeper</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Steps</h1><ul>\n<li>outer<ul>\n<li>inner<ul>\n<li>deeper</li>\n</ul>\n</li>\n</ul>\n</li>\n</ul></div></section></div>"
+ },
+ "emphasis": {
+  "source": "**bold** and *italic* and ~~struck~~ and `code`\n",
+  "inline": "<p><strong>bold</strong> and <em>italic</em> and <del>struck</del> and <code>code</code></p>",
+  "project": "<p><strong>bold</strong> and <em>italic</em> and <del>struck</del> and <code>code</code></p>"
+ },
+ "tags_in_list": {
+  "source": "# Plan\n\n- buy milk #shop\n- fix #dom-i-ogród today\n- not a tag: C# or #2 or (#x)\n",
+  "inline": "<h1>Plan</h1>\n<ul>\n<li>buy milk <span class=\"plan-tag\">#shop</span></li>\n<li>fix <span class=\"plan-tag\">#dom-i-ogród</span> today</li>\n<li>not a tag: C# or #2 or (#x)</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Plan</h1><ul>\n<li>buy milk <span class=\"plan-tag\">#shop</span></li>\n<li>fix <span class=\"plan-tag\">#dom-i-ogród</span> today</li>\n<li>not a tag: C# or #2 or (#x)</li>\n</ul></div></section></div>"
+ },
+ "tag_in_heading": {
+  "source": "# Not a #tag here\n\n- but #this is\n",
+  "inline": "<h1>Not a #tag here</h1>\n<ul>\n<li>but <span class=\"plan-tag\">#this</span> is</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Not a #tag here</h1><ul>\n<li>but <span class=\"plan-tag\">#this</span> is</li>\n</ul></div></section></div>"
+ },
+ "link_anchor": {
+  "source": "- see [top](#top) and #real\n",
+  "inline": "<ul>\n<li>see <a href=\"#top\">top</a> and <span class=\"plan-tag\">#real</span></li>\n</ul>",
+  "project": "<ul>\n<li>see <a href=\"#top\">top</a> and <span class=\"plan-tag\">#real</span></li>\n</ul>"
+ },
+ "multi_section": {
+  "source": "# One\n\n- a\n\n# Two\n\n- b\n\n# Three\n\n- c\n",
+  "inline": "<h1>One</h1>\n<ul>\n<li>a</li>\n</ul>\n<h1>Two</h1>\n<ul>\n<li>b</li>\n</ul>\n<h1>Three</h1>\n<ul>\n<li>c</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>One</h1><ul>\n<li>a</li>\n</ul></div></section><section class=\"project-markdown-section project-markdown-section-tone-2\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Two</h1><ul>\n<li>b</li>\n</ul></div></section><section class=\"project-markdown-section project-markdown-section-tone-3\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>Three</h1><ul>\n<li>c</li>\n</ul></div></section></div>"
+ },
+ "preface": {
+  "source": "Intro line\n\n# First\n\n- x\n",
+  "inline": "<p>Intro line</p>\n<h1>First</h1>\n<ul>\n<li>x</li>\n</ul>",
+  "project": "<div class=\"project-section-markdown\"><div class=\"project-section-preface\"><p>Intro line</p></div><section class=\"project-markdown-section project-markdown-section-tone-1\"><div class=\"project-markdown-step\" aria-hidden=\"true\"></div><div class=\"project-markdown-section-card\"><h1>First</h1><ul>\n<li>x</li>\n</ul></div></section></div>"
+ },
+ "newlines": {
+  "source": "line one\nline two\n",
+  "inline": "<p>line one<br />\nline two</p>",
+  "project": "<p>line one<br />\nline two</p>"
+ },
+ "numbered": {
+  "source": "1. first\n2. second\n",
+  "inline": "<ol>\n<li>first</li>\n<li>second</li>\n</ol>",
+  "project": "<ol>\n<li>first</li>\n<li>second</li>\n</ol>"
+ },
+ "_normalize": {
+  "two_space": "- outer\n    - inner\n        - deeper\n"
+ },
+ "_strip_title": {
+  "matching": "body here",
+  "different": "# Other\n\nbody",
+  "no_heading": "just text"
+ }
+}
