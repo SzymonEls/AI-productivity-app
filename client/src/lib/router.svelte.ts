@@ -16,6 +16,7 @@ export type Route =
   | { name: "time" }
   | { name: "tags" }
   | { name: "archived" }
+  | { name: "new" }
   | { name: "unknown"; path: string };
 
 function parse(pathname: string): Route {
@@ -28,6 +29,7 @@ function parse(pathname: string): Route {
   if (parts[0] === "time") return { name: "time" };
   if (parts[0] === "tags") return { name: "tags" };
   if (parts[0] === "archived") return { name: "archived" };
+  if (parts[0] === "new") return { name: "new" };
   if (parts[0] === "projects" && parts[1]) return { name: "project", uid: parts[1] };
 
   return { name: "unknown", path: rest };

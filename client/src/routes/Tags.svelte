@@ -9,6 +9,7 @@
   import { collectTags } from "../domain/tags";
   import { live } from "../lib/live.svelte";
   import { BASE, link } from "../lib/router.svelte";
+  import PrivateVeil from "../ui/PrivateVeil.svelte";
 
   let { database }: { database: LocalDatabase } = $props();
 
@@ -30,7 +31,16 @@
         <ul class="plain">
           {#each tag.items as item (item.projectUid + item.text)}
             <li class:done={item.isDone}>
-              <a href={`${BASE}/projects/${item.projectUid}`} use:link>{item.text}</a>
+              <!-- A tag lives in a plan, so a private project's line is covered
+                   by the same curtain the plan is. -->
+              <PrivateVeil
+                projectUid={item.projectUid}
+                section="plan"
+                isPrivate={item.isPrivate}
+                label="line"
+              >
+                <a href={`${BASE}/projects/${item.projectUid}`} use:link>{item.text}</a>
+              </PrivateVeil>
               <span class="muted">{item.projectTitle}</span>
             </li>
           {/each}

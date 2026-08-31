@@ -7,6 +7,7 @@
   import { readAppearance, toggleSafeMode, toggleTheme } from "./lib/appearance";
   import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
+  import NewProject from "./routes/NewProject.svelte";
   import Project from "./routes/Project.svelte";
   import Archive from "./routes/Archive.svelte";
   import Archived from "./routes/Archived.svelte";
@@ -55,6 +56,8 @@
     { href: `${BASE}/time`, label: "Time", match: "time" },
     { href: `${BASE}/tags`, label: "Tags", match: "tags" },
     { href: `${BASE}/archive`, label: "Archive", match: "archive" },
+    { href: `${BASE}/archived`, label: "Archived", match: "archived" },
+    { href: `${BASE}/new`, label: "+ New", match: "new" },
   ];
 </script>
 
@@ -114,6 +117,8 @@
       <Archive {database} />
     {:else if route.name === "time"}
       <TimeTracking {database} />
+    {:else if route.name === "new"}
+      <NewProject {database} />
     {:else if route.name === "archived"}
       <Archived {database} />
     {:else if route.name === "tags"}
