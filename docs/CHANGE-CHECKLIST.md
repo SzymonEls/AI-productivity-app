@@ -110,6 +110,11 @@ Tick off the sections matching your change. Each item is a specific file/command
 - [ ] Open the new file in [migrations/versions/](../migrations/versions/) and review it; for a
       `nullable=False` column make sure there is a `server_default` (see `20260704_0012`).
 - [ ] Apply it: `flask --app run.py db upgrade`.
+- [ ] Confirm the model and the database agree: `flask --app run.py db check` against a copy of
+      a real database. It has to say "No new upgrade operations detected". If autogenerate
+      proposes dropping something the database genuinely needs, DECLARE it on the model —
+      deleting the proposal from the migration by hand leaves the drift in place, and the next
+      real diff arrives buried in the same false ones.
 - [ ] If you added a model, add it to the import in [app/__init__.py:31](../app/__init__.py#L31).
 - [ ] Update the model list in [ARCHITECTURE.md](ARCHITECTURE.md), the "Data model" section.
 

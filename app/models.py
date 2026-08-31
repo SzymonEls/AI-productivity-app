@@ -221,7 +221,23 @@ class ProjectTimeEntry(SyncMixin, db.Model):
 
     __sync_payload__ = ("description", "project_title_snapshot")
 
-    __table_args__ = sync_table_args("project_time_entries")
+    __table_args__ = sync_table_args(
+        "project_time_entries",
+        # These two exist in every database - migration 20260520_0009 creates
+        # them, and _allow_null_time_entry_project_id() in app/__init__.py
+        # re-creates them by hand when it rebuilds the table for an old SQLite
+        # file. They were never declared here, so autogenerate kept proposing to
+        # drop them; 20260808_0016 says in its docstring that the drops were
+        # deleted from it on purpose. Declaring them is what ends that, and it
+        # needs no DDL: the indexes are already there.
+        db.Index(
+            "ix_project_time_entries_user_project_started",
+            "user_id",
+            "project_id",
+            "started_at",
+        ),
+        db.Index("ix_project_time_entries_user_ended", "user_id", "ended_at"),
+    )
 
 
 class ProjectTimelineGroup(SyncMixin, db.Model):
