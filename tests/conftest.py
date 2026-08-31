@@ -91,3 +91,42 @@ def utc():
 @pytest.fixture
 def today():
     return date.today()
+
+
+@pytest.fixture
+def client(app, user):
+    """A signed-in test client.
+
+    Goes through the real login form rather than forcing the session, so the
+    API is exercised behind the same cookie the browser will carry.
+    """
+    with app.test_client() as test_client:
+        response = test_client.post(
+            "/auth/login",
+            data={"email": "tester@example.com", "password": "correct horse"},
+            follow_redirects=False,
+        )
+        assert response.status_code in (302, 303), "login did not succeed"
+        yield test_client
+
+
+@pytest.fixture
+def sync(client):
+    """Talk to the synchronisation API the way the browser will."""
+
+    class Sync:
+        def changes(self, since=0):
+            return client.get(f"/api/sync/changes?since={since}")
+
+        def push(self, *ops, since=0):
+            return client.post(
+                "/api/sync/push",
+                json={"since": since, "ops": list(ops)},
+                headers={"X-Requested-With": "XMLHttpRequest"},
+            )
+
+    return Sync()
+
+
+def op(entity, uid, kind="create", base_rev=None, **fields):
+    return {"entity": entity, "uid": uid, "op": kind, "base_rev": base_rev, "fields": fields}

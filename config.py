@@ -101,6 +101,12 @@ class Config:
     # Failed sign-ins allowed against one account before the door shuts, and for
     # how long it stays shut. Counted per email address, which is what a guessing
     # attempt actually aims at, rather than per calling address.
+    # How long a deleted row's tombstone stays before it is cleared for good.
+    # It is not about disk - a tombstone is a few dozen bytes - but about how
+    # long a device may be away and still be sent a difference rather than the
+    # whole set. Content is emptied the moment a row is deleted, not here.
+    TOMBSTONE_RETENTION_DAYS = int(os.environ.get("TOMBSTONE_RETENTION_DAYS", "90"))
+
     LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "3") or 3)
     LOGIN_BLOCK_MINUTES = int(os.environ.get("LOGIN_BLOCK_MINUTES", "5") or 5)
     # Read-only public demo. Off by default; see app/demo.py.

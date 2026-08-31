@@ -32,6 +32,8 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
 
     from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, SyncState, User  # noqa: F401
+    from .api.routes import api_bp
+    from .api.pruning import register_pruning_command
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
@@ -40,6 +42,7 @@ def create_app(config_class=Config):
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(api_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
     register_template_context(app)
@@ -48,6 +51,7 @@ def create_app(config_class=Config):
     register_login_handlers(login_manager)
     # No-op unless DEMO_MODE is set: it registers nothing on the request path.
     register_demo_mode(app)
+    register_pruning_command(app)
     if should_initialize_database(app):
         run_database_migrations(app)
         initialize_database(app)

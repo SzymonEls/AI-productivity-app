@@ -16,7 +16,7 @@ inlining it would mean five copies of a rule that has to stay identical.
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from flask import g
+from flask import g, has_app_context
 from sqlalchemy.orm import with_loader_criteria
 
 from ..extensions import db
@@ -30,19 +30,19 @@ def utc_now():
 
 
 def next_rev(user_id):
-    """Return this request's revision number for the user, claiming one if needed.
+    """Return this transaction's revision number for the user, claiming one if needed.
 
-    Every row written while serving one request shares a number. That is not a
-    shortcut: a request commits atomically, so a client either sees all of its
-    rows or none of them, and one number per commit keeps the counter - and the
-    index that reads it - small.
+    Every row written inside one transaction shares a number, and the number is
+    released when that transaction ends. That is not a shortcut: a commit is
+    atomic, so a client either sees all of those rows or none of them, and one
+    number per commit keeps the counter - and the index that reads it - small.
 
     The claim is a single UPDATE rather than a read followed by a write. Under
     several Gunicorn workers the read-then-write version lets two requests both
     see 5 and both write 6, handing out one number twice; incrementing inside
     the statement leaves no window between the two halves.
     """
-    claimed = g.setdefault("_sync_revisions", {})
+    claimed = _claimed_revisions()
     if user_id in claimed:
         return claimed[user_id]
 
@@ -68,6 +68,23 @@ def next_rev(user_id):
 
     claimed[user_id] = revision
     return revision
+
+
+def _claimed_revisions():
+    """Revisions claimed by the transaction in flight.
+
+    Kept on ``g`` for convenience, but the lifetime that matters is the
+    transaction's, not the app context's - see release_revisions() below.
+    """
+    if not has_app_context():
+        return {}
+    return g.setdefault("_sync_revisions", {})
+
+
+def release_revisions(*_args):
+    """Let go of the claimed numbers once the transaction is over."""
+    if has_app_context():
+        g.pop("_sync_revisions", None)
 
 
 def touch(instance):
@@ -203,3 +220,10 @@ def register_write_stamping(db_):
                 continue
             if session.is_modified(instance, include_collections=False):
                 touch(instance)
+
+    # A number belongs to one transaction. Holding it past the commit would
+    # make a second, unrelated write reuse it, and a client that had already
+    # taken that number as its cursor would never be sent the newer rows.
+    sa.event.listen(db_.session, "after_commit", release_revisions)
+    sa.event.listen(db_.session, "after_rollback", release_revisions)
+    sa.event.listen(db_.session, "after_soft_rollback", release_revisions)
