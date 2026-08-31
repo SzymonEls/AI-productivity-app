@@ -7,7 +7,7 @@
  */
 
 import type { DaySlot, Project } from "../sync/types";
-import { firstPlanSectionTitle, today } from "./time";
+import { firstPlanSectionTitle, lastSessionLabel, today } from "./time";
 
 export const SLOTS = ["A", "B", "C"] as const;
 export type SlotName = (typeof SLOTS)[number];
@@ -526,6 +526,8 @@ export interface Candidate {
   uid: string;
   title: string;
   planHeading: string;
+  /** "Last session: 3 wk ago" - the note shown when the plan has no heading. */
+  lastSession: string;
   isStarred: boolean;
   canTake: boolean;
   reason: string;
@@ -542,7 +544,8 @@ export function slotCandidates(
   slots: DaySlot[],
   day: string,
   slot: string,
-  todayDay: string = today()
+  todayDay: string = today(),
+  lastSessionOf: Map<string, string> = new Map()
 ): Candidate[] {
   const taken = slots.find((entry) => entry.slot_date === day && entry.slot === slot) ?? null;
   const takenBy = taken
@@ -566,6 +569,7 @@ export function slotCandidates(
         uid: project.uid,
         title: project.title,
         planHeading: firstPlanSectionTitle(project.long_goal),
+        lastSession: lastSessionLabel(lastSessionOf.get(project.uid)),
         isStarred: project.is_starred,
         canTake: !reason,
         reason,

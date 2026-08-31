@@ -6,6 +6,8 @@ export interface BlockEditorOptions {
   onSave?: (markdown: string) => Promise<boolean>;
   onChange?: (markdown: string) => void;
   onStatus?: (status: string) => void;
+  /** Adds an archive button to each titled "# " section; index matches sectionRanges(). */
+  onArchiveSection?: (index: number) => void;
   saveDelay?: number;
 }
 

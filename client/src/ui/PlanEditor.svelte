@@ -14,7 +14,12 @@
   let {
     markdown,
     onsave,
-  }: { markdown: string; onsave: (markdown: string) => Promise<boolean> } = $props();
+    onarchivesection,
+  }: {
+    markdown: string;
+    onsave: (markdown: string) => Promise<boolean>;
+    onarchivesection?: (index: number) => void;
+  } = $props();
 
   let container = $state<HTMLDivElement | null>(null);
   let editor: BlockEditor | null = null;
@@ -26,6 +31,7 @@
       initialMarkdown: markdown,
       onSave: onsave,
       onStatus: (next: string) => (status = next),
+      onArchiveSection: onarchivesection,
     });
   });
 
@@ -34,15 +40,13 @@
   export function hasUnsavedChanges(): boolean {
     return editor?.hasUnsavedChanges() ?? false;
   }
+
+  export function saveStatus(): string {
+    return status;
+  }
 </script>
 
-<div class="plan-editor">
-  <div bind:this={container} class="pbe-root"></div>
-  {#if status}<p class="status muted">{status}</p>{/if}
-</div>
+<div bind:this={container} class="plan-block-editor"></div>
 
-<style>
-  .plan-editor { margin-top: 0.5rem; }
-  .status { font-size: 0.8rem; margin: 0.5rem 0 0; }
-  .muted { opacity: 0.6; }
-</style>
+<!-- Exposed rather than drawn here: the card header is where "All changes
+     saved" belonged, beside the heading. -->

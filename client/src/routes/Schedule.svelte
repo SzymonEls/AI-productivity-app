@@ -6,18 +6,15 @@
    * it did on the server. Changes are applied locally first and the queue takes
    * them onward - which is why a booking made with no network still appears.
    */
-  import { createRow, deleteRow, updateRow } from "../db/mutate";
+  import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
     type SheetSlot,
     calendarWeeks,
     dateRangeLabel,
-    formatDay,
-    planAssign,
     planDayOff,
     planMove,
     scheduleSheet,
-    slotCandidates,
     weekLabel,
     weeksToCover,
   } from "../domain/slots";
@@ -27,6 +24,7 @@
   import { sync } from "../sync/store.svelte";
   import type { DaySlot } from "../sync/types";
   import DaySheet from "../ui/DaySheet.svelte";
+  import Planner from "../ui/Planner.svelte";
   import Icon from "../ui/Icon.svelte";
 
   let { database }: { database: LocalDatabase } = $props();
@@ -51,9 +49,6 @@
   let dayOffDate = $state(day);
   let status = $state("");
 
-  const candidates = $derived(
-    picking ? slotCandidates(projects.value, slots.value, picking.date, picking.slot, day) : []
-  );
 
   function announce(message: string) {
     status = message;
@@ -66,14 +61,6 @@
     void sync.run();
   }
 
-  async function book(projectUid: string) {
-    if (!picking) return;
-    const plan = planAssign(projects.value, slots.value, projectUid, picking.date, picking.slot, day);
-    if (!plan.ok) return announce(plan.message);
-    if (plan.create) await createRow<DaySlot>(database, "day_slot", plan.create);
-    picking = null;
-    await after(plan.message);
-  }
 
   async function clear(entry: SheetSlot) {
     if (!entry.booking) return;
@@ -159,40 +146,7 @@
 </div>
 
 {#if picking}
-  <div class="planner-backdrop">
-    <div class="planner-dialog" role="dialog" aria-label="Choose a project">
-      <header class="planner-header">
-        <h2 class="planner-title">{formatDay(picking.date)} · block {picking.slot}</h2>
-        <button type="button" class="icon-button" title="Close" onclick={() => (picking = null)}>
-          <Icon name="x" />
-        </button>
-      </header>
-      <ul class="planner-projects">
-        {#each candidates as candidate (candidate.uid)}
-          <li>
-            <button
-              type="button"
-              class="planner-project"
-              class:is-blocked={!candidate.canTake}
-              disabled={!candidate.canTake}
-              onclick={() => book(candidate.uid)}
-            >
-              <span class="planner-project-title">
-                {#if candidate.isStarred}<span class="switcher-badge" aria-hidden="true">★</span>{/if}
-                {candidate.title}
-              </span>
-              {#if candidate.planHeading}
-                <span class="planner-project-step">{candidate.planHeading}</span>
-              {/if}
-              {#if candidate.reason}
-                <span class="planner-project-reason">{candidate.reason}</span>
-              {/if}
-            </button>
-          </li>
-        {/each}
-      </ul>
-    </div>
-  </div>
+  <Planner {database} forSlot={picking} onclose={() => (picking = null)} />
 {/if}
 
 {#if dayOffOpen}

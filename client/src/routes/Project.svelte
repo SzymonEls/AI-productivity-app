@@ -1,15 +1,20 @@
 <script lang="ts">
   /**
-   * One project: its details, its thoughts, and its plan.
+   * One project: its plan, its thoughts, its cadence.
+   *
+   * The plan is not behind an edit button. In blocks mode - the default - the
+   * editor *is* the view: always editable, saving itself, which is what the
+   * "All changes saved" line beside the heading reports. The classic Markdown
+   * mode keeps the Edit/Save pair it always had.
    *
    * The veil is the original's: the card carries `private-veiled` and the
    * stylesheet hides its contents while safe mode is on, so nothing shows for a
-   * frame before it is covered. Revealing drops the class for five minutes.
+   * frame before it is covered.
    */
   import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import { renderPlan } from "../domain/markdown";
-  import { NoSuchSection, appendSection, removeSection, sectionRanges } from "../domain/plan-sections";
+  import { NoSuchSection, appendSection, removeSection } from "../domain/plan-sections";
   import { lastSessionLabel } from "../domain/time";
   import { live } from "../lib/live.svelte";
   import { BASE, link, router } from "../lib/router.svelte";
@@ -28,10 +33,14 @@
   const REVEAL_MINUTES = 5;
 
   let safeMode = $state(document.documentElement.getAttribute("data-safe-mode") === "on");
+  let blocksMode = $state(
+    (document.documentElement.getAttribute("data-plan-editor") ?? "blocks") === "blocks"
+  );
   let revealed = $state<Record<string, boolean>>({});
-  let editingPlan = $state(false);
-  let editingDetails = $state(false);
-  let details = $state<Partial<Project>>({});
+  let editing = $state<string | null>(null);
+  let draft = $state("");
+  let planDraft = $state("");
+  let planStatus = $state("");
   let notice = $state("");
   let planning = $state(false);
   let timing = $state(false);
@@ -40,17 +49,20 @@
   const html = $derived(project ? renderPlan(project.long_goal) : "");
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
   const archivedHtml = $derived(project ? renderPlan(project.archived_long_goal) : "");
-  const sections = $derived(project ? sectionRanges(project.long_goal) : []);
-  const archivedSections = $derived(project ? sectionRanges(project.archived_long_goal) : []);
 
   $effect(() => {
-    const onChange = () => {
+    const onSafeMode = () => {
       safeMode = document.documentElement.getAttribute("data-safe-mode") === "on";
-      // Reaching for the shield again drops every reveal.
       if (safeMode) revealed = {};
     };
-    window.addEventListener("safe-mode-change", onChange);
-    return () => window.removeEventListener("safe-mode-change", onChange);
+    const onEditor = () =>
+      (blocksMode = document.documentElement.getAttribute("data-plan-editor") === "blocks");
+    window.addEventListener("safe-mode-change", onSafeMode);
+    window.addEventListener("plan-editor-change", onEditor);
+    return () => {
+      window.removeEventListener("safe-mode-change", onSafeMode);
+      window.removeEventListener("plan-editor-change", onEditor);
+    };
   });
 
   $effect(() => {
@@ -60,7 +72,6 @@
       try {
         next[section] = Number(localStorage.getItem(`app-private-reveal:${uid}:${section}`)) > now;
       } catch {
-        // Private browsing, or storage off: ask every time.
         next[section] = false;
       }
     }
@@ -72,10 +83,12 @@
   }
 
   function reveal(section: string) {
-    const until = Date.now() + REVEAL_MINUTES * 60_000;
     revealed = { ...revealed, [section]: true };
     try {
-      localStorage.setItem(`app-private-reveal:${uid}:${section}`, String(until));
+      localStorage.setItem(
+        `app-private-reveal:${uid}:${section}`,
+        String(Date.now() + REVEAL_MINUTES * 60_000)
+      );
     } catch {
       // The reveal still works for this page view.
     }
@@ -93,23 +106,23 @@
     void sync.run();
   }
 
-  function startDetails() {
-    if (!project) return;
-    details = {
-      title: project.title,
-      short_goal: project.short_goal,
-      frequency: project.frequency,
-      daily_target_minutes: project.daily_target_minutes,
-      is_starred: project.is_starred,
-      is_private: project.is_private,
-    };
-    editingDetails = true;
+  function startEdit(field: string, value: string) {
+    editing = field;
+    draft = value;
   }
 
-  async function saveDetails() {
-    if (!details.title?.trim()) return announce("A project needs a title.");
-    await save({ ...details, title: details.title.trim() }, "Saved.");
-    editingDetails = false;
+  async function commit(field: keyof Project) {
+    if (field === "title" && !draft.trim()) return announce("A project needs a title.");
+    const value =
+      field === "daily_target_minutes"
+        ? draft.trim()
+          ? Number(draft)
+          : null
+        : field === "title"
+          ? draft.trim()
+          : draft;
+    await save({ [field]: value } as Partial<Project>);
+    editing = null;
   }
 
   /** A finished section leaves the plan and joins the archive - both are text. */
@@ -153,7 +166,7 @@
 
   async function removeProject() {
     if (!project) return;
-    if (!window.confirm(`Delete "${project.title}"? Its tracked time is kept.`)) return;
+    if (!window.confirm("Delete this project?")) return;
     await deleteRow(database, "project", uid);
     await sync.refresh();
     void sync.run();
@@ -188,15 +201,29 @@
   <header class="project-detail-header mb-4">
     <div class="project-detail-heading min-w-0">
       <div class="d-flex align-items-center gap-2 flex-wrap">
-        <h1 class="project-detail-title mb-0">{project.title}</h1>
-        {#if project.is_starred}<span class="project-badge project-badge-star">★ Starred</span>{/if}
-        {#if project.is_private}<span class="project-badge">🔒 Private</span>{/if}
-        {#if project.is_archived}<span class="project-badge project-badge-archived">Archived</span>{/if}
-        <div class="inline-section-controls">
-          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={startDetails}>
-            <Icon name="pencil" />Edit
-          </button>
-        </div>
+        {#if editing === "title"}
+          <div class="project-title-edit">
+            <input type="text" class="form-control form-control-lg" bind:value={draft} />
+          </div>
+          <div class="inline-section-controls">
+            <button type="button" class="btn btn-primary btn-sm" onclick={() => commit("title")}>Save</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>
+              Cancel
+            </button>
+          </div>
+        {:else}
+          <h1 class="project-detail-title mb-0">{project.title}</h1>
+          {#if project.is_starred}<span class="project-badge project-badge-star">★ Starred</span>{/if}
+          {#if project.is_private}<span class="project-badge">🔒 Private</span>{/if}
+          {#if project.is_archived}<span class="project-badge project-badge-archived">Archived</span>{/if}
+          <div class="inline-section-controls">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              onclick={() => startEdit("title", project.title)}
+            ><Icon name="pencil" />Rename</button>
+          </div>
+        {/if}
       </div>
       <p class="text-muted mb-0 mt-1">
         {lastSessionLabel(project.updated_at).replace("Last session:", "Last modified")}
@@ -222,16 +249,25 @@
         {#if menuOpen}
           <ul class="dropdown-menu dropdown-menu-end show">
             <li>
-              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; startDetails(); }}>
-                Settings
-              </button>
-            </li>
-            <li>
               <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; downloadMarkdown(); }}>
                 Download markdown
               </button>
             </li>
-            <li><a class="dropdown-item" href={`${BASE}/`} use:link>Back to home</a></li>
+            <li>
+              <button
+                type="button"
+                class="dropdown-item"
+                onclick={() => { menuOpen = false; save({ is_starred: !project.is_starred }); }}
+              >{project.is_starred ? "Remove star" : "Star project"}</button>
+            </li>
+            <li>
+              <button
+                type="button"
+                class="dropdown-item"
+                onclick={() => { menuOpen = false; save({ is_private: !project.is_private }); }}
+              >{project.is_private ? "Make public" : "Make private"}</button>
+            </li>
+            <li><a class="dropdown-item" href={`${BASE}/`} use:link onclick={() => (menuOpen = false)}>Back to home</a></li>
             <li><hr class="dropdown-divider" /></li>
             <li>
               <button
@@ -268,48 +304,6 @@
 
   {#if notice}<div class="alert alert-info py-2">{notice}</div>{/if}
 
-  {#if editingDetails}
-    <section class="card shadow-sm inline-edit-card mb-3">
-      <div class="card-body">
-        <h2 class="h5 mb-3">Edit project</h2>
-        <div class="row g-3">
-          <div class="col-12">
-            <label class="form-label small text-muted" for="p-title">Title</label>
-            <input id="p-title" type="text" class="form-control" bind:value={details.title} />
-          </div>
-          <div class="col-12">
-            <label class="form-label small text-muted" for="p-thoughts">Thoughts</label>
-            <textarea id="p-thoughts" class="form-control" rows="3" bind:value={details.short_goal}></textarea>
-          </div>
-          <div class="col-sm-6">
-            <label class="form-label small text-muted" for="p-freq">Cadence</label>
-            <input id="p-freq" type="text" class="form-control" bind:value={details.frequency} />
-          </div>
-          <div class="col-sm-6">
-            <label class="form-label small text-muted" for="p-target">Daily target (minutes)</label>
-            <input id="p-target" type="number" min="0" class="form-control" bind:value={details.daily_target_minutes} />
-          </div>
-          <div class="col-12 d-flex gap-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="p-star" bind:checked={details.is_starred} />
-              <label class="form-check-label" for="p-star">Starred</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="p-private" bind:checked={details.is_private} />
-              <label class="form-check-label" for="p-private">Private</label>
-            </div>
-          </div>
-          <div class="col-12">
-            <button type="button" class="btn btn-primary btn-sm" onclick={saveDetails}>Save</button>
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editingDetails = false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  {/if}
-
   <div class="project-detail-body">
     <div class="project-plan-col">
       <section
@@ -324,13 +318,34 @@
                 Your working roadmap. Each heading becomes a step on the timeline.
               </p>
             </div>
-            <div class="inline-section-controls">
-              <button
-                type="button"
-                class="btn btn-outline-secondary btn-sm"
-                onclick={() => (editingPlan = !editingPlan)}
-              >{editingPlan ? "Done" : "Edit"}</button>
-            </div>
+            {#if blocksMode}
+              <span class="plan-save-status" aria-live="polite">{planStatus}</span>
+            {:else if editing === "long_goal"}
+              <div class="inline-section-controls">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  onclick={async () => {
+                    await save({ long_goal: planDraft });
+                    editing = null;
+                  }}
+                >Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>
+                  Cancel
+                </button>
+              </div>
+            {:else}
+              <div class="inline-section-controls">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() => {
+                    planDraft = project.long_goal;
+                    editing = "long_goal";
+                  }}
+                >Edit</button>
+              </div>
+            {/if}
           </div>
 
           {#if veiled("plan")}
@@ -349,37 +364,30 @@
           {/if}
 
           <div class="private-hideable">
-            {#if editingPlan}
+            {#if blocksMode}
               {#key uid}
-                <div class="plan-block-editor">
-                  <PlanEditor
-                    markdown={project.long_goal}
-                    onsave={async (next) => {
-                      await save({ long_goal: next });
-                      return true;
-                    }}
-                  />
-                </div>
+                <PlanEditor
+                  markdown={project.long_goal}
+                  onsave={async (next) => {
+                    await save({ long_goal: next });
+                    planStatus = "All changes saved";
+                    return true;
+                  }}
+                  onarchivesection={archiveSection}
+                />
               {/key}
+            {:else if editing === "long_goal"}
+              <textarea
+                class="form-control inline-edit-textarea long-goal-markdown-field"
+                rows="14"
+                bind:value={planDraft}
+              ></textarea>
             {:else if project.long_goal.trim()}
               <div
                 class="markdown-content long-goal-preview"
                 role="presentation"
                 onclick={onPlanClick}
               >{@html interactive}</div>
-
-              {#if sections.length}
-                <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
-                  <span class="text-muted small">Archive a finished section:</span>
-                  {#each sections as heading, index (heading.start)}
-                    <button
-                      type="button"
-                      class="btn btn-outline-secondary btn-sm"
-                      onclick={() => archiveSection(index)}
-                    >{heading.title} ×</button>
-                  {/each}
-                </div>
-              {/if}
             {:else}
               <p class="text-muted mb-0">This plan is empty.</p>
             {/if}
@@ -390,15 +398,11 @@
       {#if project.archived_long_goal.trim()}
         <section class="card shadow-sm inline-edit-card mt-3">
           <div class="card-body">
-            <h2 class="h5 mb-2">Archived sections</h2>
-            <div class="d-flex flex-wrap gap-2 mb-3">
-              {#each archivedSections as heading, index (heading.start)}
-                <button
-                  type="button"
-                  class="btn btn-outline-secondary btn-sm"
-                  onclick={() => restoreSection(index)}
-                >↺ {heading.title}</button>
-              {/each}
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h2 class="h5 mb-0">Archived sections</h2>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => restoreSection(0)}>
+                <Icon name="restore" />Restore the first
+              </button>
             </div>
             <div class="markdown-content opacity-75">{@html archivedHtml}</div>
           </div>
@@ -411,6 +415,18 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
             <h2 class="h5 mb-0">Thoughts</h2>
+            <div class="inline-section-controls">
+              {#if editing === "short_goal"}
+                <button type="button" class="btn btn-primary btn-sm" onclick={() => commit("short_goal")}>Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>Cancel</button>
+              {:else}
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() => startEdit("short_goal", project.short_goal)}
+                >Edit</button>
+              {/if}
+            </div>
           </div>
 
           {#if veiled("thoughts")}
@@ -426,7 +442,9 @@
           {/if}
 
           <div class="private-hideable">
-            {#if project.short_goal.trim()}
+            {#if editing === "short_goal"}
+              <textarea class="form-control inline-edit-textarea" rows="4" bind:value={draft}></textarea>
+            {:else if project.short_goal.trim()}
               <p class="preserve-lines mb-0">{project.short_goal}</p>
             {:else}
               <p class="text-muted small mb-0">Nothing written here yet.</p>
@@ -437,15 +455,54 @@
 
       <section class="card shadow-sm inline-edit-card mt-3">
         <div class="card-body">
-          <h2 class="h5 mb-3">Details</h2>
-          <dl class="mb-0">
-            <dt class="small text-muted">Cadence</dt>
-            <dd>{project.frequency || "—"}</dd>
-            <dt class="small text-muted">Daily target</dt>
-            <dd class="mb-0">
-              {project.daily_target_minutes ? `${project.daily_target_minutes} min` : "—"}
-            </dd>
-          </dl>
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <h2 class="h5 mb-0">Frequency</h2>
+            <div class="inline-section-controls">
+              {#if editing === "frequency"}
+                <button type="button" class="btn btn-primary btn-sm" onclick={() => commit("frequency")}>Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>Cancel</button>
+              {:else}
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() => startEdit("frequency", project.frequency)}
+                >Edit</button>
+              {/if}
+            </div>
+          </div>
+          {#if editing === "frequency"}
+            <input type="text" class="form-control" bind:value={draft} />
+          {:else}
+            <p class="preserve-lines mb-0">{project.frequency || "Not set"}</p>
+          {/if}
+        </div>
+      </section>
+
+      <section class="card shadow-sm inline-edit-card mt-3">
+        <div class="card-body">
+          <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+            <h2 class="h5 mb-0">Daily target</h2>
+            <div class="inline-section-controls">
+              {#if editing === "daily_target_minutes"}
+                <button type="button" class="btn btn-primary btn-sm" onclick={() => commit("daily_target_minutes")}>Save</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>Cancel</button>
+              {:else}
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary btn-sm"
+                  onclick={() =>
+                    startEdit("daily_target_minutes", String(project.daily_target_minutes ?? ""))}
+                >Edit</button>
+              {/if}
+            </div>
+          </div>
+          {#if editing === "daily_target_minutes"}
+            <input type="number" min="0" class="form-control" bind:value={draft} placeholder="Minutes" />
+          {:else}
+            <p class="mb-0">
+              {project.daily_target_minutes ? `${project.daily_target_minutes} min` : "No target"}
+            </p>
+          {/if}
         </div>
       </section>
     </div>

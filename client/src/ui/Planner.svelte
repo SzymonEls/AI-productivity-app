@@ -11,7 +11,6 @@
   import type { LocalDatabase } from "../db/schema";
   import {
     bookingNote,
-    formatDay,
     planAssign,
     scheduleWindow,
     slotCandidates,
@@ -37,6 +36,17 @@
 
   const projects = live(() => database.projects.toArray(), []);
   const slots = live(() => database.daySlots.toArray(), []);
+  const entries = live(() => database.timeEntries.toArray(), []);
+
+  const lastSessionOf = $derived.by(() => {
+    const latest = new Map<string, string>();
+    for (const entry of entries.value) {
+      if (!entry.project_uid) continue;
+      const seen = latest.get(entry.project_uid);
+      if (!seen || entry.started_at > seen) latest.set(entry.project_uid, entry.started_at);
+    }
+    return latest;
+  });
 
   const day = today();
   let status = $state("");
@@ -46,7 +56,9 @@
   );
   const note = $derived(forProject ? bookingNote(slots.value, forProject.uid, day) : "");
   const candidates = $derived(
-    forSlot ? slotCandidates(projects.value, slots.value, forSlot.date, forSlot.slot, day) : []
+    forSlot
+      ? slotCandidates(projects.value, slots.value, forSlot.date, forSlot.slot, day, lastSessionOf)
+      : []
   );
 
   async function take(projectUid: string, date: string, slot: string) {
@@ -70,7 +82,7 @@
         {#if forProject}
           Plan next session · {forProject.title}
         {:else if forSlot}
-          {formatDay(forSlot.date)} · block {forSlot.slot}
+          Choose a project for slot {forSlot.slot}
         {/if}
       </h2>
       <button type="button" class="icon-button" aria-label="Close" onclick={onclose}>×</button>
@@ -112,30 +124,44 @@
         {/each}
       </div>
     {:else if forSlot}
-      <ul class="planner-projects">
-        {#each candidates as candidate (candidate.uid)}
-          <li>
-            <button
-              type="button"
-              class="planner-project"
-              class:is-blocked={!candidate.canTake}
-              disabled={!candidate.canTake}
-              onclick={() => take(candidate.uid, forSlot.date, forSlot.slot)}
-            >
-              <span class="planner-project-title">
-                {#if candidate.isStarred}<span class="switcher-badge" aria-hidden="true">★</span>{/if}
-                {candidate.title}
-              </span>
-              {#if candidate.planHeading}
-                <span class="planner-project-step">{candidate.planHeading}</span>
+      <div class="planner-grid">
+        {#if candidates.length === 0}
+          <p class="planner-status">You have no active projects yet.</p>
+        {:else}
+          <div class="picker-list">
+            {#each candidates as candidate (candidate.uid)}
+              {#if candidate.canTake}
+                <button
+                  type="button"
+                  class="picker-row"
+                  onclick={() => take(candidate.uid, forSlot.date, forSlot.slot)}
+                >
+                  <span class="picker-row-text">
+                    <span class="picker-row-title">
+                      {candidate.title}{#if candidate.isStarred}<span class="switcher-badge" aria-hidden="true">★</span>{/if}
+                    </span>
+                    <span class="picker-row-note">
+                      {candidate.planHeading || candidate.lastSession}
+                    </span>
+                  </span>
+                </button>
+              {:else}
+                <!-- Blocked ones are shown with the reason rather than missing:
+                     "where did that project go" is worse than a greyed-out row
+                     that explains itself. -->
+                <div class="picker-row picker-row-blocked">
+                  <span class="picker-row-text">
+                    <span class="picker-row-title">
+                      {candidate.title}{#if candidate.isStarred}<span class="switcher-badge" aria-hidden="true">★</span>{/if}
+                    </span>
+                    <span class="picker-row-note">{candidate.reason}</span>
+                  </span>
+                </div>
               {/if}
-              {#if candidate.reason}
-                <span class="planner-project-reason">{candidate.reason}</span>
-              {/if}
-            </button>
-          </li>
-        {/each}
-      </ul>
+            {/each}
+          </div>
+        {/if}
+      </div>
     {/if}
   </div>
 </div>

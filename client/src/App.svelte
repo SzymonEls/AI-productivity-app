@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { liveQuery } from "dexie";
   import { onDestroy, onMount } from "svelte";
 
   import { SignedOut, signOut, start } from "./boot";
@@ -44,7 +45,6 @@
 
       router.start();
       await sync.attach(session.database);
-      titles = new Map((await session.database.projects.toArray()).map((p) => [p.uid, p.title]));
 
       status = "ready";
     } catch (error) {
@@ -59,10 +59,26 @@
 
   onMount(begin);
 
+  // Kept current rather than read once: a rename has to reach the switcher
+  // button and the pending-changes list without a reload.
+  $effect(() => {
+    if (!database) return;
+    const store = database;
+    const subscription = liveQuery(() => store.projects.toArray()).subscribe({
+      next: (rows) => (titles = new Map(rows.map((row) => [row.uid, row.title]))),
+    });
+    return () => subscription.unsubscribe();
+  });
+
   onDestroy(() => sync.detach());
 
   const titleOf = (uid: string) => titles.get(uid) ?? "";
   const route = $derived(router.current);
+
+  // The button names what you are looking at, and falls back to the prompt.
+  const currentProjectTitle = $derived(
+    route.name === "project" ? titles.get(route.uid) ?? "Switch project" : "Switch project"
+  );
 
   const nav = [
     { href: `${BASE}/`, label: "Home", match: "home", icon: "home" },
@@ -86,7 +102,7 @@
           title="Switch project (Ctrl/⌘ K)"
           onclick={() => switcher?.open()}
         >
-          <span class="switcher-label">Switch project</span>
+          <span class="switcher-label">{currentProjectTitle}</span>
           <svg class="switcher-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none"
                stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
                stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
