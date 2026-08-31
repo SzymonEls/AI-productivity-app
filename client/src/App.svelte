@@ -7,6 +7,7 @@
   import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
   import Project from "./routes/Project.svelte";
+  import Schedule from "./routes/Schedule.svelte";
   import Tags from "./routes/Tags.svelte";
   import { sync } from "./sync/store.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
@@ -42,6 +43,7 @@
 
   const nav = [
     { href: BASE, label: "Today", match: "home" },
+    { href: `${BASE}/schedule`, label: "Schedule", match: "schedule" },
     { href: `${BASE}/tags`, label: "Tags", match: "tags" },
   ];
 </script>
@@ -78,6 +80,8 @@
   {:else if database}
     {#if route.name === "home"}
       <Home {database} />
+    {:else if route.name === "schedule"}
+      <Schedule {database} />
     {:else if route.name === "tags"}
       <Tags {database} />
     {:else if route.name === "project"}

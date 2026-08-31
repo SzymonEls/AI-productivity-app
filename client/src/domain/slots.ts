@@ -7,7 +7,7 @@
  */
 
 import type { DaySlot, Project } from "../sync/types";
-import { today } from "./time";
+import { firstPlanSectionTitle, today } from "./time";
 
 export const SLOTS = ["A", "B", "C"] as const;
 export type SlotName = (typeof SLOTS)[number];
@@ -333,4 +333,244 @@ export function blockedReason(
   if (blocker === null) return "";
   if (day === todayDay) return `Already in today's slot ${blocker.slot}.`;
   return `Already planned for ${formatDay(blocker.slot_date)} in slot ${blocker.slot}.`;
+}
+
+// ---------------------------------------------------------------------------
+// The operations, as plans rather than writes.
+//
+// Each returns what should change and why it may not. The caller writes it
+// through db/mutate.ts, so the rules can be tested without a database and the
+// same answer serves an optimistic redraw and the queued change.
+// ---------------------------------------------------------------------------
+
+export interface Change {
+  uid: string;
+  changes: Partial<DaySlot>;
+}
+
+export interface Plan {
+  ok: boolean;
+  message: string;
+  create?: Omit<DaySlot, "uid" | "rev" | "updated_at">;
+  updates?: Change[];
+  removals?: string[];
+}
+
+/** Book a project into a slot - assign_slot(). */
+export function planAssign(
+  projects: Project[],
+  slots: DaySlot[],
+  projectUid: string,
+  day: string,
+  slot: string,
+  todayDay: string = today()
+): Plan {
+  if (!(SLOTS as readonly string[]).includes(slot)) return { ok: false, message: "Unknown slot." };
+  if (day < todayDay) return { ok: false, message: "That day is in the past." };
+
+  const project = projects.find((candidate) => candidate.uid === projectUid);
+  if (!project) return { ok: false, message: "Project not found." };
+  if (project.is_archived) return { ok: false, message: "Archived projects cannot be scheduled." };
+
+  const taken = slots.find((entry) => entry.slot_date === day && entry.slot === slot);
+  if (taken) {
+    if (taken.project_uid === projectUid) return { ok: true, message: "Already scheduled here." };
+    const other = projects.find((candidate) => candidate.uid === taken.project_uid);
+    return { ok: false, message: `Slot ${slot} is taken by ${other?.title ?? "another project"}.` };
+  }
+
+  const blocker = blockerForDay(projectBookings(slots, projectUid, todayDay), day, todayDay);
+  if (blocker) return { ok: false, message: blockedReason(blocker, day, todayDay) };
+
+  return {
+    ok: true,
+    message: `Scheduled in slot ${slot}.`,
+    create: { slot_date: day, slot: slot as SlotName, is_done: false, project_uid: projectUid },
+  };
+}
+
+/**
+ * Move a booking, swapping with whatever is already there - move_booking().
+ *
+ * "Done" describes a day's session, so it travels within a day and is dropped
+ * when a booking lands on another date.
+ */
+export function planMove(
+  projects: Project[],
+  slots: DaySlot[],
+  fromDay: string,
+  fromSlot: string,
+  toDay: string,
+  toSlot: string,
+  todayDay: string = today()
+): Plan {
+  if (!(SLOTS as readonly string[]).includes(toSlot)) return { ok: false, message: "Unknown slot." };
+  if (toDay < todayDay) return { ok: false, message: "That day is in the past." };
+
+  const source = slots.find((entry) => entry.slot_date === fromDay && entry.slot === fromSlot);
+  if (!source) return { ok: false, message: "That slot is empty." };
+  if (fromDay === toDay && fromSlot === toSlot) return { ok: true, message: "Nothing to do." };
+
+  const target = slots.find((entry) => entry.slot_date === toDay && entry.slot === toSlot) ?? null;
+
+  // Both rows are leaving their spots, so neither may count as a blocker - for
+  // itself or for the other - while the rule is checked.
+  const ignore = new Set([source.uid, ...(target ? [target.uid] : [])]);
+  const moves: [DaySlot, string][] = [[source, toDay]];
+  if (target) moves.push([target, fromDay]);
+
+  for (const [entry, day] of moves) {
+    if (!entry.project_uid) continue;
+    const blocker = blockerForDay(
+      projectBookings(slots, entry.project_uid, todayDay, ignore),
+      day,
+      todayDay
+    );
+    if (blocker) {
+      const project = projects.find((candidate) => candidate.uid === entry.project_uid);
+      return {
+        ok: false,
+        message: `${project?.title ?? "That project"}: ${blockedReason(blocker, day, todayDay)}`,
+      };
+    }
+  }
+
+  const updates: Change[] = [
+    {
+      uid: source.uid,
+      changes: {
+        slot_date: toDay,
+        slot: toSlot as SlotName,
+        ...(toDay !== fromDay ? { is_done: false } : {}),
+      },
+    },
+  ];
+
+  if (target) {
+    updates.push({
+      uid: target.uid,
+      changes: {
+        slot_date: fromDay,
+        slot: fromSlot as SlotName,
+        ...(toDay !== fromDay ? { is_done: false } : {}),
+      },
+    });
+    const other = projects.find((candidate) => candidate.uid === target.project_uid);
+    return { ok: true, message: `Swapped with ${other?.title ?? "the other booking"}.`, updates };
+  }
+
+  return { ok: true, message: `Moved to ${formatDay(toDay)}, slot ${toSlot}.`, updates };
+}
+
+/**
+ * Take a day off - shift_bookings_forward().
+ *
+ * A finished session stays exactly where it is: it happened, and "done" belongs
+ * to a date. Anything that would land on a spot held by one is held back too,
+ * and holds back the booking behind it in turn.
+ *
+ * Rows are walked newest first, the same order the server uses, because each
+ * booking lands on the date the one after it has just left.
+ */
+export function planDayOff(
+  slots: DaySlot[],
+  fromDay: string,
+  days = 1,
+  todayDay: string = today()
+): Plan & { moved: number } {
+  if (days < 1) return { ok: false, message: "A day off is at least one day.", moved: 0 };
+  if (fromDay < todayDay) return { ok: false, message: "That day is in the past.", moved: 0 };
+
+  const affected = slots
+    .filter((slot) => slot.slot_date >= fromDay)
+    .sort((a, b) => b.slot_date.localeCompare(a.slot_date) || a.slot.localeCompare(b.slot));
+
+  if (affected.length === 0) {
+    return { ok: true, message: `${formatDay(fromDay)} was already free.`, moved: 0, updates: [] };
+  }
+
+  const updates: Change[] = [];
+  // The (date, slot) spots nothing may move onto: a finished session, or a
+  // booking stuck behind one.
+  const staying = new Set<string>();
+
+  for (const slot of affected) {
+    const targetDate = addDays(slot.slot_date, days);
+    const targetKey = `${targetDate}|${slot.slot}`;
+
+    if (slot.is_done || staying.has(targetKey)) {
+      staying.add(`${slot.slot_date}|${slot.slot}`);
+      continue;
+    }
+
+    updates.push({ uid: slot.uid, changes: { slot_date: targetDate } });
+  }
+
+  return {
+    ok: true,
+    message: dayOffMessage(fromDay, updates.length, staying.size),
+    moved: updates.length,
+    updates,
+  };
+}
+
+function dayOffMessage(fromDay: string, moved: number, stayed: number): string {
+  if (!moved) return "Nothing moved — a finished session stays on the day it happened.";
+
+  let message = `Day off on ${formatDay(fromDay)} — ${moved} ${moved === 1 ? "block" : "blocks"} moved a day later.`;
+  if (stayed) message += ` ${stayed} stayed put: a finished session does not move.`;
+  return message;
+}
+
+export interface Candidate {
+  uid: string;
+  title: string;
+  planHeading: string;
+  isStarred: boolean;
+  canTake: boolean;
+  reason: string;
+}
+
+/**
+ * Every active project, annotated with whether it can take this slot.
+ *
+ * Projects the rule rules out are listed too, with the reason: "where did that
+ * project go" is worse than a greyed-out row that explains itself.
+ */
+export function slotCandidates(
+  projects: Project[],
+  slots: DaySlot[],
+  day: string,
+  slot: string,
+  todayDay: string = today()
+): Candidate[] {
+  const taken = slots.find((entry) => entry.slot_date === day && entry.slot === slot) ?? null;
+  const takenBy = taken
+    ? projects.find((candidate) => candidate.uid === taken.project_uid)?.title
+    : null;
+  const bookings = taken ? new Map<string, BookingPair>() : bookingsByProject(slots, todayDay);
+
+  return [...projects]
+    .filter((project) => !project.is_archived)
+    .sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()))
+    .map((project) => {
+      const reason = taken
+        ? `Slot ${slot} is taken by ${takenBy ?? "another project"}.`
+        : blockedReason(
+            blockerForDay(bookings.get(project.uid) ?? [null, null], day, todayDay),
+            day,
+            todayDay
+          );
+
+      return {
+        uid: project.uid,
+        title: project.title,
+        planHeading: firstPlanSectionTitle(project.long_goal),
+        isStarred: project.is_starred,
+        canTake: !reason,
+        reason,
+      };
+    })
+    // Available ones first; the rest keep their alphabetical order underneath.
+    .sort((a, b) => Number(!a.canTake) - Number(!b.canTake));
 }
