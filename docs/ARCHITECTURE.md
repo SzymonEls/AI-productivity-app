@@ -19,6 +19,9 @@ Two halves, and one thing crossing between them.
   same description of the same tables, written twice. Changing one without the
   other is the mistake this codebase is most exposed to.
 
+The reasoning behind this shape, the bugs found building it and what is still
+unverified are recorded in [local-first-sync.md](local-first-sync.md).
+
 ## Startup
 
 - Factory `create_app()` in [app/__init__.py](../app/__init__.py); `run.py` makes

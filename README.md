@@ -99,5 +99,7 @@ content; all three are idempotent, so redeploys leave the data alone. There is m
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — structure, data model, request flow and the
   non-obvious parts.
+- [docs/local-first-sync.md](docs/local-first-sync.md) — why 2.0.0 is shaped the
+  way it is, what went wrong building it, and what has not been verified yet.
 - [docs/CHANGE-CHECKLIST.md](docs/CHANGE-CHECKLIST.md) — the repo's conventions and a
   definition of done per change type.
