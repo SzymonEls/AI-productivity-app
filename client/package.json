@@ -19,6 +19,7 @@
     "vitest": "^4.1.11"
   },
   "dependencies": {
+    "bootstrap": "^5.3.3",
     "dexie": "^4.4.5"
   }
 }

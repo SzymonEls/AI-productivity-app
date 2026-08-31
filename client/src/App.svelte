@@ -1,37 +1,28 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
 
-  import { CURSOR_KEY, readMeta, storeFor } from "./db/schema";
   import { start } from "./boot";
-  import { ENTITIES, type EntityName } from "./sync/types";
+  import type { LocalDatabase } from "./db/schema";
+  import { useTimezone } from "./domain/time";
+  import Home from "./routes/Home.svelte";
+  import { sync } from "./sync/store.svelte";
+  import SyncButton from "./ui/SyncButton.svelte";
 
   let status = $state<"starting" | "ready" | "failed">("starting");
   let message = $state("");
   let username = $state("");
-  let cursor = $state(0);
-  let offline = $state(false);
-  let persisted = $state(false);
-  let counts = $state<Record<string, number>>({});
-  let firstProjects = $state<string[]>([]);
+  let database = $state<LocalDatabase | null>(null);
+  let titles = $state(new Map<string, string>());
 
   onMount(async () => {
     try {
-      const { session, pulled } = await start();
+      const { session } = await start();
+      useTimezone(session.me.timezone);
       username = session.me.user.username;
-      offline = session.offline;
-      cursor = pulled?.cursor ?? (await readMeta(session.database, CURSOR_KEY, 0));
-      persisted = (await navigator.storage?.persisted?.()) ?? false;
+      database = session.database;
 
-      const tally: Record<string, number> = {};
-      for (const entity of ENTITIES as readonly EntityName[]) {
-        tally[entity] = await storeFor(session.database, entity).count();
-      }
-      counts = tally;
-
-      firstProjects = (await session.database.projects.toArray())
-        .filter((project) => !project.is_archived)
-        .map((project) => project.title)
-        .slice(0, 8);
+      await sync.attach(session.database);
+      titles = new Map((await session.database.projects.toArray()).map((p) => [p.uid, p.title]));
 
       status = "ready";
     } catch (error) {
@@ -39,66 +30,53 @@
       message = error instanceof Error ? error.message : String(error);
     }
   });
+
+  onDestroy(() => sync.detach());
+
+  function titleOf(uid: string): string {
+    return titles.get(uid) ?? "";
+  }
 </script>
+
+<header class="bar">
+  <span class="brand">Productivity</span>
+  {#if status === "ready"}
+    <div class="bar-right">
+      <SyncButton {titleOf} />
+      <span class="who">{username}</span>
+      <form method="post" action="/auth/logout">
+        <button type="submit" class="link">Sign out</button>
+      </form>
+    </div>
+  {/if}
+</header>
 
 <main>
   {#if status === "starting"}
-    <p class="muted">Fetching your data…</p>
+    <p class="centered muted">Fetching your data…</p>
   {:else if status === "failed"}
-    <h1>Could not start</h1>
-    <p class="error">{message}</p>
-  {:else}
-    <h1>Signed in as {username}</h1>
-    <p class="muted">
-      Cursor {cursor} · storage {persisted ? "persistent" : "best-effort"}
-      {#if offline}
-        · <strong>offline — read from this device, nothing fetched</strong>
-      {/if}
-    </p>
-
-    <h2>In the local copy</h2>
-    <ul>
-      {#each Object.entries(counts) as [entity, total] (entity)}
-        <li><code>{entity}</code> — {total}</li>
-      {/each}
-    </ul>
-
-    <h2>Projects, read from IndexedDB</h2>
-    <ul>
-      {#each firstProjects as title (title)}
-        <li>{title}</li>
-      {/each}
-    </ul>
-    <p class="muted">
-      Nothing above touched the network. Pull the cable, reload, and it still reads.
-    </p>
+    <div class="centered">
+      <h1>Could not start</h1>
+      <p class="muted">{message}</p>
+    </div>
+  {:else if database}
+    <Home {database} />
   {/if}
 </main>
 
 <style>
-  main {
-    font-family: system-ui, sans-serif;
-    max-width: 42rem;
-    margin: 3rem auto;
-    padding: 0 1.5rem;
-    line-height: 1.5;
+  .bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid rgba(127, 127, 127, 0.2);
   }
-  h2 {
-    margin-top: 2rem;
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    opacity: 0.6;
-  }
-  .muted {
-    opacity: 0.65;
-  }
-  .error {
-    color: #b3261e;
-  }
-  code {
-    background: rgba(127, 127, 127, 0.15);
-    padding: 0.1em 0.35em;
-    border-radius: 0.25rem;
-  }
+  .brand { font-weight: 700; }
+  .bar-right { display: flex; align-items: center; gap: 0.85rem; }
+  .who { opacity: 0.7; font-size: 0.85rem; }
+  .link { background: none; border: 0; color: inherit; opacity: 0.7; cursor: pointer; font-size: 0.85rem; }
+  .centered { max-width: 40rem; margin: 4rem auto; padding: 0 1rem; text-align: center; }
+  .muted { opacity: 0.65; }
 </style>

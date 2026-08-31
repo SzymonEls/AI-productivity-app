@@ -1,0 +1,2575 @@
+/*
+ * Feature styles. Colors are driven by the design tokens defined in theme.css
+ * so every rule works in both light and dark mode. Layout/structure is
+ * unchanged from the original design; only the palette was tokenized.
+ */
+
+.min-w-0 {
+    min-width: 0;
+}
+
+.card {
+    border-radius: var(--radius-lg);
+}
+
+.empty-state {
+    border: 1px dashed var(--border-strong);
+}
+
+.preserve-lines {
+    white-space: pre-wrap;
+}
+
+.markdown-content > *:last-child {
+    margin-bottom: 0;
+}
+
+.markdown-content {
+    overflow-wrap: anywhere;
+}
+
+.markdown-content pre {
+    overflow-x: auto;
+    max-width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 0.9rem;
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--foreground);
+}
+
+.markdown-content h1 {
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.15rem;
+}
+
+.markdown-content h2 {
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.02rem;
+}
+
+.markdown-content h3 {
+    font-size: 0.96rem;
+}
+
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+    font-size: 0.9rem;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content blockquote,
+.markdown-content pre {
+    margin-bottom: 0.8rem;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 1.2rem;
+}
+
+.markdown-content .task-list,
+.editor-preview .task-list,
+.editor-preview-side .task-list {
+    padding-left: 0;
+    list-style: none;
+}
+
+.markdown-content .task-list-item,
+.editor-preview .task-list-item,
+.editor-preview-side .task-list-item {
+    display: block;
+    list-style: none;
+}
+
+.markdown-content .task-list-checkbox,
+.editor-preview .task-list-checkbox,
+.editor-preview-side .task-list-checkbox {
+    margin: 0 0.5rem 0 0;
+    vertical-align: -0.08rem;
+}
+
+.markdown-content ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.markdown-content ol:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview ol:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview-side ul:not(.task-list) > .task-list-item > .task-list-checkbox,
+.editor-preview-side ol:not(.task-list) > .task-list-item > .task-list-checkbox {
+    margin-left: -1.25rem;
+}
+
+.markdown-content .task-list .task-list,
+.editor-preview .task-list .task-list,
+.editor-preview-side .task-list .task-list {
+    padding-left: 1.35rem;
+}
+
+.markdown-content .task-list-item > ul,
+.markdown-content .task-list-item > ol,
+.editor-preview .task-list-item > ul,
+.editor-preview .task-list-item > ol,
+.editor-preview-side .task-list-item > ul,
+.editor-preview-side .task-list-item > ol {
+    margin-top: 0.25rem;
+    margin-bottom: 0;
+}
+
+.markdown-content .task-list-item:has(> .task-list-checkbox:checked),
+.editor-preview .task-list-item:has(> .task-list-checkbox:checked),
+.editor-preview-side .task-list-item:has(> .task-list-checkbox:checked) {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+.markdown-content li + li {
+    margin-top: 0.2rem;
+}
+
+.markdown-content code {
+    background-color: var(--muted);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+}
+
+.project-section-markdown {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    padding-left: 1.3rem;
+    min-width: 0;
+}
+
+.project-section-markdown::before {
+    content: "";
+    position: absolute;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    left: 0.28rem;
+    width: 2px;
+    border-radius: 2px;
+    background: var(--border-strong);
+}
+
+.project-section-preface {
+    color: var(--muted-foreground);
+}
+
+.project-markdown-section {
+    position: relative;
+    min-width: 0;
+}
+
+.project-markdown-step {
+    position: absolute;
+    top: 0.9rem;
+    left: -1.4rem;
+    z-index: 1;
+    width: 0.8rem;
+    height: 0.8rem;
+    border: 2px solid var(--project-section-accent, var(--primary));
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--project-section-accent, var(--primary)) 18%, transparent);
+}
+
+.project-markdown-section-card {
+    position: relative;
+    padding: 0.9rem 1.05rem;
+    padding-right: 2.65rem;
+    border: 1px solid color-mix(in srgb, var(--project-section-accent, var(--primary)) 22%, var(--border));
+    border-left: 3px solid var(--project-section-accent, var(--primary));
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--project-section-accent, var(--primary)) 10%, var(--surface));
+}
+
+.project-section-archive-button {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted-foreground);
+    background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.project-section-archive-button:hover,
+.project-section-archive-button:focus-visible {
+    color: var(--foreground);
+    background: var(--surface);
+}
+
+.project-markdown-section-card > h1,
+.project-markdown-section-card > h2,
+.project-markdown-section-card > h3,
+.project-markdown-section-card > h4,
+.project-markdown-section-card > h5,
+.project-markdown-section-card > h6 {
+    margin-top: 0;
+    margin-bottom: 0.35rem;
+    padding-bottom: 0;
+    border-bottom: 0;
+    font-size: 1rem;
+    color: var(--foreground);
+}
+
+.project-markdown-section-card > *:last-child {
+    margin-bottom: 0;
+}
+
+.project-markdown-section-tone-1 { --project-section-accent: #6366f1; }
+.project-markdown-section-tone-2 { --project-section-accent: #ec4899; }
+.project-markdown-section-tone-3 { --project-section-accent: #3b82f6; }
+.project-markdown-section-tone-4 { --project-section-accent: #14b8a6; }
+.project-markdown-section-tone-5 { --project-section-accent: #8b5cf6; }
+.project-markdown-section-tone-6 { --project-section-accent: #f59e0b; }
+
+.editor-preview h1,
+.editor-preview h2,
+.editor-preview h3,
+.editor-preview h4,
+.editor-preview h5,
+.editor-preview h6,
+.editor-preview-side h1,
+.editor-preview-side h2,
+.editor-preview-side h3,
+.editor-preview-side h4,
+.editor-preview-side h5,
+.editor-preview-side h6 {
+    margin-top: 1.25rem;
+    margin-bottom: 0.75rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--foreground);
+}
+
+.editor-preview h1,
+.editor-preview-side h1 {
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.15rem;
+}
+
+.editor-preview h2,
+.editor-preview-side h2 {
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 1.02rem;
+}
+
+.editor-preview h3,
+.editor-preview-side h3 {
+    font-size: 0.96rem;
+}
+
+.editor-preview h4,
+.editor-preview h5,
+.editor-preview h6,
+.editor-preview-side h4,
+.editor-preview-side h5,
+.editor-preview-side h6 {
+    font-size: 0.9rem;
+}
+
+.editor-preview p,
+.editor-preview ul,
+.editor-preview ol,
+.editor-preview blockquote,
+.editor-preview pre,
+.editor-preview-side p,
+.editor-preview-side ul,
+.editor-preview-side ol,
+.editor-preview-side blockquote,
+.editor-preview-side pre {
+    margin-bottom: 0.8rem;
+}
+
+.editor-preview ul,
+.editor-preview ol,
+.editor-preview-side ul,
+.editor-preview-side ol {
+    padding-left: 1.2rem;
+}
+
+.editor-preview li + li,
+.editor-preview-side li + li {
+    margin-top: 0.2rem;
+}
+
+.editor-preview code,
+.editor-preview-side code {
+    background-color: var(--muted);
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.25rem;
+}
+
+.inline-edit-card {
+    border-radius: var(--radius-lg);
+}
+
+.inline-section-controls {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.inline-pencil-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 1.18rem;
+    line-height: 1;
+}
+
+.inline-pencil-button:hover,
+.inline-pencil-button:focus {
+    color: var(--primary);
+}
+
+.project-inline-section + .project-inline-section {
+    margin-top: 1rem;
+}
+
+.project-view-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.timeline-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.timeline-private-toggle {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.95rem;
+    margin: 0 0.25rem 0 0;
+}
+
+.dashboard-page {
+    max-width: 100%;
+}
+
+.dashboard-section {
+    padding: 1.35rem 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+}
+
+.dashboard-header-section {
+    margin-bottom: 1.25rem;
+}
+
+.project-timeline-panel {
+    max-width: 100%;
+}
+
+.project-timeline-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+}
+
+.project-timeline-section {
+    flex: 3 1 0;
+    min-width: 0;
+}
+
+.dashboard-header-toolbar {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+
+.project-timeline {
+    position: relative;
+    display: grid;
+    gap: 0.9rem;
+    padding-left: 1.3rem;
+    min-width: 0;
+}
+
+.timeline-backlog {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.timeline-backlog-header {
+    margin-bottom: 0.55rem;
+}
+
+.timeline-backlog-title {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    color: var(--muted-foreground);
+}
+
+.timeline-backlog-hint {
+    margin: 0.3rem 0 0;
+    font-size: 0.74rem;
+    line-height: 1.35;
+    color: var(--muted-foreground);
+}
+
+.timeline-backlog-items.is-editing {
+    min-height: 4.9rem;
+    padding: 0.65rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.timeline-backlog-items .timeline-item {
+    max-width: 100%;
+    width: 100%;
+}
+
+.timeline-backlog-empty {
+    margin: 0.5rem 0 0;
+    font-size: 0.78rem;
+    color: var(--muted-foreground);
+}
+
+@media (max-width: 768px) {
+    .project-timeline-layout {
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .project-timeline-section,
+    .timeline-backlog {
+        flex: 1 1 auto;
+        width: 100%;
+    }
+}
+
+.project-timeline::before {
+    content: "";
+    position: absolute;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    left: 0.3rem;
+    width: 2px;
+    border-radius: 2px;
+    background: linear-gradient(to bottom, var(--border-strong), var(--border));
+}
+
+.timeline-group {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.timeline-group-marker {
+    position: absolute;
+    top: 0.55rem;
+    left: -1.22rem;
+    width: 0.62rem;
+    height: 0.62rem;
+    border: 2px solid var(--primary);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+.timeline-group-content {
+    padding-bottom: 0.4rem;
+}
+
+.timeline-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-left: -0.55rem;
+    margin-bottom: 0.55rem;
+}
+
+.timeline-group-title {
+    margin: 0;
+    padding-bottom: 0.25rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    color: var(--muted-foreground);
+}
+
+.timeline-group-name {
+    max-width: 16rem;
+}
+
+.timeline-group-move {
+    display: inline-flex;
+    gap: 0.25rem;
+}
+
+.timeline-group-move .btn {
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    min-width: 2rem;
+    padding-left: 0;
+    padding-right: 0;
+    font-weight: 700;
+}
+
+.timeline-items {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+    min-height: 3rem;
+    padding: 0.2rem 0;
+}
+
+.timeline-items:empty {
+    min-height: 0;
+    padding: 0;
+}
+
+.project-timeline.is-editing .timeline-items {
+    min-height: 4.9rem;
+    padding: 0.65rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.timeline-items.is-drag-over {
+    outline: 1px dashed var(--primary);
+    outline-offset: 0.25rem;
+    background: var(--primary-soft);
+}
+
+.timeline-item {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    max-width: min(100%, 14rem);
+    width: max-content;
+    min-height: 2.45rem;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+.timeline-item:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.timeline-item.is-dragging {
+    opacity: 0.5;
+}
+
+.timeline-project-item {
+    border-left: 3px solid var(--primary);
+}
+
+.timeline-note-item {
+    border-left: 3px solid var(--border-strong);
+    background: var(--surface-2);
+}
+
+.timeline-project-draft-item {
+    border-left-color: var(--primary);
+}
+
+.timeline-item.is-private-masked {
+    border-left-color: var(--muted-foreground);
+    background: var(--muted);
+}
+
+.project-timeline.is-editing .timeline-note-item {
+    align-items: stretch;
+    max-width: min(100%, 28rem);
+    width: min(100%, 28rem);
+}
+
+.project-timeline.is-editing .timeline-note-item .btn {
+    align-self: flex-start;
+    flex: 0 0 auto;
+}
+
+.timeline-drag-handle {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-weight: 700;
+    line-height: 1.1;
+    cursor: grab;
+}
+
+.timeline-item-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.timeline-item-title {
+    display: block;
+    color: var(--foreground);
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.timeline-item-title:hover,
+.timeline-item-title:focus {
+    color: var(--primary);
+}
+
+.timeline-item-text {
+    margin: 0.15rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+    line-height: 1.3;
+}
+
+.timeline-note-fields {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.timeline-note-privacy {
+    margin-top: 0.1rem;
+}
+
+.timeline-group-add-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+
+.inline-edit-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.9rem;
+}
+
+.project-title-edit {
+    min-width: min(100%, 22rem);
+}
+
+.inline-edit-textarea {
+    resize: none;
+}
+
+.long-goal-preview {
+    min-height: 1.5rem;
+}
+
+.long-goal-preview .task-list-checkbox:not(:disabled) {
+    cursor: pointer;
+}
+
+/* --- Plan block editor (Notion-like) --------------------------------- */
+
+/* Show only the editor that matches the current app setting, without a flash. */
+:root[data-plan-editor="blocks"] [data-plan-classic] { display: none !important; }
+:root[data-plan-editor="markdown"] [data-plan-blocks] { display: none !important; }
+
+.plan-block-editor {
+    position: relative;
+}
+
+.pbe {
+    position: relative;
+}
+
+.pbe-flat {
+    display: flex;
+    flex-direction: column;
+    /* Room in the left margin for the drag handle so block text stays flush-left. */
+    padding-left: 1.6rem;
+}
+
+/* Blocks that sit inside a timeline section card (grouped under an H1). */
+/* Heading inside a card matches the classic ".project-markdown-section-card > h1". */
+.project-markdown-section-card .pbe-type-h1 > .pbe-content {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.pbe-block {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    margin-left: calc(var(--pbe-indent, 0) * 1.4rem);
+    /* Match classic markdown rhythm: ~0.8rem between paragraphs/blocks. */
+    margin-top: 0.55rem;
+    border-radius: 6px;
+}
+
+.pbe-block.pbe-dragging { opacity: 0.45; }
+.pbe-block.pbe-drop-before { box-shadow: inset 0 2px 0 var(--primary); }
+.pbe-block.pbe-drop-after { box-shadow: inset 0 -2px 0 var(--primary); }
+
+/* Multi-block selection (drag across blocks to select whole sections). */
+.pbe-block.pbe-selected {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+    border-radius: 4px;
+}
+
+/* Where the tag list lands: the block it linked to says so for a moment, then
+   goes back to being an ordinary line. */
+.pbe-block.pbe-tag-found {
+    border-radius: 4px;
+    animation: pbe-tag-found 2.6s ease-out;
+}
+
+@keyframes pbe-tag-found {
+    0%, 55% { background: color-mix(in srgb, var(--primary) 20%, transparent); }
+    100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pbe-block.pbe-tag-found { animation: none; background: color-mix(in srgb, var(--primary) 14%, transparent); }
+}
+
+/* While drag-selecting blocks, suppress native text selection. */
+.pbe-selecting,
+.pbe-selecting .pbe-content { user-select: none; -webkit-user-select: none; }
+
+/* Consecutive list items of the same kind sit tight, like classic "li + li". */
+.pbe-type-bulleted + .pbe-type-bulleted,
+.pbe-type-numbered + .pbe-type-numbered,
+.pbe-type-todo + .pbe-type-todo { margin-top: 0.2rem; }
+
+.pbe-type-h1 { margin-top: 0.9rem; }
+.pbe-type-h2 { margin-top: 0.75rem; }
+.pbe-type-h3 { margin-top: 0.6rem; }
+
+/* The first block in any container hugs the top (no leading gap). */
+.pbe-flat > .pbe-block:first-child,
+.project-section-preface > .pbe-block:first-child,
+.project-markdown-section-card > .pbe-block:first-child { margin-top: 0; }
+
+/* Controls float in the left margin (out of flow) so block text is flush-left. */
+.pbe-controls {
+    position: absolute;
+    top: 0.05rem;
+    left: -1.4rem;
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+
+.pbe-block:hover > .pbe-controls,
+.pbe-block.is-focused > .pbe-controls,
+.pbe-block.pbe-menu-open > .pbe-controls { opacity: 1; }
+
+.pbe-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    line-height: 1;
+    letter-spacing: -2px;
+    cursor: grab;
+    touch-action: none;
+}
+
+.pbe-handle:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+}
+
+.pbe-marker {
+    flex: 0 0 auto;
+    /* Match the classic list indent (".markdown-content ul { padding-left: 1.2rem }"). */
+    min-width: 1.2rem;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.05rem;
+    color: var(--foreground);
+    user-select: none;
+}
+
+.pbe-type-paragraph > .pbe-marker,
+.pbe-type-h1 > .pbe-marker,
+.pbe-type-h2 > .pbe-marker,
+.pbe-type-h3 > .pbe-marker,
+.pbe-type-quote > .pbe-marker,
+.pbe-type-divider > .pbe-marker { min-width: 0; }
+
+/* Marker-less blocks drop the marker gap so their text sits flush-left,
+   aligned to (or left of) the list/to-do markers rather than indented past them. */
+.pbe-type-paragraph,
+.pbe-type-h1,
+.pbe-type-h2,
+.pbe-type-h3,
+.pbe-type-quote,
+.pbe-type-divider { gap: 0; }
+
+.pbe-bullet { font-size: 1.1rem; line-height: 1.2; }
+.pbe-number { font-variant-numeric: tabular-nums; }
+.pbe-check { margin: 0; display: inline-flex; align-items: center; height: 1.5rem; }
+.pbe-check input { width: 0.95rem; height: 0.95rem; cursor: pointer; }
+
+.pbe-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    outline: none;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.pbe-content.is-checked {
+    text-decoration: line-through;
+    color: var(--muted-foreground);
+}
+
+/* Standalone headings (no card, i.e. a plan without "# " sections). */
+.pbe-type-h1 > .pbe-content { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
+.pbe-type-h2 > .pbe-content { font-size: 1.02rem; font-weight: 700; line-height: 1.25; }
+.pbe-type-h3 > .pbe-content { font-size: 0.96rem; font-weight: 700; line-height: 1.25; }
+
+.pbe-type-quote > .pbe-content {
+    border-left: 3px solid var(--border-strong);
+    padding-left: 0.6rem;
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+.pbe-hr {
+    flex: 1 1 auto;
+    margin: 0.55rem 0;
+    border: 0;
+    border-top: 2px solid var(--border);
+}
+
+.pbe-block.is-focused > .pbe-content:empty::before,
+.pbe-flat > .pbe-block:only-child > .pbe-content:empty::before {
+    content: attr(data-placeholder);
+    color: var(--muted-foreground);
+    pointer-events: none;
+}
+
+.pbe-slash-menu {
+    position: absolute;
+    z-index: 30;
+    min-width: 16rem;
+    max-height: 17rem;
+    overflow-y: auto;
+    padding: 0.3rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.pbe-slash-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pbe-slash-item:hover,
+.pbe-slash-item.is-active { background: var(--surface-hover); }
+.pbe-slash-label { font-weight: 600; font-size: 0.9rem; color: var(--foreground); }
+.pbe-slash-hint { font-size: 0.75rem; color: var(--muted-foreground); }
+
+/* Block menu (opened from the drag handle) */
+.pbe-block-menu {
+    position: absolute;
+    z-index: 31;
+    min-width: 12.5rem;
+    max-height: 20rem;
+    overflow-y: auto;
+    padding: 0.3rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.pbe-menu-heading {
+    padding: 0.35rem 0.55rem 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--muted-foreground);
+}
+
+.pbe-menu-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.35rem 0.55rem;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.pbe-menu-item:hover { background: var(--surface-hover); }
+.pbe-menu-item.is-current { background: var(--primary-soft); }
+.pbe-menu-label { font-size: 0.88rem; color: var(--foreground); }
+.pbe-menu-check { color: var(--primary); font-size: 0.8rem; }
+.pbe-menu-danger .pbe-menu-label { color: var(--danger); }
+.pbe-menu-sep { height: 1px; margin: 0.3rem 0.2rem; background: var(--border); }
+
+.plan-save-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+}
+
+.plan-save-status[data-state="error"] { color: var(--danger); }
+
+.project-timer-modal {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--success);
+    background: var(--surface);
+}
+
+.project-timer-modal-header {
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.project-timer-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.project-timer-clock {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0;
+    font-size: 1.25rem;
+}
+
+.project-timer-button-clock {
+    padding-left: 0.15rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.project-timer-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.timer-description-field {
+    min-height: 4rem;
+    resize: vertical;
+}
+
+.project-timer-sessions {
+    border-top: 1px solid var(--border);
+    padding-top: 0.85rem;
+}
+
+.project-timer-session-list {
+    display: grid;
+    gap: 0.45rem;
+    max-height: 12rem;
+    overflow: auto;
+}
+
+.project-timer-session {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.55rem 0.65rem;
+    background: var(--surface-2);
+}
+
+.project-timer-session.is-running {
+    border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+    background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.project-timer-session-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: var(--muted-foreground);
+}
+
+.project-timer-session-description {
+    margin: 0.25rem 0 0;
+    white-space: pre-wrap;
+}
+
+.time-chart {
+    display: grid;
+    gap: 0.7rem;
+}
+
+.time-chart-row {
+    display: grid;
+    grid-template-columns: minmax(7rem, 13rem) minmax(0, 1fr) 6rem;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.time-chart-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+}
+
+.time-chart-track {
+    height: 0.85rem;
+    border-radius: 999px;
+    background: var(--muted);
+    overflow: hidden;
+}
+
+.time-chart-bar {
+    min-width: 0.2rem;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #14b8a6, #6366f1);
+}
+
+.daily-time-pie {
+    display: grid;
+    grid-template-columns: minmax(10rem, 13rem) minmax(0, 1fr);
+    gap: 1.25rem;
+    align-items: center;
+}
+
+.daily-time-pie-chart {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 13rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.daily-time-pie-chart::after {
+    content: "";
+    position: absolute;
+    inset: 27%;
+    border-radius: 50%;
+    background: var(--surface);
+    box-shadow: 0 0 0 1px var(--border);
+}
+
+.daily-time-pie-chart span {
+    position: relative;
+    z-index: 1;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.daily-time-pie-legend {
+    display: grid;
+    gap: 0.55rem;
+    min-width: 0;
+}
+
+.daily-time-pie-item {
+    display: grid;
+    grid-template-columns: 0.8rem minmax(0, 1fr) auto auto;
+    gap: 0.55rem;
+    align-items: center;
+    font-size: 0.92rem;
+}
+
+.daily-time-pie-swatch {
+    width: 0.8rem;
+    height: 0.8rem;
+    border-radius: 50%;
+}
+
+.daily-time-pie-title {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.time-summary-panel {
+    display: grid;
+    gap: 0.35rem;
+    justify-items: start;
+}
+
+.time-summary-panel strong {
+    font-size: clamp(2rem, 5vw, 3.25rem);
+    line-height: 1;
+    color: var(--foreground);
+}
+
+.time-entry-description {
+    min-width: 14rem;
+}
+
+.EasyMDEContainer {
+    width: 100%;
+}
+
+.EasyMDEContainer .editor-toolbar::before,
+.EasyMDEContainer .editor-toolbar::after {
+    display: none;
+}
+
+.EasyMDEContainer .CodeMirror {
+    border-color: var(--input);
+    border-radius: var(--radius-sm);
+    min-height: 220px;
+    background: var(--surface);
+    color: var(--foreground);
+}
+
+.EasyMDEContainer .CodeMirror-cursor {
+    border-color: var(--foreground);
+}
+
+.EasyMDEContainer .editor-preview,
+.EasyMDEContainer .editor-preview-side {
+    background: var(--surface);
+    color: var(--foreground);
+}
+
+.EasyMDEContainer .CodeMirror,
+.EasyMDEContainer .editor-preview,
+.EasyMDEContainer .editor-preview-side {
+    font-size: 0.98rem;
+    line-height: 1.65;
+}
+
+.EasyMDEContainer .CodeMirror-lines {
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+}
+
+.EasyMDEContainer .CodeMirror pre.CodeMirror-line,
+.EasyMDEContainer .CodeMirror pre.CodeMirror-line-like {
+    font-size: 0.98rem;
+    line-height: 1.65;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header,
+.EasyMDEContainer .CodeMirror .cm-strong {
+    font-weight: 700;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header-1,
+.EasyMDEContainer .CodeMirror .cm-header-2,
+.EasyMDEContainer .CodeMirror .cm-header-3,
+.EasyMDEContainer .CodeMirror .cm-header-4,
+.EasyMDEContainer .CodeMirror .cm-header-5,
+.EasyMDEContainer .CodeMirror .cm-header-6 {
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header-1 {
+    font-size: 1.18rem;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header-2 {
+    font-size: 1.08rem;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header-3 {
+    font-size: 1.02rem;
+}
+
+.EasyMDEContainer .CodeMirror .cm-header-4,
+.EasyMDEContainer .CodeMirror .cm-header-5,
+.EasyMDEContainer .CodeMirror .cm-header-6 {
+    font-size: 0.98rem;
+}
+
+/* The toolbar follows a long plan down the screen, which on a phone is the
+   difference between reaching for bold and scrolling back to the top of the
+   editor for it. It sticks below the navbar rather than at 0: the navbar is
+   sticky too and sits far above it, so a toolbar stuck at the very top simply
+   disappears underneath and reads as one that never moved at all. */
+.EasyMDEContainer .editor-toolbar {
+    border-color: var(--input);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    position: sticky;
+    top: var(--app-navbar-height, 0px);
+    z-index: 5;
+    background: var(--surface);
+}
+
+.EasyMDEContainer .editor-toolbar button {
+    color: var(--foreground);
+}
+
+.EasyMDEContainer .editor-toolbar button:hover,
+.EasyMDEContainer .editor-toolbar button.active {
+    background: var(--surface-hover);
+    border-color: var(--border);
+}
+
+.EasyMDEContainer .editor-toolbar i.separator {
+    border-color: var(--border);
+}
+
+/* Fullscreen takes the toolbar out of the page, navbar and all, so the offset
+   above has to be undone with it. */
+.EasyMDEContainer .editor-toolbar.fullscreen {
+    position: fixed;
+    top: 0;
+}
+
+.EasyMDEContainer .CodeMirror-sided {
+    min-height: 220px !important;
+}
+
+/* Private projects in safe mode: the plan and the thoughts sit behind a button
+   until asked for. The card is rendered veiled whatever the mode and the veil is
+   drawn by [data-safe-mode="on"] alone, so switching the mode needs no reload and
+   nothing is on screen for a frame before the decision. The controls go with the
+   content, since there is nothing to edit while it is hidden. */
+[data-safe-mode="on"] .private-veiled .private-hideable,
+[data-safe-mode="on"] .private-veiled .inline-section-controls,
+[data-safe-mode="on"] .private-veiled .plan-save-status {
+    display: none;
+}
+
+.private-veil {
+    display: none;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 1rem;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+[data-safe-mode="on"] .private-veiled .private-veil {
+    display: flex;
+}
+
+.private-veil-lock {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
+.private-veil-note {
+    flex: 1 1 10rem;
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
+.plan-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+.history-preview {
+    max-height: 12rem;
+    overflow: hidden;
+    position: relative;
+}
+
+.history-preview::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 3rem;
+    background: linear-gradient(to bottom, transparent, var(--surface));
+}
+
+.history-raw-json {
+    padding: 0.9rem;
+    border-radius: var(--radius);
+    background: #0b0f19;
+    color: #e5e7eb;
+    font-size: 0.82rem;
+    overflow-x: auto;
+}
+
+.daily-project-context-list {
+    padding-left: 1.2rem;
+}
+
+.manual-project-select-list {
+    display: grid;
+    gap: 0.65rem;
+}
+
+.manual-project-timeline {
+    gap: 0.75rem;
+}
+
+.manual-project-timeline .timeline-items {
+    gap: 0.5rem;
+}
+
+.manual-project-timeline .timeline-item {
+    max-width: min(100%, 24rem);
+}
+
+.manual-project-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.manual-project-choice:hover,
+.manual-project-choice:focus-within {
+    border-color: var(--primary);
+}
+
+.manual-project-choice:has(.form-check-input:checked) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.manual-project-choice .form-check-input {
+    margin-top: 0.2rem;
+}
+
+.manual-project-choice .timeline-item-title {
+    display: inline;
+}
+
+.manual-star-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    color: #f59e0b;
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.manual-timeline-note {
+    pointer-events: none;
+}
+
+.manual-project-description {
+    padding: 0.2rem 0 0;
+}
+
+.manual-project-description .project-section-markdown {
+    gap: 0.7rem;
+}
+
+.manual-project-description .project-markdown-section-card {
+    padding: 0.7rem 0.8rem;
+}
+
+.manual-last-session {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.82rem;
+    line-height: 1.25;
+    color: var(--muted-foreground);
+}
+
+.manual-plan-preview {
+    padding: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+@media (max-width: 575.98px) {
+    .project-view-toolbar {
+        align-items: stretch;
+    }
+
+    .timeline-edit-actions {
+        width: 100%;
+    }
+
+    .timeline-edit-actions .btn {
+        flex: 1 1 auto;
+    }
+
+    .time-chart-row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    .daily-time-pie {
+        grid-template-columns: 1fr;
+        justify-items: center;
+    }
+
+    .daily-time-pie-legend {
+        width: 100%;
+    }
+
+    .daily-time-pie-item {
+        grid-template-columns: 0.8rem minmax(0, 1fr) auto;
+    }
+
+    .daily-time-pie-item .text-muted {
+        grid-column: 2 / -1;
+    }
+}
+
+/* Read-only demo mode (DEMO_MODE); absent from a normal installation. */
+.demo-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin: 0 0 1rem;
+    padding: 0.5rem 1rem;
+    background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+    border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--border));
+    color: var(--foreground);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.demo-banner-tag {
+    padding: 0.1rem 0.55rem;
+    border-radius: var(--radius-pill);
+    background: var(--warning);
+    color: var(--primary-foreground);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.demo-doc {
+    overflow-wrap: anywhere;
+}
+
+.demo-doc > :first-child {
+    margin-top: 0;
+}
+
+.demo-doc > :last-child {
+    margin-bottom: 0;
+}
+
+.demo-doc pre,
+.demo-doc table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.demo-doc pre {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
+
+.demo-doc table {
+    border-collapse: collapse;
+}
+
+.demo-doc th,
+.demo-doc td {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.demo-doc th {
+    background: var(--surface-2);
+}
+
+/* ---------------------------------------------------------------- */
+/* Daily project slots (A/B/C), the schedule page and the planner.    */
+/* ---------------------------------------------------------------- */
+
+.day-slots-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    gap: 1rem;
+    align-items: start;
+}
+
+.day-slots-main {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.day-slots-aside {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+.slot-card {
+    /* Anchors the .stretched-link that turns the whole card into the hit area. */
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+}
+
+.slot-card-linked {
+    transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
+}
+
+.slot-card-linked:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+/* The link fills the card, so show its focus ring on the card itself. */
+.slot-card-linked:focus-within {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--ring);
+}
+
+.slot-card-linked .slot-card-title:focus-visible,
+.slot-card-fill:focus-visible {
+    outline: none;
+}
+
+/* Invisible hit area over an empty card, matching the stretched link on a filled one. */
+.slot-card-fill {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* Project picker inside the planner dialog */
+
+.picker-list {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    text-align: left;
+}
+
+button.picker-row:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.picker-row-blocked {
+    background: var(--surface-2);
+    color: var(--muted-foreground);
+}
+
+.picker-row-text {
+    display: grid;
+    min-width: 0;
+}
+
+.picker-row-title {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.picker-row-note {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Today's tracked time against the targets set on the A and B projects. */
+.day-progress {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.day-progress-percent {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.day-progress-percent.is-complete {
+    color: var(--success);
+}
+
+.day-progress-detail {
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Empty is empty, whichever letter it is: grey and dashed, waiting to be filled. */
+.slot-card-empty {
+    background: var(--surface-2);
+    border-style: dashed;
+}
+
+.slot-card-empty .slot-card-step {
+    color: var(--muted-foreground);
+}
+
+/* A booked slot carries an accent bar: amber for the day's real work in A and B,
+   grey for the optional C, so C stays visibly secondary once it is filled. Only
+   the colour differs - everything below reads it from --slot-card-accent. */
+.slot-card:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 7%, var(--surface));
+}
+
+/* Same specificity as the rule above, so it has to stay after it. */
+.slot-card-optional:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+/* A finished session goes green, whichever slot it sits in - last one wins. */
+.slot-card-done:not(.slot-card-empty) {
+    --slot-card-accent: var(--success);
+}
+
+.slot-done-tag {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, var(--success) 18%, var(--surface));
+    color: var(--success);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.slot-card:not(.slot-card-empty):hover {
+    background: color-mix(in srgb, var(--slot-card-accent) 14%, var(--surface));
+    border-color: color-mix(in srgb, var(--slot-card-accent) 55%, var(--border));
+}
+
+.slot-card-letter {
+    display: grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--radius-sm);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.slot-card-empty .slot-card-letter {
+    background: var(--muted);
+    color: var(--muted-foreground);
+}
+
+.slot-card:not(.slot-card-empty) .slot-card-letter {
+    background: color-mix(in srgb, var(--slot-card-accent) 16%, var(--surface));
+    color: var(--slot-card-accent);
+}
+
+.slot-card-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+
+.slot-card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: inherit;
+}
+
+/* No underline on hover: the whole card lights up, which is the affordance here. */
+.slot-card-title:hover {
+    text-decoration: none;
+}
+
+.slot-card-step {
+    margin-top: 0.15rem;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.slot-card-step-empty {
+    font-style: italic;
+}
+
+.slot-card-side {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    white-space: nowrap;
+}
+
+.slot-card-time {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.slot-card-target {
+    color: var(--muted-foreground);
+    font-weight: 400;
+}
+
+.unplanned-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.unplanned-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.unplanned-item-text {
+    display: grid;
+    min-width: 0;
+}
+
+.unplanned-item-text a {
+    text-decoration: none;
+    color: inherit;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.unplanned-item-text a:hover {
+    text-decoration: underline;
+}
+
+/* System health — one ring for the last week of sessions and planning.
+   The three bands only change --health-accent; everything below reads it. */
+.system-health {
+    --health-accent: var(--success);
+}
+
+.system-health-warn {
+    --health-accent: var(--warning);
+}
+
+.system-health-bad {
+    --health-accent: var(--danger);
+}
+
+.system-health-body {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.system-health-gauge {
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 5.25rem;
+    height: 5.25rem;
+}
+
+.system-health-gauge svg {
+    width: 100%;
+    height: 100%;
+    /* The ring is drawn from 3 o'clock, so it starts at the top instead. */
+    transform: rotate(-90deg);
+}
+
+.system-health-gauge circle {
+    fill: none;
+    stroke-width: 8;
+}
+
+.system-health-track {
+    stroke: var(--muted);
+}
+
+.system-health-value {
+    stroke: var(--health-accent);
+    stroke-linecap: round;
+    transition: stroke-dasharray 0.3s ease;
+}
+
+.system-health-score {
+    position: absolute;
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--health-accent);
+}
+
+.system-health-parts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    font-size: 0.85rem;
+}
+
+.system-health-parts li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.system-health-part-label {
+    color: var(--muted-foreground);
+}
+
+.system-health-part-value {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+/* Schedule page — three weeks of calendar sheets -------------------- */
+
+.schedule-status {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.schedule-status-success { color: var(--success); }
+.schedule-status-danger { color: var(--danger); }
+
+.schedule-hint {
+    margin: 0.6rem 0 0;
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+}
+
+.schedule-week + .schedule-week {
+    margin-top: 1.25rem;
+}
+
+.schedule-week-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+    padding: 0 0.15rem;
+}
+
+.schedule-week-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.schedule-week-range {
+    color: var(--muted-foreground);
+    font-size: 0.82rem;
+}
+
+.schedule-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+    gap: 0.6rem;
+}
+
+/* Wide enough for the seven sheets of a week to stand in one row. */
+@media (min-width: 1500px) {
+    .schedule-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+}
+
+/* One day = one sheet off a tear-off calendar: a dated head, a perforation
+   line under it, and the day's three blocks below. */
+.day-sheet {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+.day-sheet-today {
+    border-color: var(--primary);
+}
+
+.day-sheet-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface-2);
+    border-bottom: 1px dashed var(--border-strong);
+}
+
+.day-sheet-today .day-sheet-header {
+    background: var(--primary-soft);
+}
+
+.day-sheet-weekend .day-sheet-weekday {
+    color: var(--danger);
+}
+
+.day-sheet-weekday {
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.day-sheet-number {
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+}
+
+.day-sheet-month {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.day-sheet-tag {
+    margin-left: auto;
+    padding: 0.05rem 0.5rem;
+    border-radius: var(--radius-pill);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.schedule-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 1.25rem;
+}
+
+.day-sheet-slots {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem;
+    display: grid;
+    gap: 0.35rem;
+}
+
+/* Blocks read the same as the A/B/C cards on the home page: dashed grey while
+   free, amber once booked, grey for the spare C, green when the session is
+   done. Everything below takes its colour from --slot-card-accent. */
+.day-slot {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    min-height: 2.4rem;
+    padding: 0.3rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    transition: background-color 0.12s ease-in-out, border-color 0.12s ease-in-out;
+}
+
+.day-slot.is-free {
+    border-style: dashed;
+}
+
+/* Only on the board: the archive renders the same blocks, but nothing there
+   answers a click, so neither should hover or the grab cursor below. */
+[data-schedule] .day-slot.is-free:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+}
+
+.day-slot.is-booked {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 10%, var(--surface));
+}
+
+/* Same specificity as the rule above, so these have to stay after it. */
+.day-slot.is-booked.day-slot-optional {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+.day-slot.is-booked.is-done {
+    --slot-card-accent: var(--success);
+}
+
+.day-slot-letter {
+    flex: 0 0 auto;
+    width: 1.1rem;
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-align: center;
+}
+
+.day-slot.is-booked .day-slot-letter {
+    color: var(--slot-card-accent);
+}
+
+.day-slot-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.day-slot-title {
+    color: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.day-slot-title:hover {
+    text-decoration: underline;
+}
+
+.day-slot-done {
+    color: var(--success);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.day-slot-step {
+    flex-basis: 100%;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 0.95rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.day-slot-free {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+/* Freeing a block belongs to edit mode, next to moving one - outside it the
+   sheets are read-only apart from filling an empty block. (.d-none, set by the
+   script on an empty block, still wins over this.) */
+/* The board is always live, so the × sits on every booked block; the template
+   and refreshCell() put .d-none on the free ones, which outranks this. */
+.day-slot-clear {
+    display: inline-grid;
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.85rem;
+}
+
+/* The archive's ✓: dim until the session is ticked off, green once it is, and
+   the only thing on a past block that answers a click. */
+.day-slot-done-toggle {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0.35;
+}
+
+.day-slot-done-toggle:hover,
+.day-slot-done-toggle:focus-visible {
+    background: transparent;
+    border-color: var(--border);
+    opacity: 1;
+}
+
+.day-slot.is-done .day-slot-done-toggle {
+    color: var(--success);
+    opacity: 1;
+}
+
+/* Covers the block, mirroring the fill button on an empty card at home. */
+.day-slot-fill {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* A booked block is always draggable, and every block is a drop target. */
+[data-schedule] .day-slot.is-booked .day-slot-content {
+    cursor: grab;
+}
+
+[data-schedule] .day-slot.is-booked .day-slot-content:active {
+    cursor: grabbing;
+}
+
+.day-slot.is-dragging {
+    opacity: 0.45;
+}
+
+.day-slot.is-drag-over,
+.day-slot.is-picked {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px var(--ring);
+}
+
+/* Tags -------------------------------------------------------------- *
+   A tag is plain text in the plan, so it is only ever painted: the same violet
+   in the block editor, in a rendered plan and in the tag list, which is what
+   makes the three read as one thing. It is a tint on the words rather than a
+   filled pill - a plan is mostly prose, and a row of pills shouted over it. */
+.plan-tag {
+    color: var(--tag-color);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* The tag the reader was sent to, in the classic (rendered) plan. */
+.plan-tag.plan-tag-found {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.tag-list {
+    display: grid;
+    gap: 1.25rem;
+}
+
+.tag-list-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 1.5rem 0;
+    justify-content: center;
+    color: var(--muted-foreground);
+    font-size: 0.9rem;
+}
+
+.tag-group-title {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.45rem;
+    font-size: 0.95rem;
+}
+
+/* The heading names the group, so it is the one tag on the page worth marking
+   out; every #tag in the lines below is the same tag repeated. */
+.tag-group-title .plan-tag {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: var(--tag-soft);
+}
+
+.tag-item .plan-tag {
+    color: inherit;
+    font-weight: inherit;
+}
+
+.tag-group-count {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-weight: 400;
+}
+
+.tag-item {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: inherit;
+    text-decoration: none;
+}
+
+.tag-item + .tag-item {
+    margin-top: 0.35rem;
+}
+
+.tag-item:hover,
+.tag-item:focus-visible {
+    border-color: var(--border-strong);
+    background: var(--surface-hover);
+    color: inherit;
+}
+
+.tag-item-text {
+    min-width: 0;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+/* A ticked-off to-do keeps its place in the list but stops asking to be done. */
+.tag-item.is-done .tag-item-text {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+/* In safe mode a private project's line is listed but not read out. */
+.tag-item-covered {
+    color: var(--muted-foreground);
+    font-style: italic;
+}
+
+.tag-item-project {
+    flex: 0 0 auto;
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+}
+
+/* Planner dialog --------------------------------------------------- */
+
+.planner-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+    background: rgba(24, 24, 27, 0.5);
+}
+
+.planner-backdrop[hidden] {
+    display: none;
+}
+
+.planner-dialog {
+    width: min(40rem, 100%);
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 1.25rem;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg, 0 20px 40px rgba(0, 0, 0, 0.25));
+}
+
+/* One date and two buttons - the session planner's grid of days would dwarf it. */
+.planner-dialog-narrow {
+    width: min(24rem, 100%);
+}
+
+.planner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.planner-status {
+    min-height: 1.25rem;
+    margin: 0 0 0.75rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+}
+
+.planner-status-success { color: var(--success); }
+.planner-status-danger { color: var(--danger); }
+
+.planner-grid {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.planner-day {
+    display: grid;
+    grid-template-columns: 8rem minmax(0, 1fr);
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.planner-day-today {
+    border-color: var(--primary);
+}
+
+.planner-day-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.planner-day-slots {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+}
+
+.planner-slot {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 2rem;
+    padding: 0.2rem 0.45rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    font-size: 0.85rem;
+}
+
+.planner-slot-letter {
+    color: var(--muted-foreground);
+    font-weight: 700;
+    font-size: 0.75rem;
+}
+
+.planner-slot-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted-foreground);
+}
+
+/* The dialog uses the home page's colour language, so a glance says whether a
+   block is free (dashed grey), booked (amber), spare (grey) or finished (green). */
+.planner-slot-free {
+    border-style: dashed;
+}
+
+.planner-slot-taken {
+    --slot-card-accent: var(--slot-accent);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 38%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 10%, var(--surface));
+}
+
+/* Same specificity as the rule above, so these have to stay after it. */
+.planner-slot-taken.planner-slot-optional {
+    --slot-card-accent: var(--slot-optional-accent);
+}
+
+.planner-slot-taken.planner-slot-done {
+    --slot-card-accent: var(--success);
+}
+
+.planner-slot-taken .planner-slot-letter {
+    color: var(--slot-card-accent);
+}
+
+.planner-slot-taken .planner-slot-name {
+    color: var(--foreground);
+}
+
+/* The project the dialog is about, marked without changing its status colour. */
+.planner-slot-mine {
+    box-shadow: inset 0 0 0 1px var(--slot-card-accent);
+}
+
+.planner-slot-mine .planner-slot-name {
+    font-weight: 600;
+}
+
+.planner-slot-blocked {
+    border-style: dashed;
+    opacity: 0.65;
+}
+
+.planner-slot-remove {
+    flex: 0 0 auto;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted-foreground);
+    font-size: 0.95rem;
+    line-height: 1;
+}
+
+.planner-slot-remove:hover,
+.planner-slot-remove:focus-visible {
+    background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+    color: var(--danger);
+}
+
+.planner-take {
+    padding: 0.05rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+/* Why the free blocks below cannot be taken - one line for the whole grid. */
+.planner-note {
+    margin: 0 0 0.75rem;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.planner-note[hidden] {
+    display: none;
+}
+
+/* Slot letter in the navbar project switcher ----------------------- */
+
+.switcher-slot {
+    display: inline-grid;
+    place-items: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: var(--radius-sm);
+    background: var(--primary);
+    color: var(--primary-foreground);
+    font-size: 0.65rem;
+    font-weight: 700;
+    flex: 0 0 auto;
+}
+
+@media (max-width: 991.98px) {
+    .day-slots-layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 575.98px) {
+    .slot-card {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .slot-card-side:not(:empty) {
+        grid-column: 1 / -1;
+        justify-content: flex-end;
+    }
+
+    .planner-day {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
