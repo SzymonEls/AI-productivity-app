@@ -61,14 +61,16 @@
         class:is-booked={entry.project}
         class:is-free={!entry.project}
         class:is-done={entry.isDone}
-        class:is-holding={holding?.date === sheet.date && holding?.slot === entry.slot}
+        class:is-picked={holding?.date === sheet.date && holding?.slot === entry.slot}
       >
         <span class="day-slot-letter" aria-hidden="true">{entry.slot}</span>
         <div class="day-slot-content">
-          {#if entry.project}
+          {#if entry.project && readonly}
             <a class="day-slot-title" href={`${BASE}/projects/${entry.project.uid}`} use:link>
               {entry.project.title}
             </a>
+          {:else if entry.project}
+            <span class="day-slot-title">{entry.project.title}</span>
             {#if entry.isDone && !readonly}
               <span class="day-slot-done" title="Session done" aria-label="Session done">✓</span>
             {/if}
@@ -91,38 +93,38 @@
 
         {#if !readonly}
           {#if entry.project}
-            <!-- Tap to pick the booking up, then tap where it goes. A grip
-                 rather than the whole block, so the title stays a link -
-                 and unlike HTML5 drag, this works on a phone. -->
-            <button
-              type="button"
-              class="icon-button day-slot-move"
-              title={`Move block ${entry.slot}`}
-              onclick={() => onpick?.(sheet.date, entry.slot, entry)}
-            >⇄</button>
             <button
               type="button"
               class="icon-button day-slot-clear"
               title={`Free block ${entry.slot}`}
-              onclick={() => onclear?.(entry)}
+              onclick={(event) => {
+                // The cell below would otherwise read this as "pick it up".
+                event.stopPropagation();
+                onclear?.(entry);
+              }}
             ><Icon name="x" /></button>
           {/if}
-          <!-- Covers the whole block: an empty one is one click from a project,
-               and any block is a target while something is being moved. -->
-          {#if !entry.project || holding}
-            <button
-              type="button"
-              class="day-slot-fill"
-              onclick={() =>
-                holding
-                  ? onpick?.(sheet.date, entry.slot, entry)
-                  : onfill?.(sheet.date, entry.slot)}
-            >
-              <span class="visually-hidden">
-                {holding ? `Move here, block ${entry.slot}` : `Choose a project for block ${entry.slot}`}
-              </span>
-            </button>
-          {/if}
+          <!-- Covers the whole block, booked or not. On the board a click means
+               "move this", not "open it", so the title is not a way out either -
+               tap a booking to pick it up, then tap where it goes. -->
+          <button
+            type="button"
+            class="day-slot-fill"
+            onclick={() =>
+              holding || entry.project
+                ? onpick?.(sheet.date, entry.slot, entry)
+                : onfill?.(sheet.date, entry.slot)}
+          >
+            <span class="visually-hidden">
+              {#if holding}
+                Move here, block {entry.slot}
+              {:else if entry.project}
+                Move block {entry.slot}
+              {:else}
+                Choose a project for block {entry.slot}
+              {/if}
+            </span>
+          </button>
         {/if}
       </li>
     {/each}
