@@ -88,7 +88,13 @@ export interface Me {
   csrf_token: string;
   user: { username: string; email: string };
   app_version: string;
-  demo_mode: boolean;
+  demo: {
+    enabled: boolean;
+    banner: string;
+    document: string;
+    email: string;
+    password: string;
+  };
   timezone: string;
   rev: number;
 }

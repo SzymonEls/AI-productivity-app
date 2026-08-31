@@ -72,7 +72,15 @@ def me():
             "csrf_token": issue_token(),
             "user": {"username": current_user.username, "email": current_user.email},
             "app_version": current_app.config.get("APP_VERSION"),
-            "demo_mode": bool(current_app.config.get("DEMO_MODE")),
+            "demo": {
+                "enabled": bool(current_app.config.get("DEMO_MODE")),
+                "banner": current_app.config.get("DEMO_BANNER_HTML", ""),
+                "document": current_app.config.get("DEMO_DOC_HTML", ""),
+                # Only ever set for a demo, where the credentials are published
+                # anyway - it saves a visitor typing them.
+                "email": current_app.config.get("DEFAULT_LOGIN_EMAIL", ""),
+                "password": current_app.config.get("DEFAULT_LOGIN_PASSWORD", ""),
+            },
             "timezone": current_app.config.get("CALENDAR_TIMEZONE"),
             "rev": state.last_rev,
         }

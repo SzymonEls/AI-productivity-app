@@ -12,6 +12,8 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "noEmit": true

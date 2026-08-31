@@ -8,6 +8,7 @@
   import { BASE, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { Project } from "../sync/types";
+  import PlanEditor from "../ui/PlanEditor.svelte";
   import PrivateVeil from "../ui/PrivateVeil.svelte";
 
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
@@ -16,6 +17,11 @@
   const project = $derived(projects.value.find((candidate) => candidate.uid === uid));
 
   let editingPlan = $state(false);
+  // Which editor: the block editor, or raw Markdown in a textarea. The same
+  // localStorage key and the same default the previous frontend used.
+  let blockEditor = $state(
+    (document.documentElement.getAttribute("data-plan-editor") ?? "blocks") === "blocks"
+  );
   let editingDetails = $state(false);
   let planDraft = $state("");
   let details = $state<Partial<Project>>({});
@@ -179,9 +185,25 @@
     <div class="plan-head">
       <h2 class="section">Plan</h2>
       {#if editingPlan}
-        <div>
-          <button type="button" class="btn" onclick={savePlan}>Save</button>
-          <button type="button" class="btn ghost" onclick={() => (editingPlan = false)}>Cancel</button>
+        <div class="plan-actions">
+          <button
+            type="button"
+            class="btn ghost"
+            title="Switch between blocks and raw Markdown"
+            onclick={() => {
+              blockEditor = !blockEditor;
+              planDraft = project.long_goal;
+              try {
+                localStorage.setItem("app-plan-editor", blockEditor ? "blocks" : "markdown");
+              } catch {
+                // The choice still holds for this page view.
+              }
+            }}
+          >{blockEditor ? "Markdown" : "Blocks"}</button>
+          {#if !blockEditor}
+            <button type="button" class="btn" onclick={savePlan}>Save</button>
+          {/if}
+          <button type="button" class="btn ghost" onclick={() => (editingPlan = false)}>Done</button>
         </div>
       {:else}
         <button
@@ -196,7 +218,18 @@
     </div>
 
     <PrivateVeil projectUid={uid} section="plan" isPrivate={project.is_private} label="plan">
-      {#if editingPlan}
+      {#if editingPlan && blockEditor}
+        <!-- Saves itself as you type; the outbox carries it onward. -->
+        {#key uid}
+          <PlanEditor
+            markdown={project.long_goal}
+            onsave={async (next) => {
+              await save({ long_goal: next });
+              return true;
+            }}
+          />
+        {/key}
+      {:else if editingPlan}
         <textarea class="editor" bind:value={planDraft} spellcheck="false"></textarea>
       {:else if project.long_goal.trim()}
         <div class="markdown" role="presentation" onclick={onPlanClick}>{@html interactive}</div>
@@ -239,6 +272,7 @@
   .thoughts { white-space: pre-wrap; margin: 0.3rem 0 0; }
   .section { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 2rem 0 0.6rem; }
   .plan-head { display: flex; align-items: center; justify-content: space-between; }
+  .plan-actions { display: flex; gap: 0.4rem; }
   .tools { display: flex; gap: 0.4rem; flex-wrap: wrap; }
   .notice { background: rgba(217, 119, 6, 0.12); border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.88rem; }
 

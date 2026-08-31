@@ -34,7 +34,10 @@ from .models import (
 
 # Requests that may still write while the demo is read-only. The login POST has
 # to go through; logout is a GET and never reaches the guard.
-DEMO_ALLOWED_ENDPOINTS = frozenset({"auth.login"})
+# Signing in is a write in the HTTP sense and has to stay open, or nobody
+# could reach the demo at all. The endpoint moved to the API when the login
+# form did; naming the old one here would have quietly locked the door.
+DEMO_ALLOWED_ENDPOINTS = frozenset({"api.login"})
 DEMO_WRITE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
 # Relative link in the rendered document, e.g. href="docs/ARCHITECTURE.md".
@@ -46,12 +49,12 @@ def register_demo_mode(app):
     """Install demo mode, or get out of the way entirely when it is off."""
 
     if not app.config.get("DEMO_MODE"):
-        app.jinja_env.globals["demo_mode"] = False
         return
 
-    app.jinja_env.globals["demo_mode"] = True
-    app.jinja_env.globals["demo_banner_message"] = app.config.get("DEMO_BANNER_MESSAGE", "")
-    app.jinja_env.globals["demo_doc_html"] = _render_demo_doc(app)
+    # Read once at start-up and handed to the client through /api/me, which is
+    # where it used to be a Jinja global.
+    app.config["DEMO_BANNER_HTML"] = app.config.get("DEMO_BANNER_MESSAGE", "")
+    app.config["DEMO_DOC_HTML"] = _render_demo_doc(app)
     _register_write_guard(app)
     _register_seed_command(app)
 
