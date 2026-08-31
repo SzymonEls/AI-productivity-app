@@ -7,7 +7,7 @@
    * session started on a train is still running when the train comes out of the
    * tunnel.
    */
-  import { createRow, updateRow } from "../db/mutate";
+  import { createRow, deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
     activeEntry,
@@ -83,6 +83,51 @@
     void sync.run();
   }
 
+  /** What the session was, written while it runs or after it ends. */
+  async function describe(entry: TimeEntry) {
+    const description = window.prompt("What was this session?", entry.description ?? "");
+    if (description === null) return;
+    await updateRow<TimeEntry>(database, "time_entry", entry.uid, {
+      description: description.trim() || null,
+    });
+    await after();
+  }
+
+  async function editTimes(entry: TimeEntry) {
+    const started = window.prompt("Started at (YYYY-MM-DDTHH:MM)", toLocalInput(entry.started_at));
+    if (started === null) return;
+    const ended = window.prompt(
+      "Ended at (YYYY-MM-DDTHH:MM, blank to leave it running)",
+      entry.ended_at ? toLocalInput(entry.ended_at) : ""
+    );
+    if (ended === null) return;
+
+    const startedAt = new Date(started);
+    if (Number.isNaN(startedAt.getTime())) return;
+    const endedAt = ended.trim() ? new Date(ended) : null;
+    if (endedAt && Number.isNaN(endedAt.getTime())) return;
+    if (endedAt && endedAt < startedAt) return;
+
+    await updateRow<TimeEntry>(database, "time_entry", entry.uid, {
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt ? endedAt.toISOString() : null,
+    });
+    await after();
+  }
+
+  async function removeEntry(entry: TimeEntry) {
+    if (!window.confirm("Delete this session?")) return;
+    await deleteRow(database, "time_entry", entry.uid);
+    await after();
+  }
+
+  /** An instant as the value a datetime-local field would carry. */
+  function toLocalInput(iso: string): string {
+    const at = new Date(iso);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  }
+
   function shift(days: number) {
     const moved = new Date(`${day}T00:00:00Z`);
     moved.setUTCDate(moved.getUTCDate() + days);
@@ -132,15 +177,26 @@
   {:else}
     <table class="entries">
       <thead>
-        <tr><th>Project</th><th>Started</th><th>Ended</th><th class="right">Length</th></tr>
+        <tr>
+          <th>Project</th><th>Started</th><th>Ended</th>
+          <th class="right">Length</th><th></th>
+        </tr>
       </thead>
       <tbody>
         {#each forDay as entry (entry.uid)}
           <tr>
-            <td>{titleFor(entry)}</td>
+            <td>
+              {titleFor(entry)}
+              {#if entry.description}<div class="muted note">{entry.description}</div>{/if}
+            </td>
             <td>{new Date(entry.started_at).toLocaleTimeString()}</td>
             <td>{entry.ended_at ? new Date(entry.ended_at).toLocaleTimeString() : "—"}</td>
             <td class="right">{formatDuration(elapsedSeconds(entry, now))}</td>
+            <td class="tools">
+              <button type="button" title="Describe this session" onclick={() => describe(entry)}>✎</button>
+              <button type="button" title="Change the times" onclick={() => editTimes(entry)}>⏱</button>
+              <button type="button" title="Delete this session" onclick={() => removeEntry(entry)}>×</button>
+            </td>
           </tr>
         {/each}
       </tbody>
@@ -171,4 +227,8 @@
   .entries th { text-align: left; font-weight: 600; opacity: 0.6; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 0.3rem; }
   .entries td { padding: 0.4rem 0; border-top: 1px solid rgba(127, 127, 127, 0.15); }
   .right { text-align: right; font-variant-numeric: tabular-nums; }
+  .note { font-size: 0.8rem; }
+  .tools { text-align: right; white-space: nowrap; }
+  .tools button { background: none; border: 0; color: inherit; opacity: 0.5; cursor: pointer; padding: 0 0.15rem; }
+  .tools button:hover { opacity: 1; }
 </style>

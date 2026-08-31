@@ -17,6 +17,7 @@
   import Timeline from "./routes/Timeline.svelte";
   import { sync } from "./sync/store.svelte";
   import ConflictDialog from "./ui/ConflictDialog.svelte";
+  import Switcher from "./ui/Switcher.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
 
   let status = $state<"starting" | "ready" | "failed">("starting");
@@ -138,6 +139,10 @@
     {/if}
   {/if}
 </main>
+
+{#if database}
+  <Switcher {database} />
+{/if}
 
 {#if resolving && database}
   <ConflictDialog {database} onclose={() => (resolving = false)} />
