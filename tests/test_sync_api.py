@@ -203,3 +203,74 @@ def test_logout_is_not_a_link(app, client):
     """A GET that signs the user out is a link another site can aim at."""
     assert client.get("/auth/logout").status_code == 405
     assert client.post("/auth/logout").status_code in (302, 303)
+
+
+def test_two_bookings_can_swap_places_in_one_push(app, sync):
+    """A swap is two updates that each land where the other is leaving.
+
+    Checked one at a time they collide; the row on its way out is not a blocker.
+    """
+    from app.models import ProjectDaySlot
+
+    when = (date.today() + timedelta(days=6)).isoformat()
+    sync.push(
+        op("project", "01SWAPAAAAAAAAAAAAAAAAAAAA", **dict(PROJECT_FIELDS, title="alpha")),
+        op("project", "01SWAPBBBBBBBBBBBBBBBBBBBB", **dict(PROJECT_FIELDS, title="beta")),
+        op("day_slot", "01SWAPSLOTAAAAAAAAAAAAAAAA",
+           project_uid="01SWAPAAAAAAAAAAAAAAAAAAAA", slot_date=when, slot="A"),
+        op("day_slot", "01SWAPSLOTBBBBBBBBBBBBBBBB",
+           project_uid="01SWAPBBBBBBBBBBBBBBBBBBBB", slot_date=when, slot="B"),
+    )
+
+    first = ProjectDaySlot.query.filter_by(uid="01SWAPSLOTAAAAAAAAAAAAAAAA").one()
+    second = ProjectDaySlot.query.filter_by(uid="01SWAPSLOTBBBBBBBBBBBBBBBB").one()
+
+    response = sync.push(
+        op("day_slot", "01SWAPSLOTAAAAAAAAAAAAAAAA", kind="update",
+           base_rev=first.rev, slot="B"),
+        op("day_slot", "01SWAPSLOTBBBBBBBBBBBBBBBB", kind="update",
+           base_rev=second.rev, slot="A"),
+    )
+    body = response.get_json()
+
+    assert body["conflicts"] == [], body
+    assert len(body["applied"]) == 2
+
+    from app.extensions import db
+    db.session.expire_all()
+    assert ProjectDaySlot.query.filter_by(uid="01SWAPSLOTAAAAAAAAAAAAAAAA").one().slot == "B"
+    assert ProjectDaySlot.query.filter_by(uid="01SWAPSLOTBBBBBBBBBBBBBBBB").one().slot == "A"
+
+
+def test_a_push_that_would_double_book_saves_nothing(app, sync):
+    """The sweep after the loop: a swap is fine, two rows wanting one spot is not."""
+    from app.models import ProjectDaySlot
+
+    when = (date.today() + timedelta(days=7)).isoformat()
+    sync.push(
+        op("project", "01DUPEAAAAAAAAAAAAAAAAAAAA", **dict(PROJECT_FIELDS, title="alpha")),
+        op("project", "01DUPEBBBBBBBBBBBBBBBBBBBB", **dict(PROJECT_FIELDS, title="beta")),
+        op("day_slot", "01DUPESLOTAAAAAAAAAAAAAAAA",
+           project_uid="01DUPEAAAAAAAAAAAAAAAAAAAA", slot_date=when, slot="A"),
+        op("day_slot", "01DUPESLOTBBBBBBBBBBBBBBBB",
+           project_uid="01DUPEBBBBBBBBBBBBBBBBBBBB", slot_date=when, slot="B"),
+    )
+
+    first = ProjectDaySlot.query.filter_by(uid="01DUPESLOTAAAAAAAAAAAAAAAA").one()
+    second = ProjectDaySlot.query.filter_by(uid="01DUPESLOTBBBBBBBBBBBBBBBB").one()
+    original = second.slot
+
+    # Both want slot A, and neither is leaving it.
+    response = sync.push(
+        op("day_slot", "01DUPESLOTBBBBBBBBBBBBBBBB", kind="update",
+           base_rev=second.rev, slot="A"),
+        op("day_slot", "01DUPESLOTAAAAAAAAAAAAAAAA", kind="update",
+           base_rev=first.rev, slot="A"),
+    )
+
+    assert response.status_code == 409
+    assert response.get_json()["reason"] == "slot_taken"
+
+    from app.extensions import db
+    db.session.expire_all()
+    assert ProjectDaySlot.query.filter_by(uid="01DUPESLOTBBBBBBBBBBBBBBBB").one().slot == original

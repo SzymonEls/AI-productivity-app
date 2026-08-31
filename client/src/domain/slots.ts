@@ -130,3 +130,207 @@ export function systemHealth(
     unplannedProjects: unplanned.length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Calendar windows and the two-block rule.
+//
+// Everything below is pure: it works out what should change and hands it back,
+// leaving the caller to write it through db/mutate.ts. The server versions
+// mutated a session directly, which is what made them impossible to test
+// without a database.
+// ---------------------------------------------------------------------------
+
+export const SCHEDULE_WINDOW_DAYS = 14;
+export const DAYS_PER_WEEK = 7;
+export const SCHEDULE_WEEKS = 5;
+export const ARCHIVE_WEEKS = 3;
+export const MAX_CALENDAR_WEEKS = 12;
+
+/** Monday is 0, matching Python's date.weekday(). */
+export function weekday(day: string): number {
+  return (new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7;
+}
+
+export function formatDay(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+export interface CalendarDay {
+  date: string;
+  slots: SlotMap;
+}
+
+/**
+ * The schedule page: weeks of days, each with its three slots.
+ *
+ * Weeks run Monday to Sunday, but the first starts today rather than on its
+ * Monday - a day that has passed cannot be booked, so there is nothing to show
+ * there. Empty days are kept: the page is a strip of sheets to drop a project
+ * onto, so an empty one is a target rather than something to leave out.
+ */
+export function calendarWeeks(
+  slots: DaySlot[],
+  weeks: number = SCHEDULE_WEEKS,
+  startDay: string = today()
+): CalendarDay[][] {
+  const firstWeekDays = DAYS_PER_WEEK - weekday(startDay);
+  const calendar: CalendarDay[][] = [];
+  let day = startDay;
+
+  for (let index = 0; index < weeks; index += 1) {
+    const length = index === 0 ? firstWeekDays : DAYS_PER_WEEK;
+    const week: CalendarDay[] = [];
+    for (let offset = 0; offset < length; offset += 1) {
+      const date = addDays(day, offset);
+      week.push({ date, slots: slotsForDate(slots, date) });
+    }
+    calendar.push(week);
+    day = addDays(day, length);
+  }
+  return calendar;
+}
+
+/**
+ * The archive: weeks up to and including endDay, newest week first.
+ *
+ * The mirror of calendarWeeks(). There the short week is the first because it
+ * starts today; here it is the newest, because it ends on endDay.
+ */
+export function pastCalendarWeeks(
+  slots: DaySlot[],
+  weeks: number = ARCHIVE_WEEKS,
+  endDay: string = addDays(today(), -1)
+): CalendarDay[][] {
+  const newestWeekDays = weekday(endDay) + 1;
+  const calendar: CalendarDay[][] = [];
+  let lastDay = endDay;
+
+  for (let index = 0; index < weeks; index += 1) {
+    const length = index === 0 ? newestWeekDays : DAYS_PER_WEEK;
+    const monday = addDays(lastDay, -(length - 1));
+    const week: CalendarDay[] = [];
+    for (let offset = 0; offset < length; offset += 1) {
+      const date = addDays(monday, offset);
+      week.push({ date, slots: slotsForDate(slots, date) });
+    }
+    calendar.push(week);
+    lastDay = addDays(monday, -1);
+  }
+  return calendar;
+}
+
+export function lastBookedDay(slots: DaySlot[]): string | null {
+  return slots.reduce<string | null>(
+    (latest, slot) => (latest === null || slot.slot_date > latest ? slot.slot_date : latest),
+    null
+  );
+}
+
+export function firstBookedDay(slots: DaySlot[]): string | null {
+  return slots.reduce<string | null>(
+    (earliest, slot) => (earliest === null || slot.slot_date < earliest ? slot.slot_date : earliest),
+    null
+  );
+}
+
+/**
+ * How many weeks the schedule has to show to reach the furthest booking.
+ *
+ * A day off pushes bookings past the page's edge; the window grows to keep the
+ * last one in view rather than hiding it.
+ */
+export function weeksToCover(
+  slots: DaySlot[],
+  startDay: string = today(),
+  minimum: number = SCHEDULE_WEEKS,
+  maximum: number = MAX_CALENDAR_WEEKS
+): number {
+  const last = lastBookedDay(slots);
+  if (last === null || last <= startDay) return minimum;
+
+  const firstWeekDays = DAYS_PER_WEEK - weekday(startDay);
+  const daysNeeded =
+    Math.round(
+      (new Date(`${last}T00:00:00Z`).getTime() - new Date(`${startDay}T00:00:00Z`).getTime()) /
+        86400000
+    ) + 1;
+
+  const weeks =
+    daysNeeded <= firstWeekDays
+      ? 1
+      : 1 + Math.ceil((daysNeeded - firstWeekDays) / DAYS_PER_WEEK);
+
+  return Math.max(minimum, Math.min(weeks, maximum));
+}
+
+export type BookingPair = [DaySlot | null, DaySlot | null];
+
+/** A project's slots from today on, as (today, future) - project_bookings(). */
+export function projectBookings(
+  slots: DaySlot[],
+  projectUid: string,
+  day: string = today(),
+  ignore: ReadonlySet<string> = new Set()
+): BookingPair {
+  const mine = slots
+    .filter(
+      (slot) =>
+        slot.project_uid === projectUid && slot.slot_date >= day && !ignore.has(slot.uid)
+    )
+    .sort((a, b) => a.slot_date.localeCompare(b.slot_date));
+
+  return [
+    mine.find((slot) => slot.slot_date === day) ?? null,
+    mine.find((slot) => slot.slot_date > day) ?? null,
+  ];
+}
+
+/** The bulk form, so the picker does not ask once per project. */
+export function bookingsByProject(
+  slots: DaySlot[],
+  day: string = today()
+): Map<string, BookingPair> {
+  const byProject = new Map<string, BookingPair>();
+
+  for (const slot of [...slots]
+    .filter((slot) => slot.slot_date >= day && slot.project_uid)
+    .sort((a, b) => a.slot_date.localeCompare(b.slot_date))) {
+    const key = slot.project_uid!;
+    const [todaySlot, futureSlot] = byProject.get(key) ?? [null, null];
+    if (slot.slot_date === day) {
+      byProject.set(key, [todaySlot ?? slot, futureSlot]);
+    } else if (futureSlot === null) {
+      byProject.set(key, [todaySlot, slot]);
+    }
+  }
+  return byProject;
+}
+
+/**
+ * Which of a project's two bookings stands in the way on a day.
+ *
+ * A project gets at most two: one today and one in the future. The rule lives
+ * here alone, so the single-project and bulk paths cannot drift apart.
+ */
+export function blockerForDay(
+  bookings: BookingPair,
+  day: string,
+  todayDay: string = today()
+): DaySlot | null {
+  const [todaySlot, futureSlot] = bookings;
+  return day === todayDay ? todaySlot : futureSlot;
+}
+
+export function blockedReason(
+  blocker: DaySlot | null,
+  day: string,
+  todayDay: string
+): string {
+  if (blocker === null) return "";
+  if (day === todayDay) return `Already in today's slot ${blocker.slot}.`;
+  return `Already planned for ${formatDay(blocker.slot_date)} in slot ${blocker.slot}.`;
+}
