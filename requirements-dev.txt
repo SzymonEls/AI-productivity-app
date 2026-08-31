@@ -1,0 +1,4 @@
+# Test-only dependencies. The application itself installs from requirements.txt;
+# nothing here ships in the Docker image.
+-r requirements.txt
+pytest==8.3.4

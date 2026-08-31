@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, SyncState, User  # noqa: F401
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
