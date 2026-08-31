@@ -1,0 +1,77 @@
+{
+  "durations": {
+    "0": "00:00:00",
+    "-5": "00:00:00",
+    "1": "00:00:01",
+    "59": "00:00:59",
+    "60": "00:01:00",
+    "61": "00:01:01",
+    "3599": "00:59:59",
+    "3600": "01:00:00",
+    "3661": "01:01:01",
+    "86399": "23:59:59",
+    "90061": "25:01:01",
+    "359999": "99:59:59"
+  },
+  "lastSession": {
+    "0": "Last session: just now",
+    "30": "Last session: just now",
+    "59": "Last session: just now",
+    "60": "Last session: 1 min ago",
+    "90": "Last session: 1 min ago",
+    "3599": "Last session: 59 min ago",
+    "3600": "Last session: 1 hr ago",
+    "7200": "Last session: 2 hr ago",
+    "86399": "Last session: 23 hr ago",
+    "86400": "Last session: yesterday",
+    "90000": "Last session: yesterday",
+    "172799": "Last session: yesterday",
+    "172800": "Last session: 2 days ago",
+    "300000": "Last session: 3 days ago",
+    "604799": "Last session: 6 days ago",
+    "604800": "Last session: a week ago",
+    "900000": "Last session: a week ago",
+    "1209599": "Last session: a week ago",
+    "1209600": "Last session: 2 wk ago",
+    "2000000": "Last session: 3 wk ago",
+    "2592000": "Last session: 1 mo ago",
+    "5184000": "Last session: 2 mo ago",
+    "31535999": "Last session: 12 mo ago",
+    "31536000": "Last session: a year ago",
+    "63072000": "Last session: 2 years ago"
+  },
+  "dayBounds": {
+    "2026-01-15": [
+      "2026-01-14T23:00:00Z",
+      "2026-01-15T22:59:59.999999Z"
+    ],
+    "2026-03-29": [
+      "2026-03-28T23:00:00Z",
+      "2026-03-29T21:59:59.999999Z"
+    ],
+    "2026-03-28": [
+      "2026-03-27T23:00:00Z",
+      "2026-03-28T22:59:59.999999Z"
+    ],
+    "2026-10-25": [
+      "2026-10-24T22:00:00Z",
+      "2026-10-25T22:59:59.999999Z"
+    ],
+    "2026-10-24": [
+      "2026-10-23T22:00:00Z",
+      "2026-10-24T21:59:59.999999Z"
+    ],
+    "2026-07-01": [
+      "2026-06-30T22:00:00Z",
+      "2026-07-01T21:59:59.999999Z"
+    ]
+  },
+  "midnightEntry": {
+    "started_at": "2026-01-15T21:30:00Z",
+    "ended_at": "2026-01-16T00:15:00Z",
+    "overlap": {
+      "2026-01-15": 5399,
+      "2026-01-16": 4500
+    }
+  }
+}

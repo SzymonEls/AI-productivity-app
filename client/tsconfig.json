@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
     "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
