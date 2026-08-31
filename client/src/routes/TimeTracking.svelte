@@ -2,32 +2,40 @@
   /**
    * Tracked time, and the timer.
    *
-   * The timer used to be the server's: start and stop wrote rows, and the page
-   * interpolated between polls. It is now a local row like any other, so a
-   * session started on a train is still running when the train comes out of the
+   * The timer used to be the server's: start and stop wrote rows and the page
+   * interpolated between polls. It is a local row like any other now, so a
+   * session started on a train is still running when the train leaves the
    * tunnel.
    */
   import { createRow, deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
     activeEntry,
-    dailyTotalsByProject,
     dayBounds,
     elapsedSeconds,
     entriesForRange,
     formatDuration,
+    overlapSeconds,
     today,
   } from "../domain/time";
   import { live } from "../lib/live.svelte";
   import { sync } from "../sync/store.svelte";
   import type { TimeEntry } from "../sync/types";
+  import Icon from "../ui/Icon.svelte";
 
   let { database }: { database: LocalDatabase } = $props();
+
+  const PIE_COLOURS = [
+    "#0f9488", "#1f7ae0", "#f59e0b", "#dc3545",
+    "#6f42c1", "#198754", "#0dcaf0", "#6c757d",
+  ];
 
   const projects = live(() => database.projects.toArray(), []);
   const entries = live(() => database.timeEntries.toArray(), []);
 
   let day = $state(today());
+  let allDates = $state(false);
+  let projectFilter = $state("");
   // Ticks once a second so a running timer counts up without a round trip.
   let now = $state(new Date());
   $effect(() => {
@@ -38,9 +46,47 @@
   const byUid = $derived(new Map(projects.value.map((p) => [p.uid, p])));
   const active = $derived(activeEntry(entries.value));
   const bounds = $derived(dayBounds(day));
-  const forDay = $derived(entriesForRange(entries.value, bounds[0], bounds[1]));
-  const totals = $derived(dailyTotalsByProject(entries.value, day, now));
-  const dayTotal = $derived([...totals.values()].reduce((sum, value) => sum + value, 0));
+
+  const shown = $derived(
+    (allDates
+      ? [...entries.value].sort((a, b) => b.started_at.localeCompare(a.started_at))
+      : entriesForRange(entries.value, bounds[0], bounds[1])
+    ).filter((entry) => !projectFilter || entry.project_uid === projectFilter)
+  );
+
+  const dayTotal = $derived(
+    allDates
+      ? shown.reduce((sum, entry) => sum + elapsedSeconds(entry, now), 0)
+      : shown.reduce((sum, entry) => sum + overlapSeconds(entry, bounds[0], bounds[1], now), 0)
+  );
+
+  /** Seconds per project across what is on screen, biggest first. */
+  const slices = $derived.by(() => {
+    const totals = new Map<string, number>();
+    for (const entry of shown) {
+      const seconds = allDates
+        ? elapsedSeconds(entry, now)
+        : overlapSeconds(entry, bounds[0], bounds[1], now);
+      const title = titleFor(entry);
+      totals.set(title, (totals.get(title) ?? 0) + seconds);
+    }
+    return [...totals.entries()]
+      .map(([title, seconds]) => ({ title, seconds }))
+      .filter((slice) => slice.seconds > 0)
+      .sort((a, b) => b.seconds - a.seconds);
+  });
+
+  const pieBackground = $derived.by(() => {
+    if (!dayTotal) return "";
+    let position = 0;
+    const stops = slices.map((slice, index) => {
+      const colour = PIE_COLOURS[index % PIE_COLOURS.length];
+      const start = position;
+      position += (slice.seconds * 100) / dayTotal;
+      return `${colour} ${start.toFixed(3)}% ${position.toFixed(3)}%`;
+    });
+    return `conic-gradient(${stops.join(", ")})`;
+  });
 
   const activeProjects = $derived(
     [...projects.value]
@@ -50,21 +96,34 @@
 
   function titleFor(entry: TimeEntry): string {
     const project = entry.project_uid ? byUid.get(entry.project_uid) : undefined;
-    return project?.title ?? entry.project_title_snapshot ?? "Unknown project";
+    if (project) return project.title;
+    return entry.project_title_snapshot
+      ? `Unknown project (was: ${entry.project_title_snapshot})`
+      : "Unknown project";
+  }
+
+  function localValue(iso: string | null): string {
+    if (!iso) return "";
+    const at = new Date(iso);
+    const pad = (value: number) => String(value).padStart(2, "0");
+    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  }
+
+  async function after() {
+    await sync.refresh();
+    void sync.run();
   }
 
   async function startTimer(projectUid: string) {
     // One timer at a time, exactly as the server refused a second one.
     if (active) await stopTimer();
-
-    const project = byUid.get(projectUid);
     await createRow<TimeEntry>(database, "time_entry", {
       started_at: new Date().toISOString(),
       ended_at: null,
       description: null,
       // Written now, not when the project is deleted: it is what keeps past
       // weeks readable once the project is gone.
-      project_title_snapshot: project?.title ?? null,
+      project_title_snapshot: byUid.get(projectUid)?.title ?? null,
       project_uid: projectUid,
     });
     await after();
@@ -78,40 +137,8 @@
     await after();
   }
 
-  async function after() {
-    await sync.refresh();
-    void sync.run();
-  }
-
-  /** What the session was, written while it runs or after it ends. */
-  async function describe(entry: TimeEntry) {
-    const description = window.prompt("What was this session?", entry.description ?? "");
-    if (description === null) return;
-    await updateRow<TimeEntry>(database, "time_entry", entry.uid, {
-      description: description.trim() || null,
-    });
-    await after();
-  }
-
-  async function editTimes(entry: TimeEntry) {
-    const started = window.prompt("Started at (YYYY-MM-DDTHH:MM)", toLocalInput(entry.started_at));
-    if (started === null) return;
-    const ended = window.prompt(
-      "Ended at (YYYY-MM-DDTHH:MM, blank to leave it running)",
-      entry.ended_at ? toLocalInput(entry.ended_at) : ""
-    );
-    if (ended === null) return;
-
-    const startedAt = new Date(started);
-    if (Number.isNaN(startedAt.getTime())) return;
-    const endedAt = ended.trim() ? new Date(ended) : null;
-    if (endedAt && Number.isNaN(endedAt.getTime())) return;
-    if (endedAt && endedAt < startedAt) return;
-
-    await updateRow<TimeEntry>(database, "time_entry", entry.uid, {
-      started_at: startedAt.toISOString(),
-      ended_at: endedAt ? endedAt.toISOString() : null,
-    });
+  async function change(entry: TimeEntry, changes: Partial<TimeEntry>) {
+    await updateRow<TimeEntry>(database, "time_entry", entry.uid, changes);
     await after();
   }
 
@@ -121,114 +148,212 @@
     await after();
   }
 
-  /** An instant as the value a datetime-local field would carry. */
-  function toLocalInput(iso: string): string {
-    const at = new Date(iso);
-    const pad = (value: number) => String(value).padStart(2, "0");
-    return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
-  }
-
-  function shift(days: number) {
-    const moved = new Date(`${day}T00:00:00Z`);
-    moved.setUTCDate(moved.getUTCDate() + days);
-    day = moved.toISOString().slice(0, 10);
+  function localToIso(value: string): string | null {
+    if (!value) return null;
+    const at = new Date(value);
+    return Number.isNaN(at.getTime()) ? null : at.toISOString();
   }
 </script>
 
-<section class="page">
-  <header class="head">
-    <h1>Time tracking</h1>
-    <div class="daypick">
-      <button type="button" onclick={() => shift(-1)} aria-label="Previous day">‹</button>
-      <input type="date" bind:value={day} />
-      <button type="button" onclick={() => shift(1)} aria-label="Next day">›</button>
-    </div>
-  </header>
-
-  {#if active}
-    <div class="running">
-      <div>
-        <span class="muted">Running</span>
-        <strong>{titleFor(active)}</strong>
-      </div>
-      <span class="clock">{formatDuration(elapsedSeconds(active, now))}</span>
-      <button type="button" class="btn" onclick={stopTimer}>Stop</button>
-    </div>
-  {/if}
-
-  <h2 class="section">Start a timer</h2>
-  <div class="starters">
-    {#each activeProjects as project (project.uid)}
-      <button
-        type="button"
-        class="starter"
-        disabled={active?.project_uid === project.uid}
-        onclick={() => startTimer(project.uid)}
-      >
-        {project.title}
-        <span class="muted">{formatDuration(totals.get(project.uid) ?? 0)}</span>
-      </button>
-    {/each}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+  <div>
+    <h1 class="h2 mb-1">Time tracking</h1>
+    <p class="text-muted mb-0">
+      Work statistics, active timer, and editing of historical sessions.
+    </p>
   </div>
-
-  <h2 class="section">{day} — {formatDuration(dayTotal)} tracked</h2>
-  {#if forDay.length === 0}
-    <p class="muted">Nothing tracked on this day.</p>
-  {:else}
-    <table class="entries">
-      <thead>
-        <tr>
-          <th>Project</th><th>Started</th><th>Ended</th>
-          <th class="right">Length</th><th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each forDay as entry (entry.uid)}
-          <tr>
-            <td>
-              {titleFor(entry)}
-              {#if entry.description}<div class="muted note">{entry.description}</div>{/if}
-            </td>
-            <td>{new Date(entry.started_at).toLocaleTimeString()}</td>
-            <td>{entry.ended_at ? new Date(entry.ended_at).toLocaleTimeString() : "—"}</td>
-            <td class="right">{formatDuration(elapsedSeconds(entry, now))}</td>
-            <td class="tools">
-              <button type="button" title="Describe this session" onclick={() => describe(entry)}>✎</button>
-              <button type="button" title="Change the times" onclick={() => editTimes(entry)}>⏱</button>
-              <button type="button" title="Delete this session" onclick={() => removeEntry(entry)}>×</button>
-            </td>
-          </tr>
-        {/each}
-      </tbody>
-    </table>
+  {#if active}
+    <button type="button" class="btn btn-outline-success" onclick={stopTimer}>
+      <Icon name="clock" />
+      Active timer: {titleFor(active)} · {formatDuration(elapsedSeconds(active, now))} — stop
+    </button>
   {/if}
+</div>
+
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-3">
+        <label class="form-label" for="trackingDateMode">Date range</label>
+        <select class="form-select" id="trackingDateMode" bind:value={allDates}>
+          <option value={false}>Selected day</option>
+          <option value={true}>All dates</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="trackingDate">Day</label>
+        <input class="form-control" type="date" id="trackingDate" bind:value={day} disabled={allDates} />
+      </div>
+      <div class="col-md-4">
+        <label class="form-label" for="trackingProject">Project</label>
+        <select class="form-select" id="trackingProject" bind:value={projectFilter}>
+          <option value="">All projects</option>
+          {#each activeProjects as project (project.uid)}
+            <option value={project.uid}>{project.title}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <button
+          class="btn btn-secondary w-100"
+          type="button"
+          onclick={() => {
+            allDates = false;
+            day = today();
+            projectFilter = "";
+          }}
+        ><Icon name="reset" />Reset</button>
+      </div>
+    </div>
+  </div>
 </section>
 
-<style>
-  .page { max-width: 54rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  h1 { font-size: 1.6rem; margin: 0; }
-  .section { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin: 2rem 0 0.6rem; }
-  .muted { opacity: 0.6; }
-  .daypick { display: flex; align-items: center; gap: 0.3rem; }
-  .daypick button { border: 1px solid rgba(127, 127, 127, 0.3); background: transparent; color: inherit; border-radius: 0.4rem; width: 1.9rem; height: 1.9rem; cursor: pointer; }
-  .daypick input { font: inherit; background: transparent; color: inherit; border: 1px solid rgba(127, 127, 127, 0.3); border-radius: 0.4rem; padding: 0.25rem 0.4rem; }
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+      <h2 class="h5 mb-0">{allDates ? "All dates" : "Selected day"}</h2>
+      <strong>{formatDuration(dayTotal)}</strong>
+    </div>
 
-  .running { display: flex; align-items: center; gap: 1rem; margin-top: 1rem; padding: 0.75rem 1rem; border: 1px solid #16a34a; border-radius: 0.7rem; }
-  .running strong { display: block; }
-  .clock { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 1.2rem; }
-  .btn { border: 0; background: var(--bs-primary, #4f46e5); color: #fff; border-radius: 0.5rem; padding: 0.35rem 0.9rem; cursor: pointer; }
+    {#if slices.length}
+      <div class="daily-time-pie">
+        <div
+          class="daily-time-pie-chart"
+          role="img"
+          aria-label="Breakdown of work time"
+          style={`background: ${pieBackground};`}
+        >
+          <span>{formatDuration(dayTotal)}</span>
+        </div>
+        <div class="daily-time-pie-legend">
+          {#each slices as slice, index (slice.title)}
+            <div class="daily-time-pie-item">
+              <span
+                class="daily-time-pie-swatch"
+                style={`background: ${PIE_COLOURS[index % PIE_COLOURS.length]}`}
+              ></span>
+              <span class="daily-time-pie-title" title={slice.title}>{slice.title}</span>
+              <strong>{((slice.seconds * 100) / dayTotal).toFixed(1)}%</strong>
+              <span class="text-muted">{formatDuration(slice.seconds)}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {:else}
+      <p class="text-muted mb-0">No sessions recorded for the selected day.</p>
+    {/if}
+  </div>
+</section>
 
-  .starters { display: grid; gap: 0.5rem; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
-  .starter { display: flex; justify-content: space-between; gap: 0.75rem; border: 1px solid rgba(127, 127, 127, 0.3); background: transparent; color: inherit; border-radius: 0.6rem; padding: 0.5rem 0.7rem; cursor: pointer; font: inherit; text-align: left; }
-  .starter:disabled { opacity: 0.45; cursor: default; }
+<section class="card shadow-sm mb-4">
+  <div class="card-body">
+    <h2 class="h5 mb-3">Start a timer</h2>
+    <div class="d-flex flex-wrap gap-2">
+      {#each activeProjects as project (project.uid)}
+        <button
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          disabled={active?.project_uid === project.uid}
+          onclick={() => startTimer(project.uid)}
+        >{project.title}</button>
+      {/each}
+    </div>
+  </div>
+</section>
 
-  .entries { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  .entries th { text-align: left; font-weight: 600; opacity: 0.6; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 0.3rem; }
-  .entries td { padding: 0.4rem 0; border-top: 1px solid rgba(127, 127, 127, 0.15); }
-  .right { text-align: right; font-variant-numeric: tabular-nums; }
-  .note { font-size: 0.8rem; }
-  .tools { text-align: right; white-space: nowrap; }
-  .tools button { background: none; border: 0; color: inherit; opacity: 0.5; cursor: pointer; padding: 0 0.15rem; }
-  .tools button:hover { opacity: 1; }
-</style>
+<section class="card shadow-sm">
+  <div class="card-body">
+    <div class="mb-3">
+      <h2 class="h5 mb-1">Sessions</h2>
+      <p class="text-muted mb-0">
+        You can edit the project, the time range and the description, or delete the entry.
+      </p>
+    </div>
+
+    {#if shown.length}
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead>
+            <tr>
+              <th>Project</th><th>Start</th><th>End</th>
+              <th>Duration</th><th>Description</th><th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each shown as entry (entry.uid)}
+              <tr>
+                <td>
+                  <select
+                    class="form-select form-select-sm"
+                    aria-label="Project"
+                    value={entry.project_uid ?? ""}
+                    onchange={(event) =>
+                      change(entry, {
+                        project_uid: event.currentTarget.value || null,
+                        project_title_snapshot:
+                          byUid.get(event.currentTarget.value)?.title ??
+                          entry.project_title_snapshot,
+                      })}
+                  >
+                    {#if !entry.project_uid}
+                      <option value="">{titleFor(entry)}</option>
+                    {/if}
+                    {#each activeProjects as project (project.uid)}
+                      <option value={project.uid}>{project.title}</option>
+                    {/each}
+                  </select>
+                </td>
+                <td>
+                  <input
+                    class="form-control form-control-sm"
+                    type="datetime-local"
+                    value={localValue(entry.started_at)}
+                    onchange={(event) => {
+                      const iso = localToIso(event.currentTarget.value);
+                      if (iso) change(entry, { started_at: iso });
+                    }}
+                  />
+                </td>
+                <td>
+                  <input
+                    class="form-control form-control-sm"
+                    type="datetime-local"
+                    value={localValue(entry.ended_at)}
+                    onchange={(event) =>
+                      change(entry, { ended_at: localToIso(event.currentTarget.value) })}
+                  />
+                  {#if !entry.ended_at}<span class="badge bg-success">running</span>{/if}
+                </td>
+                <td class="text-nowrap">{formatDuration(elapsedSeconds(entry, now))}</td>
+                <td>
+                  <input
+                    class="form-control form-control-sm"
+                    type="text"
+                    value={entry.description ?? ""}
+                    placeholder="What was this session?"
+                    onchange={(event) =>
+                      change(entry, { description: event.currentTarget.value.trim() || null })}
+                  />
+                </td>
+                <td class="text-end text-nowrap">
+                  {#if !entry.ended_at}
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick={stopTimer}>
+                      Stop
+                    </button>
+                  {/if}
+                  <button
+                    type="button"
+                    class="btn btn-outline-danger btn-sm"
+                    onclick={() => removeEntry(entry)}
+                  ><Icon name="x" /></button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    {:else}
+      <p class="text-muted mb-0">No sessions match these filters.</p>
+    {/if}
+  </div>
+</section>

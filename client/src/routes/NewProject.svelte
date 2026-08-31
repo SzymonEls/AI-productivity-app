@@ -16,7 +16,8 @@
   let isStarred = $state(false);
   let error = $state("");
 
-  async function create() {
+  async function submit(event: Event) {
+    event.preventDefault();
     if (!title.trim()) {
       error = "A project needs a title.";
       return;
@@ -25,7 +26,7 @@
     const uid = await createRow<Project>(database, "project", {
       title: title.trim(),
       short_goal: shortGoal,
-      frequency: frequency,
+      frequency,
       long_goal: "",
       archived_long_goal: "",
       daily_target_minutes: dailyTarget,
@@ -40,39 +41,67 @@
   }
 </script>
 
-<section class="page">
-  <h1>New project</h1>
-  {#if error}<p class="error">{error}</p>{/if}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3 mb-4">Create Project</h1>
 
-  <div class="form">
-    <label class="wide">Title<input type="text" bind:value={title} placeholder="What is it called?" /></label>
-    <label class="wide">
-      Thoughts
-      <textarea rows="3" bind:value={shortGoal} placeholder="What is this for?"></textarea>
-    </label>
-    <label>Cadence<input type="text" bind:value={frequency} placeholder="Daily, three times a week…" /></label>
-    <label>Daily target (minutes)<input type="number" min="0" bind:value={dailyTarget} /></label>
-    <label class="check"><input type="checkbox" bind:checked={isStarred} /> Starred</label>
-    <label class="check"><input type="checkbox" bind:checked={isPrivate} /> Private</label>
-    <div class="wide">
-      <button type="button" class="btn" onclick={create}>Create</button>
-      <button type="button" class="btn ghost" onclick={() => router.go(BASE)}>Cancel</button>
+        {#if error}<div class="alert alert-danger py-2">{error}</div>{/if}
+
+        <form onsubmit={submit}>
+          <div class="mb-3">
+            <label for="title" class="form-label">Project Title</label>
+            <input type="text" class="form-control" id="title" bind:value={title} required />
+          </div>
+
+          <div class="mb-3">
+            <label for="short_goal" class="form-label">Thoughts</label>
+            <textarea class="form-control" id="short_goal" rows="4" bind:value={shortGoal}></textarea>
+            <div class="form-text">Notes, reflections, or the next thing on your mind.</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="frequency" class="form-label">Frequency</label>
+            <input
+              type="text"
+              class="form-control"
+              id="frequency"
+              bind:value={frequency}
+              placeholder="For example: 3 times a week, every weekday, every Saturday morning"
+            />
+            <div class="form-text">
+              A short note about how often you want to come back to this project.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="daily_target" class="form-label">Daily target (minutes)</label>
+            <input type="number" min="0" class="form-control" id="daily_target" bind:value={dailyTarget} />
+            <div class="form-text">
+              Shown on the home page against the time tracked, for slots A and B.
+            </div>
+          </div>
+
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="is_starred" bind:checked={isStarred} />
+            <label class="form-check-label" for="is_starred">Starred</label>
+          </div>
+          <div class="form-check mb-4">
+            <input class="form-check-input" type="checkbox" id="is_private" bind:checked={isPrivate} />
+            <label class="form-check-label" for="is_private">
+              Private — hidden behind a button while safe mode is on
+            </label>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Create Project</button>
+            <button type="button" class="btn btn-outline-secondary" onclick={() => router.go(`${BASE}/`)}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
-</section>
-
-<style>
-  .page { max-width: 40rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-  h1 { font-size: 1.6rem; margin: 0 0 1rem; }
-  .error { color: #b3261e; }
-  .form { display: grid; gap: 0.75rem; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
-  .form label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.8rem; opacity: 0.75; }
-  .form .wide { grid-column: 1 / -1; }
-  .form .check { flex-direction: row; align-items: center; gap: 0.4rem; }
-  .form input[type="text"], .form input[type="number"], .form textarea {
-    font: inherit; background: transparent; color: inherit;
-    border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 0.45rem; padding: 0.4rem 0.5rem;
-  }
-  .btn { border: 1px solid rgba(127, 127, 127, 0.35); background: var(--bs-primary, #4f46e5); color: #fff; border-radius: 0.5rem; padding: 0.4rem 1rem; cursor: pointer; }
-  .btn.ghost { background: transparent; color: inherit; }
-</style>
+</div>

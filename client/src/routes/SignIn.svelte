@@ -17,6 +17,19 @@
   let remember = $state(true);
   let error = $state("");
   let busy = $state(false);
+  let registrationEnabled = $state(true);
+
+  // A demo publishes its own credentials; filling them in saves a visitor typing.
+  $effect(() => {
+    fetch("/api/me", { headers: { "X-Requested-With": "XMLHttpRequest" } })
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((body) => {
+        if (!body?.demo?.enabled) return;
+        email ||= body.demo.email ?? "";
+        password ||= body.demo.password ?? "";
+      });
+  });
 
   async function submit(event: Event) {
     event.preventDefault();
@@ -42,6 +55,7 @@
 
       if (!response.ok) {
         error = answer?.message ?? `The server answered ${response.status}.`;
+        if (response.status === 403) registrationEnabled = false;
         return;
       }
       onsignedin();
@@ -53,73 +67,95 @@
   }
 </script>
 
-<div class="wrap">
-  <form class="card" onsubmit={submit}>
-    <h1>{mode === "signin" ? "Sign in" : "Create an account"}</h1>
-    {#if error}<p class="error">{error}</p>{/if}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h3 mb-4">{mode === "signin" ? "Login" : "Register"}</h1>
 
-    {#if mode === "register"}
-      <label>
-        Username
-        <input type="text" bind:value={username} autocomplete="username" required />
-      </label>
-    {/if}
+        {#if error}
+          <div class="alert alert-danger py-2">{error}</div>
+        {/if}
 
-    <label>
-      Email
-      <input type="email" bind:value={email} autocomplete="email" required />
-    </label>
+        <form onsubmit={submit}>
+          {#if mode === "register"}
+            <div class="mb-3">
+              <label for="username" class="form-label">Username</label>
+              <input
+                type="text"
+                class="form-control"
+                id="username"
+                autocomplete="username"
+                bind:value={username}
+                required
+              />
+            </div>
+          {/if}
 
-    <label>
-      Password
-      <input
-        type="password"
-        bind:value={password}
-        autocomplete={mode === "signin" ? "current-password" : "new-password"}
-        required
-      />
-    </label>
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input
+              type="email"
+              class="form-control"
+              id="email"
+              autocomplete="email"
+              bind:value={email}
+              required
+            />
+          </div>
 
-    {#if mode === "register"}
-      <label>
-        Confirm password
-        <input type="password" bind:value={confirmPassword} autocomplete="new-password" required />
-      </label>
-    {:else}
-      <label class="check">
-        <input type="checkbox" bind:checked={remember} /> Remember me
-      </label>
-    {/if}
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input
+              type="password"
+              class="form-control"
+              id="password"
+              autocomplete={mode === "signin" ? "current-password" : "new-password"}
+              bind:value={password}
+              required
+            />
+          </div>
 
-    <button type="submit" class="btn" disabled={busy}>
-      {busy ? "Working…" : mode === "signin" ? "Sign in" : "Create account"}
-    </button>
+          {#if mode === "register"}
+            <div class="mb-3">
+              <label for="confirm" class="form-label">Confirm password</label>
+              <input
+                type="password"
+                class="form-control"
+                id="confirm"
+                autocomplete="new-password"
+                bind:value={confirmPassword}
+                required
+              />
+            </div>
+          {:else}
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="remember_me" bind:checked={remember} />
+              <label class="form-check-label" for="remember_me">Remember me</label>
+            </div>
+          {/if}
 
-    <button
-      type="button"
-      class="linkish"
-      onclick={() => {
-        mode = mode === "signin" ? "register" : "signin";
-        error = "";
-      }}
-    >
-      {mode === "signin" ? "Need an account? Register" : "Already have an account? Sign in"}
-    </button>
-  </form>
+          <button type="submit" class="btn btn-primary w-100" disabled={busy}>
+            {busy ? "Working…" : mode === "signin" ? "Login" : "Register"}
+          </button>
+        </form>
+
+        {#if registrationEnabled}
+          <p class="mt-3 mb-0 text-muted">
+            {#if mode === "signin"}
+              Need an account?
+              <button type="button" class="btn btn-link p-0 align-baseline" onclick={() => { mode = "register"; error = ""; }}>
+                Register here
+              </button>.
+            {:else}
+              Already have an account?
+              <button type="button" class="btn btn-link p-0 align-baseline" onclick={() => { mode = "signin"; error = ""; }}>
+                Log in
+              </button>.
+            {/if}
+          </p>
+        {/if}
+      </div>
+    </div>
+  </div>
 </div>
-
-<style>
-  .wrap { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
-  .card { width: min(24rem, 100%); display: grid; gap: 0.85rem; border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 0.9rem; padding: 1.5rem; }
-  h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
-  label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.82rem; opacity: 0.8; }
-  label.check { flex-direction: row; align-items: center; gap: 0.45rem; }
-  input[type="text"], input[type="email"], input[type="password"] {
-    font: inherit; background: transparent; color: inherit;
-    border: 1px solid rgba(127, 127, 127, 0.35); border-radius: 0.5rem; padding: 0.5rem 0.6rem;
-  }
-  .btn { border: 0; background: var(--bs-primary, #4f46e5); color: #fff; border-radius: 0.5rem; padding: 0.55rem; cursor: pointer; font: inherit; }
-  .btn:disabled { opacity: 0.6; cursor: default; }
-  .linkish { background: none; border: 0; color: inherit; opacity: 0.7; text-decoration: underline; cursor: pointer; font: inherit; font-size: 0.85rem; }
-  .error { color: #b3261e; margin: 0; font-size: 0.88rem; }
-</style>
