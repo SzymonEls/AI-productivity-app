@@ -9,13 +9,16 @@
   import { createRow, deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
-    SLOTS,
+    type SheetSlot,
     calendarWeeks,
+    dateRangeLabel,
     formatDay,
     planAssign,
     planDayOff,
     planMove,
+    scheduleSheet,
     slotCandidates,
+    weekLabel,
     weeksToCover,
   } from "../domain/slots";
   import { today } from "../domain/time";
@@ -23,6 +26,8 @@
   import { BASE, link } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { DaySlot } from "../sync/types";
+  import DaySheet from "../ui/DaySheet.svelte";
+  import Icon from "../ui/Icon.svelte";
 
   let { database }: { database: LocalDatabase } = $props();
 
@@ -30,26 +35,32 @@
   const slots = live(() => database.daySlots.toArray(), []);
 
   const day = today();
-  const weeks = $derived(calendarWeeks(slots.value, weeksToCover(slots.value, day), day));
   const byUid = $derived(new Map(projects.value.map((p) => [p.uid, p])));
+  const weekCount = $derived(weeksToCover(slots.value, day));
+  const weeks = $derived(
+    calendarWeeks(slots.value, weekCount, day).map((week, index) => ({
+      label: weekLabel(index),
+      range: dateRangeLabel(week[0].date, week[week.length - 1].date),
+      sheets: week.map((calendarDay) => scheduleSheet(calendarDay, byUid, day)),
+    }))
+  );
 
   let picking = $state<{ date: string; slot: string } | null>(null);
-  /** Tapping a booking then a target moves it - HTML5 drag does not fire on a phone. */
   let holding = $state<{ date: string; slot: string } | null>(null);
-  let notice = $state("");
+  let dayOffOpen = $state(false);
+  let dayOffDate = $state(day);
+  let status = $state("");
 
   const candidates = $derived(
-    picking
-      ? slotCandidates(projects.value, slots.value, picking.date, picking.slot, day)
-      : []
+    picking ? slotCandidates(projects.value, slots.value, picking.date, picking.slot, day) : []
   );
 
   function announce(message: string) {
-    notice = message;
-    setTimeout(() => (notice = message === notice ? "" : notice), 4000);
+    status = message;
+    setTimeout(() => (status = status === message ? "" : status), 5000);
   }
 
-  async function afterWrite(message: string) {
+  async function after(message: string) {
     announce(message);
     await sync.refresh();
     void sync.run();
@@ -59,159 +70,149 @@
     if (!picking) return;
     const plan = planAssign(projects.value, slots.value, projectUid, picking.date, picking.slot, day);
     if (!plan.ok) return announce(plan.message);
-
     if (plan.create) await createRow<DaySlot>(database, "day_slot", plan.create);
     picking = null;
-    await afterWrite(plan.message);
+    await after(plan.message);
   }
 
-  async function clear(booking: DaySlot) {
-    await deleteRow(database, "day_slot", booking.uid);
-    await afterWrite(`Slot ${booking.slot} cleared.`);
+  async function clear(entry: SheetSlot) {
+    if (!entry.booking) return;
+    await deleteRow(database, "day_slot", entry.booking.uid);
+    await after(`Slot ${entry.slot} cleared.`);
   }
 
-  async function toggleDone(booking: DaySlot) {
-    await updateRow<DaySlot>(database, "day_slot", booking.uid, { is_done: !booking.is_done });
-    await afterWrite(booking.is_done ? "Marked as not done." : "Session ticked off.");
-  }
+  async function pick(date: string, slot: string, entry: SheetSlot) {
+    if (!holding) {
+      if (entry.project) holding = { date, slot };
+      return;
+    }
 
-  async function move(toDate: string, toSlot: string) {
-    if (!holding) return;
     const from = holding;
     holding = null;
+    if (from.date === date && from.slot === slot) return;
 
-    const plan = planMove(projects.value, slots.value, from.date, from.slot, toDate, toSlot, day);
+    const plan = planMove(projects.value, slots.value, from.date, from.slot, date, slot, day);
     if (!plan.ok) return announce(plan.message);
-
     for (const update of plan.updates ?? []) {
       await updateRow<DaySlot>(database, "day_slot", update.uid, update.changes);
     }
-    await afterWrite(plan.message);
+    await after(plan.message);
   }
 
-  async function dayOff() {
-    const date = window.prompt("Free which day? (YYYY-MM-DD)", day);
-    if (!date) return;
-
-    const plan = planDayOff(slots.value, date, 1, day);
+  async function takeDayOff() {
+    const plan = planDayOff(slots.value, dayOffDate, 1, day);
+    dayOffOpen = false;
     if (!plan.ok) return announce(plan.message);
-
     for (const update of plan.updates ?? []) {
       await updateRow<DaySlot>(database, "day_slot", update.uid, update.changes);
     }
-    await afterWrite(plan.message);
-  }
-
-  function onCellClick(date: string, name: string, booking: DaySlot | null) {
-    if (holding) return void move(date, name);
-    if (booking) holding = { date, slot: name };
-    else picking = { date, slot: name };
+    await after(plan.message);
   }
 </script>
 
-<section class="page">
-  <header class="head">
-    <h1>Schedule</h1>
-    <div class="actions">
-      {#if holding}
-        <span class="hint">Pick where it goes, or <button type="button" class="linkish" onclick={() => (holding = null)}>cancel</button></span>
-      {/if}
-      <button type="button" class="btn ghost" onclick={dayOff}>Day off</button>
+<div class="dashboard-page schedule-page">
+  <section class="dashboard-section dashboard-header-section">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+      <div class="d-flex align-items-center gap-2">
+        <h1 class="h5 mb-0">Schedule</h1>
+        <span class="text-muted small">The next {weekCount} weeks, one sheet per day.</span>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="schedule-status" role="status">{status}</span>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (dayOffOpen = true)}>
+          <Icon name="moon" />Day off
+        </button>
+        <a href={`${BASE}/archive`} use:link class="btn btn-outline-secondary btn-sm">
+          <Icon name="archive" />Archive
+        </a>
+        <a href={`${BASE}/`} use:link class="btn btn-outline-secondary btn-sm">
+          <Icon name="home" />Today
+        </a>
+      </div>
     </div>
-  </header>
+    <p class="schedule-hint">
+      Tap the ⇄ on a booking and then tap where it should go. Dropping it on a
+      taken block swaps the two. "Day off" asks for a date and frees it: that day
+      and everything planned after it move one day later.
+    </p>
+  </section>
 
-  {#if notice}<p class="notice">{notice}</p>{/if}
-
-  {#each weeks as week, index (index)}
-    <div class="week">
-      {#each week as sheet (sheet.date)}
-        <article class="sheet" class:today={sheet.date === day}>
-          <h2>{formatDay(sheet.date)}</h2>
-          {#each SLOTS as name (name)}
-            {@const booking = sheet.slots[name]}
-            {@const project = booking?.project_uid ? byUid.get(booking.project_uid) : undefined}
-            <div
-              class="cell"
-              data-state={booking ? (booking.is_done ? "done" : "booked") : "free"}
-              class:holding={holding?.date === sheet.date && holding?.slot === name}
-            >
-              <button type="button" class="cell-main" onclick={() => onCellClick(sheet.date, name, booking)}>
-                <span class="cell-slot">{name}</span>
-                <span class="cell-title">{project?.title ?? (booking ? "Unknown" : "—")}</span>
-              </button>
-              {#if booking}
-                <span class="cell-tools">
-                  <button type="button" title="Tick this session off" onclick={() => toggleDone(booking)}>✓</button>
-                  <button type="button" title="Free this slot" onclick={() => clear(booking)}>×</button>
-                </span>
-              {/if}
-            </div>
-          {/each}
-        </article>
-      {/each}
-    </div>
+  {#each weeks as week (week.label)}
+    <section class="schedule-week">
+      <header class="schedule-week-header">
+        <h2 class="schedule-week-title">{week.label}</h2>
+        <span class="schedule-week-range">{week.range}</span>
+      </header>
+      <div class="schedule-grid">
+        {#each week.sheets as sheet (sheet.date)}
+          <DaySheet
+            {sheet}
+            {holding}
+            onfill={(date, slot) => (picking = { date, slot })}
+            onclear={clear}
+            onpick={pick}
+          />
+        {/each}
+      </div>
+    </section>
   {/each}
-</section>
+</div>
 
 {#if picking}
-  <div class="overlay" role="dialog" aria-label="Choose a project">
-    <div class="panel">
-      <header>
-        <strong>{formatDay(picking.date)} · slot {picking.slot}</strong>
-        <button type="button" class="linkish" onclick={() => (picking = null)}>Close</button>
+  <div class="planner-backdrop">
+    <div class="planner-dialog" role="dialog" aria-label="Choose a project">
+      <header class="planner-header">
+        <h2 class="planner-title">{formatDay(picking.date)} · block {picking.slot}</h2>
+        <button type="button" class="icon-button" title="Close" onclick={() => (picking = null)}>
+          <Icon name="x" />
+        </button>
       </header>
-      <ul class="candidates">
+      <ul class="planner-projects">
         {#each candidates as candidate (candidate.uid)}
           <li>
-            <button type="button" disabled={!candidate.canTake} onclick={() => book(candidate.uid)}>
-              <span class="candidate-title">
-                {candidate.isStarred ? "★ " : ""}{candidate.title}
+            <button
+              type="button"
+              class="planner-project"
+              class:is-blocked={!candidate.canTake}
+              disabled={!candidate.canTake}
+              onclick={() => book(candidate.uid)}
+            >
+              <span class="planner-project-title">
+                {#if candidate.isStarred}<span class="switcher-badge" aria-hidden="true">★</span>{/if}
+                {candidate.title}
               </span>
-              {#if candidate.planHeading}<span class="muted">{candidate.planHeading}</span>{/if}
-              {#if candidate.reason}<span class="reason">{candidate.reason}</span>{/if}
+              {#if candidate.planHeading}
+                <span class="planner-project-step">{candidate.planHeading}</span>
+              {/if}
+              {#if candidate.reason}
+                <span class="planner-project-reason">{candidate.reason}</span>
+              {/if}
             </button>
           </li>
         {/each}
       </ul>
-      <a href={`${BASE}`} use:link class="muted small">Back to today</a>
     </div>
   </div>
 {/if}
 
-<style>
-  .page { max-width: 68rem; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-  h1 { font-size: 1.6rem; margin: 0; }
-  .actions { display: flex; align-items: center; gap: 0.75rem; }
-  .hint { font-size: 0.82rem; opacity: 0.75; }
-  .notice { background: rgba(217, 119, 6, 0.12); border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.88rem; }
-  .btn { border: 1px solid rgba(127, 127, 127, 0.35); background: transparent; color: inherit; border-radius: 0.5rem; padding: 0.3rem 0.8rem; cursor: pointer; }
-  .linkish { background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
-
-  .week { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 0.6rem; margin-top: 0.9rem; }
-  .sheet { border: 1px solid rgba(127, 127, 127, 0.22); border-radius: 0.7rem; padding: 0.5rem; }
-  .sheet.today { border-color: var(--bs-primary, #4f46e5); }
-  .sheet h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.6; margin: 0 0 0.4rem; }
-
-  .cell { display: flex; align-items: center; gap: 0.25rem; border: 1px dashed rgba(127, 127, 127, 0.4); border-radius: 0.45rem; margin-bottom: 0.3rem; }
-  .cell[data-state="booked"] { border-style: solid; border-color: #d97706; }
-  .cell[data-state="done"] { border-style: solid; border-color: #16a34a; }
-  .cell.holding { outline: 2px solid var(--bs-primary, #4f46e5); }
-  .cell-main { flex: 1; display: flex; gap: 0.4rem; align-items: baseline; background: none; border: 0; color: inherit; padding: 0.35rem 0.4rem; cursor: pointer; text-align: left; font: inherit; min-width: 0; }
-  .cell-slot { font-weight: 700; opacity: 0.5; font-size: 0.75rem; }
-  .cell-title { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .cell-tools { display: flex; }
-  .cell-tools button { background: none; border: 0; color: inherit; opacity: 0.55; cursor: pointer; padding: 0.2rem 0.3rem; }
-  .cell-tools button:hover { opacity: 1; }
-
-  .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: grid; place-items: center; padding: 1rem; z-index: 50; }
-  .panel { background: var(--app-surface, Canvas); border-radius: 0.9rem; padding: 1rem; width: min(30rem, 100%); max-height: 80vh; overflow: auto; }
-  .panel header { display: flex; justify-content: space-between; margin-bottom: 0.6rem; }
-  .candidates { list-style: none; margin: 0 0 0.75rem; padding: 0; }
-  .candidates button { width: 100%; display: flex; flex-direction: column; gap: 0.1rem; text-align: left; background: none; border: 0; border-bottom: 1px solid rgba(127, 127, 127, 0.15); padding: 0.5rem 0.25rem; color: inherit; cursor: pointer; font: inherit; }
-  .candidates button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .candidate-title { font-weight: 600; }
-  .muted { opacity: 0.6; font-size: 0.8rem; }
-  .small { font-size: 0.8rem; }
-  .reason { font-size: 0.78rem; color: #b45309; }
-</style>
+{#if dayOffOpen}
+  <div class="planner-backdrop">
+    <div class="planner-dialog planner-dialog-narrow" role="dialog" aria-label="Take a day off">
+      <header class="planner-header">
+        <h2 class="planner-title">Day off</h2>
+        <button type="button" class="icon-button" title="Close" onclick={() => (dayOffOpen = false)}>
+          <Icon name="x" />
+        </button>
+      </header>
+      <p class="text-muted small">
+        That day is freed, and everything planned for it and after it moves one
+        day later. A session already ticked off stays where it happened.
+      </p>
+      <label class="d-block mb-3">
+        <span class="text-muted small">Which day?</span>
+        <input type="date" class="form-control" bind:value={dayOffDate} min={day} />
+      </label>
+      <button type="button" class="btn btn-primary btn-sm" onclick={takeDayOff}>Free that day</button>
+    </div>
+  </div>
+{/if}

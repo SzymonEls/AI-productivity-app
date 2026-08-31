@@ -662,3 +662,92 @@ export function dayProgress(
     targetLabel: minutesLabel(target),
   };
 }
+
+// ---------------------------------------------------------------------------
+// What the schedule and archive headers say.
+// ---------------------------------------------------------------------------
+
+const WEEK_LABELS = ["This week", "Next week", "In two weeks", "In three weeks", "In four weeks"];
+
+// The archive counts the other way, and says so from the week's own dates rather
+// than its place on the page - "Last week" has to mean last week on every page.
+const PAST_WEEK_LABELS: Record<number, string> = {
+  0: "Earlier this week",
+  1: "Last week",
+  2: "Two weeks ago",
+  3: "Three weeks ago",
+};
+
+export function weekLabel(index: number): string {
+  return WEEK_LABELS[index] ?? `In ${index} weeks`;
+}
+
+export function pastWeekLabel(weekStart: string, todayDay: string = today()): string {
+  const thisMonday = addDays(todayDay, -weekday(todayDay));
+  const weeksAgo = Math.round(
+    (new Date(`${thisMonday}T00:00:00Z`).getTime() - new Date(`${weekStart}T00:00:00Z`).getTime()) /
+      (86400000 * DAYS_PER_WEEK)
+  );
+  return PAST_WEEK_LABELS[weeksAgo] ?? `${weeksAgo} weeks ago`;
+}
+
+/** "12 Aug" / "12–18 Aug" / "28 Aug – 03 Sep" - _date_range_label(). */
+export function dateRangeLabel(first: string, last: string): string {
+  const from = new Date(`${first}T00:00:00Z`);
+  const to = new Date(`${last}T00:00:00Z`);
+  const month = (at: Date) =>
+    new Intl.DateTimeFormat("en-GB", { month: "short", timeZone: "UTC" }).format(at);
+
+  // The current week can be down to a single day, on a Sunday.
+  if (first === last) return formatDay(first).replace(/^0/, "");
+  if (from.getUTCMonth() === to.getUTCMonth()) {
+    return `${from.getUTCDate()}–${to.getUTCDate()} ${month(to)}`;
+  }
+  return `${formatDay(first)} – ${formatDay(last)}`;
+}
+
+export interface SheetSlot {
+  slot: SlotName;
+  booking: DaySlot | null;
+  project: Project | null;
+  planHeading: string;
+  isDone: boolean;
+  /** C is the spare slot; it stays visibly secondary once it is filled. */
+  isOptional: boolean;
+}
+
+export interface Sheet {
+  date: string;
+  isToday: boolean;
+  isWeekend: boolean;
+  slots: SheetSlot[];
+  bookedCount: number;
+}
+
+/** One calendar sheet, plus what its header has to show. */
+export function scheduleSheet(
+  day: CalendarDay,
+  projects: Map<string, Project>,
+  todayDay: string = today()
+): Sheet {
+  const slots = SLOTS.map((slot) => {
+    const booking = day.slots[slot];
+    const project = booking?.project_uid ? projects.get(booking.project_uid) ?? null : null;
+    return {
+      slot,
+      booking,
+      project,
+      planHeading: project ? firstPlanSectionTitle(project.long_goal) : "",
+      isDone: Boolean(booking?.is_done),
+      isOptional: !(TIMED_SLOTS as readonly string[]).includes(slot),
+    };
+  });
+
+  return {
+    date: day.date,
+    isToday: day.date === todayDay,
+    isWeekend: weekday(day.date) >= 5,
+    slots,
+    bookedCount: slots.filter((entry) => entry.project).length,
+  };
+}
