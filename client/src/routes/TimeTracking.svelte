@@ -7,7 +7,7 @@
    * session started on a train is still running when the train leaves the
    * tunnel.
    */
-  import { createRow, deleteRow, updateRow } from "../db/mutate";
+  import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
     activeEntry,
@@ -114,21 +114,6 @@
     void sync.run();
   }
 
-  async function startTimer(projectUid: string) {
-    // One timer at a time, exactly as the server refused a second one.
-    if (active) await stopTimer();
-    await createRow<TimeEntry>(database, "time_entry", {
-      started_at: new Date().toISOString(),
-      ended_at: null,
-      description: null,
-      // Written now, not when the project is deleted: it is what keeps past
-      // weeks readable once the project is gone.
-      project_title_snapshot: byUid.get(projectUid)?.title ?? null,
-      project_uid: projectUid,
-    });
-    await after();
-  }
-
   async function stopTimer() {
     if (!active) return;
     await updateRow<TimeEntry>(database, "time_entry", active.uid, {
@@ -194,6 +179,8 @@
         </select>
       </div>
       <div class="col-md-2">
+        <!-- No "Show": the filters above are read straight from the local copy,
+             so there is nothing to submit and nothing to wait for. -->
         <button
           class="btn btn-secondary w-100"
           type="button"
@@ -202,7 +189,7 @@
             day = today();
             projectFilter = "";
           }}
-        ><Icon name="reset" />Reset</button>
+        ><Icon name="reset" />Reset filters</button>
       </div>
     </div>
   </div>
@@ -242,22 +229,6 @@
     {:else}
       <p class="text-muted mb-0">No sessions recorded for the selected day.</p>
     {/if}
-  </div>
-</section>
-
-<section class="card shadow-sm mb-4">
-  <div class="card-body">
-    <h2 class="h5 mb-3">Start a timer</h2>
-    <div class="d-flex flex-wrap gap-2">
-      {#each activeProjects as project (project.uid)}
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm"
-          disabled={active?.project_uid === project.uid}
-          onclick={() => startTimer(project.uid)}
-        >{project.title}</button>
-      {/each}
-    </div>
   </div>
 </section>
 

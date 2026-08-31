@@ -18,6 +18,7 @@
   import Icon from "../ui/Icon.svelte";
   import PlanEditor from "../ui/PlanEditor.svelte";
   import Planner from "../ui/Planner.svelte";
+  import ProjectTimer from "../ui/ProjectTimer.svelte";
 
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
 
@@ -33,6 +34,8 @@
   let details = $state<Partial<Project>>({});
   let notice = $state("");
   let planning = $state(false);
+  let timing = $state(false);
+  let menuOpen = $state(false);
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
@@ -136,6 +139,18 @@
     }
   }
 
+  /** The plan, as a file. It is Markdown in the database, so nothing converts. */
+  function downloadMarkdown() {
+    if (!project) return;
+    const blob = new Blob([project.long_goal], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${project.title.replace(/[^\w\- ]+/g, "").trim() || "plan"}.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function removeProject() {
     if (!project) return;
     if (!window.confirm(`Delete "${project.title}"? Its tracked time is kept.`)) return;
@@ -189,21 +204,54 @@
     </div>
 
     <div class="project-detail-actions">
-      <a href={`${BASE}/time`} use:link class="btn btn-primary project-timer-toggle">
+      <button type="button" class="btn btn-primary project-timer-toggle" onclick={() => (timing = true)}>
         <Icon name="clock" /><span>Track time</span>
-      </a>
+      </button>
       <button type="button" class="btn btn-outline-secondary" onclick={() => (planning = true)}>
         <Icon name="calendar" /><span>Plan next session</span>
       </button>
-      <button
-        type="button"
-        class="btn btn-outline-secondary"
-        onclick={() => save({ is_archived: !project.is_archived },
-          project.is_archived ? "Restored." : "Archived.")}
-      >
-        <Icon name="archive" />{project.is_archived ? "Unarchive" : "Archive"}
-      </button>
-      <button type="button" class="btn btn-outline-danger" onclick={removeProject}>Delete</button>
+
+      <div class="dropdown">
+        <button
+          type="button"
+          class="btn btn-outline-secondary"
+          aria-label="More"
+          aria-expanded={menuOpen}
+          onclick={() => (menuOpen = !menuOpen)}
+        >⋯</button>
+        {#if menuOpen}
+          <ul class="dropdown-menu dropdown-menu-end show">
+            <li>
+              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; startDetails(); }}>
+                Settings
+              </button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item" onclick={() => { menuOpen = false; downloadMarkdown(); }}>
+                Download markdown
+              </button>
+            </li>
+            <li><a class="dropdown-item" href={`${BASE}/`} use:link>Back to home</a></li>
+            <li><hr class="dropdown-divider" /></li>
+            <li>
+              <button
+                type="button"
+                class="dropdown-item"
+                onclick={() => {
+                  menuOpen = false;
+                  save({ is_archived: !project.is_archived },
+                    project.is_archived ? "Restored." : "Archived.");
+                }}
+              >{project.is_archived ? "Unarchive project" : "Archive project"}</button>
+            </li>
+            <li>
+              <button type="button" class="dropdown-item text-danger" onclick={() => { menuOpen = false; removeProject(); }}>
+                Delete project
+              </button>
+            </li>
+          </ul>
+        {/if}
+      </div>
     </div>
   </header>
 
@@ -409,5 +457,14 @@
     {database}
     forProject={{ uid: project.uid, title: project.title }}
     onclose={() => (planning = false)}
+  />
+{/if}
+
+{#if timing && project}
+  <ProjectTimer
+    {database}
+    projectUid={project.uid}
+    projectTitle={project.title}
+    onclose={() => (timing = false)}
   />
 {/if}
