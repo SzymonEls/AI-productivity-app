@@ -8,7 +8,10 @@
    */
   import { describe, sync } from "../sync/store.svelte";
 
-  let { titleOf }: { titleOf: (uid: string) => string } = $props();
+  let {
+    titleOf,
+    onresolve,
+  }: { titleOf: (uid: string) => string; onresolve: () => void } = $props();
 
   let open = $state(false);
 
@@ -64,9 +67,18 @@
 
       {#if sync.conflicts > 0}
         <p class="sync-note sync-note-warn">
-          {sync.conflicts === 1 ? "One change" : `${sync.conflicts} changes`} changed
-          in two places at once and need you to decide.
+          {sync.conflicts === 1
+            ? "One change was made in two places at once and needs you to decide."
+            : `${sync.conflicts} changes were made in two places at once and need you to decide.`}
         </p>
+        <button
+          type="button"
+          class="sync-now"
+          onclick={() => {
+            open = false;
+            onresolve();
+          }}
+        >Settle {sync.conflicts === 1 ? "it" : "them"}</button>
       {/if}
 
       {#if sync.pendingCount === 0}

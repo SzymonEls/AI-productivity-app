@@ -12,6 +12,8 @@ export type Route =
   | { name: "home" }
   | { name: "project"; uid: string }
   | { name: "schedule" }
+  | { name: "archive" }
+  | { name: "time" }
   | { name: "tags" }
   | { name: "archived" }
   | { name: "unknown"; path: string };
@@ -22,6 +24,8 @@ function parse(pathname: string): Route {
 
   if (parts.length === 0) return { name: "home" };
   if (parts[0] === "schedule") return { name: "schedule" };
+  if (parts[0] === "archive") return { name: "archive" };
+  if (parts[0] === "time") return { name: "time" };
   if (parts[0] === "tags") return { name: "tags" };
   if (parts[0] === "archived") return { name: "archived" };
   if (parts[0] === "projects" && parts[1]) return { name: "project", uid: parts[1] };

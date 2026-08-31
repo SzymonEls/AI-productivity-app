@@ -7,9 +7,13 @@
   import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
   import Project from "./routes/Project.svelte";
+  import Archive from "./routes/Archive.svelte";
+  import Archived from "./routes/Archived.svelte";
   import Schedule from "./routes/Schedule.svelte";
+  import TimeTracking from "./routes/TimeTracking.svelte";
   import Tags from "./routes/Tags.svelte";
   import { sync } from "./sync/store.svelte";
+  import ConflictDialog from "./ui/ConflictDialog.svelte";
   import SyncButton from "./ui/SyncButton.svelte";
 
   let status = $state<"starting" | "ready" | "failed">("starting");
@@ -17,6 +21,7 @@
   let username = $state("");
   let database = $state<LocalDatabase | null>(null);
   let titles = $state(new Map<string, string>());
+  let resolving = $state(false);
 
   onMount(async () => {
     try {
@@ -44,7 +49,9 @@
   const nav = [
     { href: BASE, label: "Today", match: "home" },
     { href: `${BASE}/schedule`, label: "Schedule", match: "schedule" },
+    { href: `${BASE}/time`, label: "Time", match: "time" },
     { href: `${BASE}/tags`, label: "Tags", match: "tags" },
+    { href: `${BASE}/archive`, label: "Archive", match: "archive" },
   ];
 </script>
 
@@ -60,7 +67,7 @@
 
   {#if status === "ready"}
     <div class="bar-right">
-      <SyncButton {titleOf} />
+      <SyncButton {titleOf} onresolve={() => (resolving = true)} />
       <span class="who">{username}</span>
       <form method="post" action="/auth/logout">
         <button type="submit" class="link">Sign out</button>
@@ -82,6 +89,12 @@
       <Home {database} />
     {:else if route.name === "schedule"}
       <Schedule {database} />
+    {:else if route.name === "archive"}
+      <Archive {database} />
+    {:else if route.name === "time"}
+      <TimeTracking {database} />
+    {:else if route.name === "archived"}
+      <Archived {database} />
     {:else if route.name === "tags"}
       <Tags {database} />
     {:else if route.name === "project"}
@@ -95,6 +108,10 @@
     {/if}
   {/if}
 </main>
+
+{#if resolving && database}
+  <ConflictDialog {database} onclose={() => (resolving = false)} />
+{/if}
 
 <style>
   .bar {

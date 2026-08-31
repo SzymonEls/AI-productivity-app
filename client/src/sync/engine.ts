@@ -233,7 +233,21 @@ export async function push(database: LocalDatabase): Promise<PushResult> {
   const applied = new Set<string>(body.applied ?? []);
 
   for (const entry of queued) {
-    if (applied.has(entry.uid)) await database.outbox.delete(entry.id!);
+    if (!applied.has(entry.uid)) continue;
+
+    await database.outbox.delete(entry.id!);
+
+    // Take the revision the server just assigned. Without this the local row
+    // still carries the revision it was created with, so the very next edit
+    // would be sent as a change to a version the server had already moved
+    // past - and come straight back as a conflict with nobody on the other
+    // side of it. Written through the store, not mutate.ts: this is the
+    // server's answer being recorded, not a change to send back to it.
+    if (entry.op !== "delete") {
+      const store = storeFor(database, entry.entity);
+      const row = await store.get(entry.uid);
+      if (row !== undefined) await store.put({ ...row, rev: body.rev });
+    }
   }
 
   for (const conflict of body.conflicts ?? []) {
