@@ -11,12 +11,14 @@
   import Project from "./routes/Project.svelte";
   import Archive from "./routes/Archive.svelte";
   import Archived from "./routes/Archived.svelte";
+  import ChangePassword from "./routes/ChangePassword.svelte";
   import Schedule from "./routes/Schedule.svelte";
   import SignIn from "./routes/SignIn.svelte";
   import TimeTracking from "./routes/TimeTracking.svelte";
   import Tags from "./routes/Tags.svelte";
   import Timeline from "./routes/Timeline.svelte";
   import { sync } from "./sync/store.svelte";
+  import AppSettings from "./ui/AppSettings.svelte";
   import ConflictDialog from "./ui/ConflictDialog.svelte";
   import Icon from "./ui/Icon.svelte";
   import Switcher from "./ui/Switcher.svelte";
@@ -29,6 +31,8 @@
   let titles = $state(new Map<string, string>());
   let resolving = $state(false);
   let switcher = $state<{ open: () => void } | null>(null);
+  let settingsOpen = $state(false);
+  let menuOpen = $state(false);
   let safeMode = $state<"on" | "off">(readAppearance().safeMode);
 
   async function begin() {
@@ -65,9 +69,6 @@
     { href: `${BASE}/schedule`, label: "Schedule", match: "schedule", icon: "calendar" },
     { href: `${BASE}/timeline`, label: "Projects", match: "timeline", icon: "folder" },
     { href: `${BASE}/time`, label: "Time tracking", match: "time", icon: "clock" },
-    { href: `${BASE}/tags`, label: "Tags", match: "tags", icon: "sparkles" },
-    { href: `${BASE}/archive`, label: "Archive", match: "archive", icon: "archive" },
-    { href: `${BASE}/new`, label: "New", match: "new", icon: "plus" },
   ];
 </script>
 
@@ -143,18 +144,46 @@
           </button>
 
           <div class="nav-item dropdown">
-            <button class="user-menu-button" type="button" title={username}>
+            <button
+              class="user-menu-button dropdown-toggle"
+              type="button"
+              aria-expanded={menuOpen}
+              onclick={() => (menuOpen = !menuOpen)}
+            >
               <span class="user-avatar" aria-hidden="true">{username.slice(0, 1)}</span>
               <span class="d-none d-md-inline">{username}</span>
             </button>
+            {#if menuOpen}
+              <ul class="dropdown-menu dropdown-menu-end show">
+                <li>
+                  <button
+                    type="button"
+                    class="dropdown-item"
+                    onclick={() => {
+                      menuOpen = false;
+                      settingsOpen = true;
+                    }}
+                  >App settings</button>
+                </li>
+                <li>
+                  <a
+                    class="dropdown-item"
+                    href={`${BASE}/change-password`}
+                    use:link
+                    onclick={() => (menuOpen = false)}
+                  >Change password</a>
+                </li>
+                <li>
+                  <button
+                    type="button"
+                    class="dropdown-item"
+                    title="Signs out and clears this device's copy"
+                    onclick={() => database && signOut(database)}
+                  >Logout</button>
+                </li>
+              </ul>
+            {/if}
           </div>
-
-          <button
-            type="button"
-            class="btn btn-outline-secondary btn-sm"
-            title="Signs out and clears this device's copy"
-            onclick={() => database && signOut(database)}
-          >Sign out</button>
         </div>
       {/if}
     </div>
@@ -188,6 +217,8 @@
       <NewProject {database} />
     {:else if route.name === "tags"}
       <Tags {database} />
+    {:else if route.name === "change-password"}
+      <ChangePassword />
     {:else if route.name === "project"}
       <Project {database} uid={route.uid} />
     {:else}
@@ -202,6 +233,10 @@
 
 {#if database}
   <Switcher {database} bind:this={switcher} />
+{/if}
+
+{#if settingsOpen}
+  <AppSettings onclose={() => (settingsOpen = false)} />
 {/if}
 
 {#if resolving && database}

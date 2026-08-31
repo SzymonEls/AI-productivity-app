@@ -16,8 +16,9 @@
   } from "../domain/slots";
   import { dailyTotalsByProject, lastSessionLabel, today } from "../domain/time";
   import { live } from "../lib/live.svelte";
-  import { BASE, link, router } from "../lib/router.svelte";
+  import { BASE, link } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
+  import Planner from "../ui/Planner.svelte";
   import type { DaySlot } from "../sync/types";
 
   let { database }: { database: LocalDatabase } = $props();
@@ -50,6 +51,11 @@
     day: "2-digit",
     month: "long",
   }).format(new Date(`${day}T12:00:00Z`));
+
+  // The planner opens in place, as it did on the server: navigating away to
+  // the schedule to book one session was never what this button did.
+  let planningProject = $state<{ uid: string; title: string } | null>(null);
+  let fillingSlot = $state<{ date: string; slot: string } | null>(null);
 
   async function toggleDone(booking: DaySlot) {
     await updateRow<DaySlot>(database, "day_slot", booking.uid, { is_done: !booking.is_done });
@@ -122,7 +128,7 @@
               <button
                 type="button"
                 class="slot-card-fill"
-                onclick={() => router.go(`${BASE}/schedule`)}
+                onclick={() => (fillingSlot = { date: day, slot: card.slot })}
               >
                 <span class="visually-hidden">Choose a project for slot {card.slot}</span>
               </button>
@@ -171,7 +177,7 @@
                 <button
                   type="button"
                   class="btn btn-outline-secondary btn-sm"
-                  onclick={() => router.go(`${BASE}/schedule`)}
+                  onclick={() => (planningProject = { uid: project.uid, title: project.title })}
                 >Plan</button>
               </li>
             {/each}
@@ -238,3 +244,11 @@
     </aside>
   </div>
 </div>
+
+{#if planningProject}
+  <Planner {database} forProject={planningProject} onclose={() => (planningProject = null)} />
+{/if}
+
+{#if fillingSlot}
+  <Planner {database} forSlot={fillingSlot} onclose={() => (fillingSlot = null)} />
+{/if}

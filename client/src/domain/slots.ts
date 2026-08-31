@@ -751,3 +751,99 @@ export function scheduleSheet(
     bookedCount: slots.filter((entry) => entry.project).length,
   };
 }
+
+// ---------------------------------------------------------------------------
+// The session planner: a fortnight of slots, and where a project already stands.
+// ---------------------------------------------------------------------------
+
+export interface WindowSlot {
+  slot: SlotName;
+  projectUid: string | null;
+  projectTitle: string;
+  isThisProject: boolean;
+  canTake: boolean;
+  isDone: boolean;
+  /** C is the spare slot; it stays visibly secondary once it is filled. */
+  isOptional: boolean;
+}
+
+export interface WindowDay {
+  date: string;
+  label: string;
+  isToday: boolean;
+  slots: WindowSlot[];
+}
+
+/**
+ * The planner grid - schedule_window().
+ *
+ * A fortnight rather than a week: a week was short enough that a project with
+ * a booking in it had nowhere left to go, and the dialog scrolls anyway.
+ */
+export function scheduleWindow(
+  projects: Project[],
+  slots: DaySlot[],
+  projectUid: string,
+  days: number = SCHEDULE_WINDOW_DAYS,
+  todayDay: string = today()
+): WindowDay[] {
+  const byUid = new Map(projects.map((project) => [project.uid, project]));
+  // The project's own two bookings do not change from day to day, so they are
+  // read once for the whole grid rather than per row.
+  const bookings = projectBookings(slots, projectUid, todayDay);
+
+  const window: WindowDay[] = [];
+  for (let offset = 0; offset < days; offset += 1) {
+    const date = addDays(todayDay, offset);
+    const blocker = blockerForDay(bookings, date, todayDay);
+    const filled = slotsForDate(slots, date);
+
+    window.push({
+      date,
+      label: new Intl.DateTimeFormat("en-GB", {
+        weekday: "short",
+        day: "2-digit",
+        month: "short",
+        timeZone: "UTC",
+      }).format(new Date(`${date}T00:00:00Z`)),
+      isToday: date === todayDay,
+      slots: SLOTS.map((slot) => {
+        const booking = filled[slot];
+        return {
+          slot,
+          projectUid: booking?.project_uid ?? null,
+          projectTitle: booking?.project_uid ? byUid.get(booking.project_uid)?.title ?? "" : "",
+          isThisProject: booking?.project_uid === projectUid,
+          canTake: booking === null && blocker === null,
+          isDone: Boolean(booking?.is_done),
+          isOptional: !(TIMED_SLOTS as readonly string[]).includes(slot),
+        };
+      }),
+    });
+  }
+  return window;
+}
+
+/**
+ * Where this project already stands, as the one line the planner shows.
+ *
+ * The two-block rule blocks whole days at a time, so saying it per day - or
+ * once per booking - only repeats itself.
+ */
+export function bookingNote(
+  slots: DaySlot[],
+  projectUid: string,
+  todayDay: string = today()
+): string {
+  const [todaySlot, futureSlot] = projectBookings(slots, projectUid, todayDay);
+
+  const booked: string[] = [];
+  if (todaySlot) booked.push(`today in slot ${todaySlot.slot}`);
+  if (futureSlot) booked.push(`${formatDay(futureSlot.slot_date)} in slot ${futureSlot.slot}`);
+  if (booked.length === 0) return "";
+
+  return (
+    `Already planned for ${booked.join(" and ")} — ` +
+    "a project takes at most one block today and one later."
+  );
+}

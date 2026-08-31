@@ -80,3 +80,41 @@ export function toggleSafeMode(): "on" | "off" {
   window.dispatchEvent(new CustomEvent("safe-mode-change", { detail: next }));
   return next;
 }
+
+
+/** Write one setting, apply it, and let the page know. */
+export function setSetting(key: keyof Appearance, value: string): void {
+  const storageKey = {
+    ui: "app-ui",
+    theme: "app-theme",
+    projectLayout: "app-project-layout",
+    planEditor: "app-plan-editor",
+    safeMode: "app-safe-mode",
+  }[key];
+
+  try {
+    // "System" means having no stored preference, not a stored word.
+    if (key === "theme" && value === "system") localStorage.removeItem(storageKey);
+    else localStorage.setItem(storageKey, value);
+  } catch {
+    // The change still holds for this page view.
+  }
+
+  applyAppearance();
+  if (key === "planEditor") {
+    window.dispatchEvent(new CustomEvent("plan-editor-change", { detail: value }));
+  }
+}
+
+/** What the settings dialog should show as chosen. */
+export function chosen(key: keyof Appearance): string {
+  try {
+    if (key === "theme") return localStorage.getItem("app-theme") ?? "system";
+    if (key === "ui") return localStorage.getItem("app-ui") ?? "modern";
+    if (key === "projectLayout") return localStorage.getItem("app-project-layout") ?? "sidebar";
+    if (key === "planEditor") return localStorage.getItem("app-plan-editor") ?? "blocks";
+  } catch {
+    // Fall through to the defaults below.
+  }
+  return readAppearance()[key] as string;
+}

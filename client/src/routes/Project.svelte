@@ -17,6 +17,7 @@
   import type { Project } from "../sync/types";
   import Icon from "../ui/Icon.svelte";
   import PlanEditor from "../ui/PlanEditor.svelte";
+  import Planner from "../ui/Planner.svelte";
 
   let { database, uid }: { database: LocalDatabase; uid: string } = $props();
 
@@ -31,6 +32,7 @@
   let editingDetails = $state(false);
   let details = $state<Partial<Project>>({});
   let notice = $state("");
+  let planning = $state(false);
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
   const interactive = $derived(html.replace(/ disabled(?=[ >])/g, ""));
@@ -190,9 +192,9 @@
       <a href={`${BASE}/time`} use:link class="btn btn-primary project-timer-toggle">
         <Icon name="clock" /><span>Track time</span>
       </a>
-      <a href={`${BASE}/schedule`} use:link class="btn btn-outline-secondary">
+      <button type="button" class="btn btn-outline-secondary" onclick={() => (planning = true)}>
         <Icon name="calendar" /><span>Plan next session</span>
-      </a>
+      </button>
       <button
         type="button"
         class="btn btn-outline-secondary"
@@ -400,4 +402,12 @@
       </section>
     </div>
   </div>
+{/if}
+
+{#if planning && project}
+  <Planner
+    {database}
+    forProject={{ uid: project.uid, title: project.title }}
+    onclose={() => (planning = false)}
+  />
 {/if}
