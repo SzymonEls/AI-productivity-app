@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { addDays, planAssign, planDayOff, planMove, slotCandidates } from "./slots";
+import { addDays, archivePaging, planAssign, planDayOff, planMove, slotCandidates } from "./slots";
 import type { DaySlot, Project } from "../sync/types";
 
 const TODAY = "2026-06-15";
@@ -184,5 +184,41 @@ describe("slotCandidates", () => {
     const booked = [slot("s1", TOMORROW, "A", { project_uid: "p1" })];
     const candidates = slotCandidates(projects, booked, TOMORROW, "A", TODAY);
     expect(candidates[0].reason).toContain("taken by alpha");
+  });
+});
+
+describe("archivePaging", () => {
+  const YESTERDAY = addDays(TODAY, -1);
+
+  it("steps back from the page's own edge, not a fixed three weeks from the cursor", () => {
+    // A booking well before the window, so "Earlier" has somewhere to go.
+    const old = [slot("s1", addDays(TODAY, -90), "A")];
+    const paging = archivePaging(old, YESTERDAY, TODAY);
+
+    expect(paging.earlierUntil).toBe(addDays(paging.firstDay, -1));
+  });
+
+  it("offers nothing older than the first booking there has ever been", () => {
+    const recent = [slot("s1", addDays(TODAY, -2), "A")];
+    expect(archivePaging(recent, YESTERDAY, TODAY).earlierUntil).toBeNull();
+  });
+
+  it("offers no Later on the newest page", () => {
+    expect(archivePaging([], YESTERDAY, TODAY).laterUntil).toBeNull();
+  });
+
+  it("stops Later at yesterday rather than reaching into the schedule", () => {
+    const older = addDays(TODAY, -30);
+    const paging = archivePaging([], older, TODAY);
+    expect(paging.laterUntil).not.toBeNull();
+    expect(paging.laterUntil! <= YESTERDAY).toBe(true);
+  });
+
+  it("pages meet with no gap", () => {
+    const long = [slot("s1", addDays(TODAY, -120), "A")];
+    const first = archivePaging(long, YESTERDAY, TODAY);
+    const second = archivePaging(long, first.earlierUntil!, TODAY);
+    // The older page ends the day before the newer one begins.
+    expect(addDays(second.lastDay, 1)).toBe(first.firstDay);
   });
 });

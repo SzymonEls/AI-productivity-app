@@ -851,3 +851,40 @@ export function bookingNote(
     "a project takes at most one block today and one later."
   );
 }
+
+/**
+ * Where the archive's two links go - the pagination from schedule_archive().
+ *
+ * Both are worked out from the page's own edges rather than by stepping a fixed
+ * three weeks from the cursor, which is what keeps the pages gapless whatever
+ * weekday the first one starts on.
+ */
+export function archivePaging(
+  slots: DaySlot[],
+  until: string,
+  todayDay: string = today()
+): { firstDay: string; lastDay: string; earlierUntil: string | null; laterUntil: string | null } {
+  const yesterday = addDays(todayDay, -1);
+  const weeks = pastCalendarWeeks(slots, ARCHIVE_WEEKS, until);
+
+  // The weeks run newest first.
+  const firstDay = weeks[weeks.length - 1][0].date;
+  const lastWeek = weeks[0];
+  const lastDay = lastWeek[lastWeek.length - 1].date;
+
+  const earliest = firstBookedDay(slots);
+
+  return {
+    firstDay,
+    lastDay,
+    // No point offering a page older than the first booking there has ever been.
+    earlierUntil: earliest !== null && earliest < firstDay ? addDays(firstDay, -1) : null,
+    laterUntil:
+      lastDay < yesterday
+        ? (() => {
+            const candidate = addDays(lastDay, ARCHIVE_WEEKS * DAYS_PER_WEEK);
+            return candidate > yesterday ? yesterday : candidate;
+          })()
+        : null,
+  };
+}

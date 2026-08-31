@@ -315,6 +315,8 @@
                   <button
                     type="button"
                     class="btn btn-outline-danger btn-sm"
+                    title="Delete this session"
+                    aria-label="Delete this session"
                     onclick={() => removeEntry(entry)}
                   ><Icon name="x" /></button>
                 </td>

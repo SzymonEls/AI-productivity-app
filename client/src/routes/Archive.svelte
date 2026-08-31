@@ -10,11 +10,10 @@
   import type { LocalDatabase } from "../db/schema";
   import {
     ARCHIVE_WEEKS,
-    DAYS_PER_WEEK,
     type SheetSlot,
     addDays,
+    archivePaging,
     dateRangeLabel,
-    firstBookedDay,
     pastCalendarWeeks,
     pastWeekLabel,
     scheduleSheet,
@@ -33,7 +32,6 @@
   const slots = live(() => database.daySlots.toArray(), []);
 
   const day = today();
-  const newest = addDays(day, -1);
 
   let until = $state(addDays(today(), -1));
   let status = $state("");
@@ -50,22 +48,8 @@
     weeks.reduce((total, week) => total + week.sheets.reduce((n, s) => n + s.bookedCount, 0), 0)
   );
 
-  const earliest = $derived(firstBookedDay(slots.value));
-  const earlierUntil = $derived(addDays(until, -(ARCHIVE_WEEKS * DAYS_PER_WEEK)));
-  const hasEarlier = $derived(earliest !== null && earlierUntil >= earliest);
-  const laterUntil = $derived(
-    (() => {
-      const candidate = addDays(until, ARCHIVE_WEEKS * DAYS_PER_WEEK);
-      return candidate > newest ? newest : candidate;
-    })()
-  );
-  const hasLater = $derived(until < newest);
-
-  const rangeLabel = $derived(
-    weeks.length
-      ? dateRangeLabel(weeks[weeks.length - 1].sheets[0].date, until)
-      : dateRangeLabel(until, until)
-  );
+  const paging = $derived(archivePaging(slots.value, until, day));
+  const rangeLabel = $derived(dateRangeLabel(paging.firstDay, paging.lastDay));
 
   async function toggleDone(entry: SheetSlot) {
     if (!entry.booking) return;
@@ -90,13 +74,13 @@
         <span class="schedule-status" role="status">{status}</span>
         <!-- Each step is worked out from this page's own edges, so the pages
              meet exactly whatever weekday the newest one ends on. -->
-        {#if hasEarlier}
-          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (until = earlierUntil)}>
+        {#if paging.earlierUntil}
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (until = paging.earlierUntil!)}>
             Earlier
           </button>
         {/if}
-        {#if hasLater}
-          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (until = laterUntil)}>
+        {#if paging.laterUntil}
+          <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (until = paging.laterUntil!)}>
             Later
           </button>
         {/if}
