@@ -64,14 +64,20 @@ def _sync_columns_table(table_name):
         table_name,
         sa.column('id', sa.Integer),
         sa.column('uid', sa.String),
+        sa.column('rev', sa.Integer),
     )
 
 
-def _backfill_uids(connection, table_name):
-    """Give every existing row a ULID.
+def _backfill_sync_columns(connection, table_name):
+    """Give every existing row a ULID and a revision the first sync can see.
 
-    Only rows still holding the empty server_default are touched, so running
-    the migration twice - or resuming one that was interrupted - is safe.
+    The revision has to be 1, not the 0 the column defaults to. A client asks
+    for "everything above my cursor", and a brand new client's cursor is 0 - so
+    rows left at 0 would sit above nothing, and every project already on the
+    server would be invisible to the device that had just been set up.
+
+    Only rows still holding the empty server_default are touched, so running the
+    migration twice - or resuming one that was interrupted - is safe.
     """
     table = _sync_columns_table(table_name)
 
@@ -85,7 +91,7 @@ def _backfill_uids(connection, table_name):
 
         for row in rows:
             connection.execute(
-                table.update().where(table.c.id == row.id).values(uid=_new_ulid())
+                table.update().where(table.c.id == row.id).values(uid=_new_ulid(), rev=1)
             )
 
 
@@ -100,9 +106,35 @@ def upgrade():
             )
             batch_op.add_column(sa.Column('deleted_at', sa.DateTime(), nullable=True))
 
+    op.create_table(
+        'sync_states',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('user_id', sa.Integer(), nullable=False),
+        sa.Column('last_rev', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('tombstone_floor', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('last_pruned_at', sa.DateTime(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('user_id'),
+    )
+
     connection = op.get_bind()
     for table_name in SYNC_TABLES:
-        _backfill_uids(connection, table_name)
+        _backfill_sync_columns(connection, table_name)
+
+    # Every existing account starts its counter at 1, matching the revision the
+    # backfill just wrote, so the next change it makes is numbered above what is
+    # already there rather than colliding with it.
+    connection.execute(
+        sa.text(
+            "INSERT INTO sync_states (user_id, last_rev, tombstone_floor,"
+            " created_at, updated_at)"
+            " SELECT id, 1, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM users"
+            " WHERE id NOT IN (SELECT user_id FROM sync_states)"
+        )
+    )
 
     # Only now that every row holds a distinct value can the identity be made
     # unique. The day slot table also loses its old table-level constraint here,
@@ -128,20 +160,6 @@ def upgrade():
         ['user_id', 'slot_date', 'slot'],
         unique=True,
         sqlite_where=sa.text('deleted_at IS NULL'),
-    )
-
-    op.create_table(
-        'sync_states',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('last_rev', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('tombstone_floor', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('last_pruned_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-        sa.UniqueConstraint('user_id'),
     )
 
 
