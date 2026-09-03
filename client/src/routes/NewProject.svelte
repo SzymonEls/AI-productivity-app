@@ -2,6 +2,7 @@
   /** A new project, created on this device whether there is a network or not. */
   import { createRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
+  import { autoresize } from "../lib/autoresize";
   import { BASE, router } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { Project } from "../sync/types";
@@ -11,10 +12,25 @@
   let title = $state("");
   let shortGoal = $state("");
   let frequency = $state("");
+  let longGoal = $state("");
   let dailyTarget = $state<number | null>(null);
   let isPrivate = $state(false);
   let isStarred = $state(false);
   let error = $state("");
+  let created = $state(false);
+
+  const untouched = $derived(
+    !title.trim() && !shortGoal.trim() && !frequency.trim() && !longGoal.trim()
+  );
+
+  // The form holds the only copy of what has been typed until it is created -
+  // the warning the original carried on the same page.
+  $effect(() => {
+    if (untouched || created) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  });
 
   async function submit(event: Event) {
     event.preventDefault();
@@ -27,7 +43,7 @@
       title: title.trim(),
       short_goal: shortGoal,
       frequency,
-      long_goal: "",
+      long_goal: longGoal,
       archived_long_goal: "",
       daily_target_minutes: dailyTarget,
       is_starred: isStarred,
@@ -35,6 +51,7 @@
       is_archived: false,
     });
 
+    created = true;
     await sync.refresh();
     void sync.run();
     router.go(`${BASE}/projects/${uid}`);
@@ -57,7 +74,13 @@
 
           <div class="mb-3">
             <label for="short_goal" class="form-label">Thoughts</label>
-            <textarea class="form-control" id="short_goal" rows="4" bind:value={shortGoal}></textarea>
+            <textarea
+              class="form-control"
+              id="short_goal"
+              rows="4"
+              use:autoresize
+              bind:value={shortGoal}
+            ></textarea>
             <div class="form-text">Notes, reflections, or the next thing on your mind.</div>
           </div>
 
@@ -73,6 +96,18 @@
             <div class="form-text">
               A short note about how often you want to come back to this project.
             </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="long_goal" class="form-label">Plan</label>
+            <textarea
+              class="form-control"
+              id="long_goal"
+              rows="6"
+              use:autoresize
+              bind:value={longGoal}
+            ></textarea>
+            <div class="form-text">The working project plan. Markdown is supported here.</div>
           </div>
 
           <div class="mb-3">

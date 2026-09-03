@@ -25,6 +25,7 @@
     overlapSeconds,
     today,
   } from "../domain/time";
+  import { autoresize } from "../lib/autoresize";
   import { live } from "../lib/live.svelte";
   import { BASE, link, router } from "../lib/router.svelte";
   import { sectionControls } from "../lib/section-controls";
@@ -299,17 +300,6 @@
       document.removeEventListener("keydown", onKey);
     };
   });
-
-  /** Grow a textarea to its content, as the original did while typing. */
-  function autoresize(node: HTMLTextAreaElement) {
-    const fit = () => {
-      node.style.height = "auto";
-      node.style.height = `${node.scrollHeight}px`;
-    };
-    fit();
-    node.addEventListener("input", fit);
-    return { destroy: () => node.removeEventListener("input", fit) };
-  }
 
   function onPlanClick(event: MouseEvent) {
     const target = event.target as HTMLElement;

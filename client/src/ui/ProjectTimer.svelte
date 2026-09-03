@@ -18,10 +18,10 @@
     overlapSeconds,
     today,
   } from "../domain/time";
-  import { dismissable } from "../lib/dismiss";
   import { live } from "../lib/live.svelte";
   import { sync } from "../sync/store.svelte";
   import type { TimeEntry } from "../sync/types";
+  import Modal from "./Modal.svelte";
 
   let {
     database,
@@ -109,96 +109,79 @@
   }
 </script>
 
-<div class="modal-backdrop-shim" use:dismissable={onclose}>
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content project-timer-modal">
-      <div class="modal-header project-timer-modal-header">
-        <div class="min-w-0">
-          <h2 class="modal-title h5">Today's work time</h2>
-          <span class="small text-muted">
-            {mineRunning ? "Timer is running" : "Timer is stopped"}
-          </span>
-        </div>
-        <strong class="project-timer-clock ms-auto">{formatDuration(total)}</strong>
-        <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
+<Modal label="Today's work time" {onclose}>
+  <div class="modal-content project-timer-modal">
+    <div class="modal-header project-timer-modal-header">
+      <div class="min-w-0">
+        <h2 class="modal-title h5">Today's work time</h2>
+        <span class="small text-muted">
+          {mineRunning ? "Timer is running" : "Timer is stopped"}
+        </span>
+      </div>
+      <strong class="project-timer-clock ms-auto">{formatDuration(total)}</strong>
+      <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
+    </div>
+
+    <div class="modal-body">
+      <div class="project-timer-actions mb-3">
+        <button type="button" class="btn btn-success" disabled={Boolean(mineRunning)} onclick={start}>
+          {mineRunning ? "Session in progress" : "Start new session"}
+        </button>
+        <button type="button" class="btn btn-outline-secondary" disabled={!mineRunning} onclick={stop}>
+          End session
+        </button>
       </div>
 
-      <div class="modal-body">
-        <div class="project-timer-actions mb-3">
-          <button type="button" class="btn btn-success" disabled={Boolean(mineRunning)} onclick={start}>
-            {mineRunning ? "Session in progress" : "Start new session"}
-          </button>
-          <button type="button" class="btn btn-outline-secondary" disabled={!mineRunning} onclick={stop}>
-            End session
-          </button>
+      <label class="form-label" for="projectTimerDescription">Current session description</label>
+      <!-- A description belongs to a session, so there is nothing to write
+           into until one is running. -->
+      <textarea
+        id="projectTimerDescription"
+        class="form-control timer-description-field"
+        disabled={!mineRunning}
+        placeholder={mineRunning
+          ? "What was done in this session..."
+          : "Start a new session to add its description."}
+        bind:value={description}
+        onkeydown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void saveDescription();
+          }
+        }}
+      ></textarea>
+
+      <div class="project-timer-sessions mt-3">
+        <h3 class="h6 mb-2">Today's sessions</h3>
+        <div class="project-timer-session-list">
+          {#if todays.length === 0}
+            <p class="text-muted small mb-0">No sessions recorded today.</p>
+          {:else}
+            {#each todays as entry (entry.uid)}
+              <article class="project-timer-session" class:is-running={!entry.ended_at}>
+                <div class="project-timer-session-meta">
+                  <span>{clock(entry.started_at)}-{entry.ended_at ? clock(entry.ended_at) : "now"}</span>
+                  <strong>{formatDuration(elapsedSeconds(entry, now))}</strong>
+                  {#if !entry.ended_at}<span class="badge text-bg-success">now</span>{/if}
+                </div>
+                <p class="project-timer-session-description">
+                  {entry.description || "No description"}
+                </p>
+              </article>
+            {/each}
+          {/if}
         </div>
-
-        <label class="form-label" for="projectTimerDescription">Current session description</label>
-        <!-- A description belongs to a session, so there is nothing to write
-             into until one is running. -->
-        <textarea
-          id="projectTimerDescription"
-          class="form-control timer-description-field"
-          disabled={!mineRunning}
-          placeholder={mineRunning
-            ? "What was done in this session..."
-            : "Start a new session to add its description."}
-          bind:value={description}
-          onkeydown={(event) => {
-            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
-              event.preventDefault();
-              void saveDescription();
-            }
-          }}
-        ></textarea>
-
-        <div class="project-timer-sessions mt-3">
-          <h3 class="h6 mb-2">Today's sessions</h3>
-          <div class="project-timer-session-list">
-            {#if todays.length === 0}
-              <p class="text-muted small mb-0">No sessions recorded today.</p>
-            {:else}
-              {#each todays as entry (entry.uid)}
-                <article class="project-timer-session" class:is-running={!entry.ended_at}>
-                  <div class="project-timer-session-meta">
-                    <span>{clock(entry.started_at)}-{entry.ended_at ? clock(entry.ended_at) : "now"}</span>
-                    <strong>{formatDuration(elapsedSeconds(entry, now))}</strong>
-                    {#if !entry.ended_at}<span class="badge text-bg-success">now</span>{/if}
-                  </div>
-                  <p class="project-timer-session-description">
-                    {entry.description || "No description"}
-                  </p>
-                </article>
-              {/each}
-            {/if}
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer justify-content-between">
-        <span class="small text-muted">{saved}</span>
-        <button
-          type="button"
-          class="btn btn-outline-primary btn-sm"
-          disabled={!mineRunning}
-          onclick={saveDescription}
-        >Save description</button>
       </div>
     </div>
-  </div>
-</div>
 
-<style>
-  /* Bootstrap's modal needs its JavaScript to position itself; this stands in
-     for the backdrop it would have created. */
-  .modal-backdrop-shim {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-    z-index: 1055;
-  }
-  .modal-dialog { margin: 0; width: min(34rem, 100%); }
-</style>
+    <div class="modal-footer justify-content-between">
+      <span class="small text-muted">{saved}</span>
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        disabled={!mineRunning}
+        onclick={saveDescription}
+      >Save description</button>
+    </div>
+  </div>
+</Modal>

@@ -7,8 +7,8 @@
    */
   import { untrack } from "svelte";
 
-  import { dismissable } from "../lib/dismiss";
   import type { Project } from "../sync/types";
+  import Modal from "./Modal.svelte";
 
   let {
     project,
@@ -26,49 +26,34 @@
   let isPrivate = $state(untrack(() => project.is_private));
 </script>
 
-<div class="modal-backdrop-shim" use:dismissable={onclose}>
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title h5">Project settings</h2>
-        <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
+<Modal label="Project settings" {onclose}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title h5">Project settings</h2>
+      <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="projectStarred" bind:checked={starred} />
+        <label class="form-check-label" for="projectStarred">
+          Starred (context for AI Daily Planning)
+        </label>
       </div>
-      <div class="modal-body">
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="projectStarred" bind:checked={starred} />
-          <label class="form-check-label" for="projectStarred">
-            Starred (context for AI Daily Planning)
-          </label>
-        </div>
-        <div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="projectPrivate" bind:checked={isPrivate} />
-          <label class="form-check-label" for="projectPrivate">Private project</label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" onclick={onclose}>Cancel</button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          onclick={async () => {
-            await onsave({ is_starred: starred, is_private: isPrivate });
-            onclose();
-          }}
-        >Save settings</button>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="projectPrivate" bind:checked={isPrivate} />
+        <label class="form-check-label" for="projectPrivate">Private project</label>
       </div>
     </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" onclick={onclose}>Cancel</button>
+      <button
+        type="button"
+        class="btn btn-primary"
+        onclick={async () => {
+          await onsave({ is_starred: starred, is_private: isPrivate });
+          onclose();
+        }}
+      >Save settings</button>
+    </div>
   </div>
-</div>
-
-<style>
-  .modal-backdrop-shim {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-    z-index: 1055;
-  }
-  .modal-dialog { margin: 0; width: min(32rem, 100%); }
-</style>
+</Modal>

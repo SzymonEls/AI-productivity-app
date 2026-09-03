@@ -5,8 +5,8 @@
    * nothing here reaches the server, and nothing here is synchronised.
    */
   import { type Appearance, chosen, setSetting } from "../lib/appearance";
-  import { dismissable } from "../lib/dismiss";
   import Icon from "./Icon.svelte";
+  import Modal from "./Modal.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
 
@@ -70,46 +70,29 @@
   }
 </script>
 
-<div class="modal-backdrop-shim" use:dismissable={onclose}>
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 class="modal-title h5">App settings</h2>
-        <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
-      </div>
-      <div class="modal-body">
-        {#each GROUPS as group (group.key)}
-          <div class="settings-group">
-            <div class="settings-label"><Icon name={group.icon} />{group.label}</div>
-            <p class="settings-hint">{group.hint}</p>
-            <div class="settings-segments" role="group" aria-label={group.label}>
-              {#each group.options as option (option.value)}
-                <button
-                  type="button"
-                  class="settings-segment"
-                  class:is-active={picked[group.key] === option.value}
-                  onclick={() => choose(group.key, option.value)}
-                >{option.label}</button>
-              {/each}
-            </div>
+<Modal label="App settings" {onclose}>
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2 class="modal-title h5">App settings</h2>
+      <button type="button" class="btn-close" aria-label="Close" onclick={onclose}></button>
+    </div>
+    <div class="modal-body">
+      {#each GROUPS as group (group.key)}
+        <div class="settings-group">
+          <div class="settings-label"><Icon name={group.icon} />{group.label}</div>
+          <p class="settings-hint">{group.hint}</p>
+          <div class="settings-segments" role="group" aria-label={group.label}>
+            {#each group.options as option (option.value)}
+              <button
+                type="button"
+                class="settings-segment"
+                class:is-active={picked[group.key] === option.value}
+                onclick={() => choose(group.key, option.value)}
+              >{option.label}</button>
+            {/each}
           </div>
-        {/each}
-      </div>
+        </div>
+      {/each}
     </div>
   </div>
-</div>
-
-<style>
-  /* Bootstrap's modal needs its JavaScript to be positioned; this stands in for
-     the backdrop it would have created. */
-  .modal-backdrop-shim {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: grid;
-    place-items: center;
-    padding: 1rem;
-    z-index: 1055;
-  }
-  .modal-dialog { margin: 0; width: min(32rem, 100%); }
-</style>
+</Modal>

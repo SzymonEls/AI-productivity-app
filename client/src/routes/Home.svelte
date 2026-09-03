@@ -129,9 +129,9 @@
           <div class="slot-card-side">
             {#if card.project && card.showsTime}
               <span class="slot-card-time">
-                {card.trackedLabel}{#if card.targetLabel}
-                  <span class="slot-card-target">/ {card.targetLabel}</span>
-                {/if}
+                {card.trackedLabel}{#if card.targetLabel}&nbsp;<span
+                  class="slot-card-target"
+                >/ {card.targetLabel}</span>{/if}
               </span>
             {/if}
           </div>

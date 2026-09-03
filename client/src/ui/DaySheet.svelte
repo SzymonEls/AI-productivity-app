@@ -123,7 +123,13 @@
               over = null;
             }}
           >
-            <span class="day-slot-title">{entry.project.title}</span>
+            <!-- A link, as on the original board: a plain click means "move
+                 this" and is stopped, but ⌘-click still opens the project. -->
+            <a
+              class="day-slot-title"
+              href={`${BASE}/projects/${entry.project.uid}`}
+              onclick={(event) => event.preventDefault()}
+            >{entry.project.title}</a>
             {#if entry.isDone}
               <span class="day-slot-done" title="Session done" aria-label="Session done">✓</span>
             {/if}

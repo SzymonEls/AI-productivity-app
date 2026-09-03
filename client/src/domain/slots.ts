@@ -760,6 +760,8 @@ export function scheduleSheet(
 
 export interface WindowSlot {
   slot: SlotName;
+  /** The booking itself, so the planner can free a block it is showing. */
+  bookingUid: string | null;
   projectUid: string | null;
   projectTitle: string;
   isThisProject: boolean;
@@ -813,6 +815,7 @@ export function scheduleWindow(
         const booking = filled[slot];
         return {
           slot,
+          bookingUid: booking?.uid ?? null,
           projectUid: booking?.project_uid ?? null,
           projectTitle: booking?.project_uid ? byUid.get(booking.project_uid)?.title ?? "" : "",
           isThisProject: booking?.project_uid === projectUid,

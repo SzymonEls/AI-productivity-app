@@ -47,10 +47,10 @@
 </script>
 
 <div class="row justify-content-center">
-  <div class="col-md-6 col-lg-5">
+  <div class="col-md-7 col-lg-6">
     <div class="card shadow-sm">
       <div class="card-body p-4">
-        <h1 class="h3 mb-4">Change password</h1>
+        <h1 class="h3 mb-4">Change Password</h1>
 
         {#if error}<div class="alert alert-danger py-2">{error}</div>{/if}
         {#if done}<div class="alert alert-success py-2">{done}</div>{/if}
@@ -89,7 +89,7 @@
               required
             />
           </div>
-          <button type="submit" class="btn btn-primary w-100">Update password</button>
+          <button type="submit" class="btn btn-primary w-100">Update Password</button>
         </form>
       </div>
     </div>
