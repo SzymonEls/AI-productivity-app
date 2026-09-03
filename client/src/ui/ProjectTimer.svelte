@@ -14,6 +14,7 @@
     dayBounds,
     elapsedSeconds,
     entriesForRange,
+    firstPlanSectionTitle,
     formatDuration,
     overlapSeconds,
     today,
@@ -36,6 +37,8 @@
   } = $props();
 
   const entries = live(() => database.timeEntries.toArray(), []);
+  const projects = live(() => database.projects.toArray(), []);
+  const project = $derived(projects.value.find((entry) => entry.uid === projectUid));
 
   const day = today();
   let now = $state(new Date());
@@ -66,12 +69,24 @@
   }
 
   async function start() {
-    // One timer at a time, exactly as the server refused a second one.
-    if (running) await stop();
+    // One timer at a time, and the other one is not this dialog's to end: the
+    // server refused in the same words rather than quietly closing a session
+    // being run somewhere else.
+    if (running && running.project_uid !== projectUid) {
+      const other = running.project_uid
+        ? projects.value.find((entry) => entry.uid === running.project_uid)?.title
+        : null;
+      saved = `Stop the timer for project ${other ?? running.project_title_snapshot ?? "in progress"} first.`;
+      return;
+    }
+    if (running) return;
+
     await createRow<TimeEntry>(database, "time_entry", {
       started_at: new Date().toISOString(),
       ended_at: null,
-      description: null,
+      // What the session is about, before anything is typed: the plan's first
+      // section is the step being worked on, which is what it was on the server.
+      description: firstPlanSectionTitle(project?.long_goal) || null,
       // Written now, not when the project is deleted: it is what keeps past
       // weeks readable once the project is gone.
       project_title_snapshot: projectTitle,

@@ -63,6 +63,26 @@ export function toggleTheme(): string {
   return next;
 }
 
+/** Where a card that has been opened while safe mode is on remembers it. */
+export const REVEAL_PREFIX = "app-private-reveal:";
+
+/**
+ * Forget every card that was opened by hand.
+ *
+ * Reaching for the shield means "hide this now", so a reveal from four minutes
+ * ago has to go with it - otherwise the curtain is back up but the next reload
+ * lifts it again, which is the one thing safe mode must never do.
+ */
+export function forgetReveals(): void {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(REVEAL_PREFIX)) localStorage.removeItem(key);
+    }
+  } catch {
+    // Nothing was remembered, then.
+  }
+}
+
 /**
  * Safe mode: a curtain over a private project's plan and thoughts.
  *
@@ -76,6 +96,7 @@ export function toggleSafeMode(): "on" | "off" {
   } catch {
     // As above.
   }
+  if (next === "on") forgetReveals();
   document.documentElement.setAttribute("data-safe-mode", next);
   window.dispatchEvent(new CustomEvent("safe-mode-change", { detail: next }));
   return next;
@@ -99,6 +120,9 @@ export function setSetting(key: keyof Appearance, value: string): void {
   } catch {
     // The change still holds for this page view.
   }
+
+  // Same rule as the shield in the navbar, whichever way safe mode is turned on.
+  if (key === "safeMode" && value === "on") forgetReveals();
 
   applyAppearance();
   if (key === "planEditor") {
