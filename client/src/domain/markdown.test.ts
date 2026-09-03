@@ -10,8 +10,10 @@ import { describe, expect, it } from "vitest";
 
 import golden from "./__golden__markdown.json";
 import {
+  markdownFilename,
   normalizeTwoSpaceNestedLists,
   paintTags,
+  projectMarkdown,
   renderMarkdown,
   renderPlan,
   stripRepeatedTitle,
@@ -81,5 +83,46 @@ describe("stripRepeatedTitle", () => {
     expect(stripRepeatedTitle("# My Project\n\nbody here", "My Project")).toBe(g.matching);
     expect(stripRepeatedTitle("# Other\n\nbody", "My Project")).toBe(g.different);
     expect(stripRepeatedTitle("just text", "My Project")).toBe(g.no_heading);
+  });
+});
+
+describe("projectMarkdown", () => {
+  const full = {
+    title: "Dom i ogród",
+    short_goal: "Keep it liveable.",
+    frequency: "Weekends",
+    daily_target_minutes: 90,
+    long_goal: "# Kitchen\n\n- paint",
+  };
+
+  it("carries the name and every card, in the order of the page", () => {
+    expect(projectMarkdown(full)).toBe(
+      "# Dom i ogród\n\n" +
+        "## Thoughts\n\nKeep it liveable.\n\n" +
+        "## Frequency\n\nWeekends\n\n" +
+        "## Daily target\n\n1h 30m\n\n" +
+        "## Plan\n\n# Kitchen\n\n- paint\n"
+    );
+  });
+
+  it("leaves out a card that has nothing in it", () => {
+    expect(
+      projectMarkdown({ ...full, short_goal: "  ", frequency: "", daily_target_minutes: null })
+    ).toBe("# Dom i ogród\n\n## Plan\n\n# Kitchen\n\n- paint\n");
+  });
+
+  it("still names the file when the project has no title", () => {
+    expect(projectMarkdown({ ...full, title: " " }).startsWith("# Project\n")).toBe(true);
+  });
+});
+
+describe("markdownFilename", () => {
+  it("folds accents and punctuation into a slug", () => {
+    expect(markdownFilename("Dom i ogród")).toBe("dom-i-ogrod.md");
+    expect(markdownFilename("  Plan: 2026 / Q1  ")).toBe("plan-2026-q1.md");
+  });
+
+  it("falls back when nothing survives", () => {
+    expect(markdownFilename("!!!")).toBe("project.md");
   });
 });

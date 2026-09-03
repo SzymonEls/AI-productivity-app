@@ -4,6 +4,7 @@
    * and the person decides - the rule the whole design turns on.
    */
   import type { ConflictEntry, LocalDatabase } from "../db/schema";
+  import { dismissable } from "../lib/dismiss";
   import { live } from "../lib/live.svelte";
   import { canKeepBoth, differences, keepBoth, keepMine, keepServer } from "../sync/resolve";
   import { sync } from "../sync/store.svelte";
@@ -45,7 +46,7 @@
   }
 </script>
 
-<div class="overlay" role="dialog" aria-modal="true" aria-label="Resolve a conflict">
+<div class="overlay" role="dialog" aria-modal="true" aria-label="Resolve a conflict" use:dismissable={onclose}>
   <div class="panel">
     {#if !current}
       <p>Nothing left to settle.</p>

@@ -11,6 +11,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import golden from "./__golden__time.json";
 import {
   dayBounds,
+  dailyTotals,
   formatDuration,
   lastSessionLabel,
   overlapSeconds,
@@ -143,5 +144,35 @@ describe("firstPlanSectionTitle", () => {
     expect(firstPlanSectionTitle("no heading here")).toBe("");
     expect(firstPlanSectionTitle("#  \n# Real")).toBe("Real");
     expect(firstPlanSectionTitle(null)).toBe("");
+  });
+});
+
+describe("dailyTotals", () => {
+  it("gives one row per day, oldest first, labelled as the chart wants", () => {
+    const rows = dailyTotals([entry()], "2026-01-16", 3);
+
+    expect(rows.map((row) => row.date)).toEqual(["2026-01-14", "2026-01-15", "2026-01-16"]);
+    expect(rows.map((row) => row.label)).toEqual(["14.01", "15.01", "16.01"]);
+    expect(rows.map((row) => row.seconds)).toEqual([0, 3600, 0]);
+    expect(rows[1].duration).toBe("01:00:00");
+  });
+
+  it("splits a session that crosses midnight over both days", () => {
+    // 23:30 to 00:30 in Warsaw, which is 22:30 to 23:30 UTC in January.
+    const rows = dailyTotals(
+      [entry({ started_at: "2026-01-15T22:30:00Z", ended_at: "2026-01-15T23:30:00Z" })],
+      "2026-01-16",
+      2
+    );
+
+    expect(rows.map((row) => row.seconds)).toEqual([1799, 1800]);
+  });
+
+  it("counts one project only when asked for one", () => {
+    const entries = [entry(), entry({ uid: "u2", project_uid: "p2" })];
+
+    expect(dailyTotals(entries, "2026-01-15", 1, "p1")[0].seconds).toBe(3600);
+    expect(dailyTotals(entries, "2026-01-15", 1, "p2")[0].seconds).toBe(3600);
+    expect(dailyTotals(entries, "2026-01-15", 1)[0].seconds).toBe(7200);
   });
 });

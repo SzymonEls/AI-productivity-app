@@ -43,20 +43,40 @@ function parse(pathname: string): Route {
 
 class Router {
   current = $state<Route>(parse(window.location.pathname));
+  /** The query string, for the few addresses that carry one - "?open_timer=1". */
+  search = $state<string>(window.location.search);
 
   start(): void {
     window.addEventListener("popstate", () => {
       this.current = parse(window.location.pathname);
+      this.search = window.location.search;
     });
   }
 
   go(path: string): void {
-    const target = path.startsWith("/") ? path : `${BASE}/${path}`;
-    if (target !== window.location.pathname) {
-      window.history.pushState({}, "", target);
+    const full = path.startsWith("/") ? path : `${BASE}/${path}`;
+    const cut = full.indexOf("?");
+    const pathname = cut === -1 ? full : full.slice(0, cut);
+    const search = cut === -1 ? "" : full.slice(cut);
+
+    if (pathname !== window.location.pathname || search !== window.location.search) {
+      window.history.pushState({}, "", full);
     }
-    this.current = parse(target);
+    this.current = parse(pathname);
+    this.search = search;
     window.scrollTo(0, 0);
+  }
+
+  /**
+   * Drop the query string where it stands.
+   *
+   * A query that asked for something once - open this dialog - must not ask
+   * again on a reload, and it is not a place of its own to go back to.
+   */
+  clearQuery(): void {
+    if (!window.location.search) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    this.search = "";
   }
 }
 

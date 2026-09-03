@@ -5,12 +5,17 @@
    * The timer used to be the server's: start and stop wrote rows and the page
    * interpolated between polls. It is a local row like any other now, so a
    * session started on a train is still running when the train leaves the
-   * tunnel.
+   * tunnel. The filters read from the local copy, so nothing is submitted and
+   * an edit saves itself - the "Show" and "Save" buttons the form had are what
+   * the round trip needed, not what the page is for.
    */
   import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
+  import { minutesLabel } from "../domain/slots";
   import {
     activeEntry,
+    dailyTotals,
+    dailyTotalsByProject,
     dayBounds,
     elapsedSeconds,
     entriesForRange,
@@ -19,6 +24,7 @@
     today,
   } from "../domain/time";
   import { live } from "../lib/live.svelte";
+  import { BASE, link } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
   import type { TimeEntry } from "../sync/types";
   import Icon from "../ui/Icon.svelte";
@@ -29,6 +35,9 @@
     "#0f9488", "#1f7ae0", "#f59e0b", "#dc3545",
     "#6f42c1", "#198754", "#0dcaf0", "#6c757d",
   ];
+  /** A fortnight, the window the bar charts have always covered. */
+  const CHART_DAYS = 14;
+  const PER_PAGE = 50;
 
   const projects = live(() => database.projects.toArray(), []);
   const entries = live(() => database.timeEntries.toArray(), []);
@@ -36,6 +45,7 @@
   let day = $state(today());
   let allDates = $state(false);
   let projectFilter = $state("");
+  let page = $state(1);
   // Ticks once a second so a running timer counts up without a round trip.
   let now = $state(new Date());
   $effect(() => {
@@ -46,35 +56,39 @@
   const byUid = $derived(new Map(projects.value.map((p) => [p.uid, p])));
   const active = $derived(activeEntry(entries.value));
   const bounds = $derived(dayBounds(day));
+  const selectedProject = $derived(projectFilter ? byUid.get(projectFilter) ?? null : null);
 
-  const shown = $derived(
+  const matching = $derived(
     (allDates
       ? [...entries.value].sort((a, b) => b.started_at.localeCompare(a.started_at))
       : entriesForRange(entries.value, bounds[0], bounds[1])
     ).filter((entry) => !projectFilter || entry.project_uid === projectFilter)
   );
 
-  const dayTotal = $derived(
-    allDates
-      ? shown.reduce((sum, entry) => sum + elapsedSeconds(entry, now), 0)
-      : shown.reduce((sum, entry) => sum + overlapSeconds(entry, bounds[0], bounds[1], now), 0)
-  );
+  // A page is a page of what the filters found, so changing a filter starts
+  // again at the first one rather than leaving you on a page that has gone.
+  $effect(() => {
+    void [day, allDates, projectFilter];
+    page = 1;
+  });
 
-  /** Seconds per project across what is on screen, biggest first. */
+  const pageCount = $derived(Math.max(Math.ceil(matching.length / PER_PAGE), 1));
+  const shown = $derived(matching.slice((page - 1) * PER_PAGE, page * PER_PAGE));
+
+  /** Seconds per project on the selected day - the pie, as the server built it. */
   const slices = $derived.by(() => {
-    const totals = new Map<string, number>();
-    for (const entry of shown) {
-      const seconds = allDates
-        ? elapsedSeconds(entry, now)
-        : overlapSeconds(entry, bounds[0], bounds[1], now);
-      const title = titleFor(entry);
-      totals.set(title, (totals.get(title) ?? 0) + seconds);
-    }
+    if (allDates || selectedProject) return [];
+    const totals = dailyTotalsByProject(entries.value, day, now);
     return [...totals.entries()]
-      .map(([title, seconds]) => ({ title, seconds }))
+      .map(([uid, seconds]) => ({
+        title: uid ? byUid.get(uid)?.title ?? "Unknown project" : "Unknown project",
+        seconds,
+      }))
       .filter((slice) => slice.seconds > 0)
       .sort((a, b) => b.seconds - a.seconds);
   });
+
+  const dayTotal = $derived(slices.reduce((sum, slice) => sum + slice.seconds, 0));
 
   const pieBackground = $derived.by(() => {
     if (!dayTotal) return "";
@@ -87,6 +101,30 @@
     });
     return `conic-gradient(${stops.join(", ")})`;
   });
+
+  // The bars run to today rather than to the selected day: they are there to
+  // show the shape of the last fortnight, which the date picker does not move.
+  const recentDays = $derived(
+    allDates && !selectedProject ? dailyTotals(entries.value, today(), CHART_DAYS, null, now) : []
+  );
+  const projectDays = $derived(
+    allDates && selectedProject
+      ? dailyTotals(entries.value, today(), CHART_DAYS, selectedProject.uid, now)
+      : []
+  );
+  const projectDaySeconds = $derived(
+    selectedProject && !allDates
+      ? entriesForRange(entries.value, bounds[0], bounds[1], selectedProject.uid).reduce(
+          (sum, entry) => sum + overlapSeconds(entry, bounds[0], bounds[1], now),
+          0
+        )
+      : 0
+  );
+
+  const recentTotal = $derived(recentDays.reduce((sum, row) => sum + row.seconds, 0));
+  const chartPeak = $derived(
+    Math.max(...[...recentDays, ...projectDays].map((row) => row.seconds), 0)
+  );
 
   const activeProjects = $derived(
     [...projects.value]
@@ -107,6 +145,11 @@
     const at = new Date(iso);
     const pad = (value: number) => String(value).padStart(2, "0");
     return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+  }
+
+  function dayHeading(value: string): string {
+    const [year, month, date] = value.split("-");
+    return `${date}.${month}.${year}`;
   }
 
   async function after() {
@@ -148,10 +191,19 @@
     </p>
   </div>
   {#if active}
-    <button type="button" class="btn btn-outline-success" onclick={stopTimer}>
-      <Icon name="clock" />
-      Active timer: {titleFor(active)} · {formatDuration(elapsedSeconds(active, now))} — stop
-    </button>
+    <!-- To the project, where the timer is: this page edits sessions, it is not
+         where one is started or ended. -->
+    <a
+      class="btn btn-outline-success"
+      href={active.project_uid
+        ? `${BASE}/projects/${active.project_uid}?open_timer=1`
+        : `${BASE}/time`}
+      use:link
+    >
+      <Icon name="clock" />Active timer: {titleFor(active)} · {formatDuration(
+        elapsedSeconds(active, now)
+      )}
+    </a>
   {/if}
 </div>
 
@@ -195,42 +247,113 @@
   </div>
 </section>
 
-<section class="card shadow-sm mb-4">
-  <div class="card-body">
-    <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
-      <h2 class="h5 mb-0">{allDates ? "All dates" : "Selected day"}</h2>
-      <strong>{formatDuration(dayTotal)}</strong>
-    </div>
-
+{#if slices.length || recentDays.length || selectedProject}
+  <div class="row g-4 mb-4">
     {#if slices.length}
-      <div class="daily-time-pie">
-        <div
-          class="daily-time-pie-chart"
-          role="img"
-          aria-label="Breakdown of work time"
-          style={`background: ${pieBackground};`}
-        >
-          <span>{formatDuration(dayTotal)}</span>
-        </div>
-        <div class="daily-time-pie-legend">
-          {#each slices as slice, index (slice.title)}
-            <div class="daily-time-pie-item">
-              <span
-                class="daily-time-pie-swatch"
-                style={`background: ${PIE_COLOURS[index % PIE_COLOURS.length]}`}
-              ></span>
-              <span class="daily-time-pie-title" title={slice.title}>{slice.title}</span>
-              <strong>{((slice.seconds * 100) / dayTotal).toFixed(1)}%</strong>
-              <span class="text-muted">{formatDuration(slice.seconds)}</span>
+      <div class="col-12">
+        <section class="card shadow-sm h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+              <h2 class="h5 mb-0">Selected day</h2>
+              <strong>{formatDuration(dayTotal)}</strong>
             </div>
-          {/each}
-        </div>
+            <div class="daily-time-pie">
+              <div
+                class="daily-time-pie-chart"
+                role="img"
+                aria-label="Breakdown of work time on the selected day"
+                style={`background: ${pieBackground};`}
+              >
+                <span>{formatDuration(dayTotal)}</span>
+              </div>
+              <div class="daily-time-pie-legend">
+                {#each slices as slice, index}
+                  <div class="daily-time-pie-item">
+                    <span
+                      class="daily-time-pie-swatch"
+                      style={`background: ${PIE_COLOURS[index % PIE_COLOURS.length]}`}
+                    ></span>
+                    <span class="daily-time-pie-title" title={slice.title}>{slice.title}</span>
+                    <strong>{((slice.seconds * 100) / dayTotal).toFixed(1)}%</strong>
+                    <span class="text-muted">{formatDuration(slice.seconds)}</span>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    {:else}
-      <p class="text-muted mb-0">No sessions recorded for the selected day.</p>
+    {/if}
+
+    {#if recentDays.length}
+      <div class="col-12">
+        <section class="card shadow-sm h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+              <h2 class="h5 mb-0">Recent days</h2>
+              <strong>{formatDuration(recentTotal)}</strong>
+            </div>
+            <div class="time-chart">
+              {#each recentDays as row (row.date)}
+                <div class="time-chart-row">
+                  <div class="time-chart-label">{row.label}</div>
+                  <div class="time-chart-track" aria-label={`${row.date}: ${row.duration}`}>
+                    <div
+                      class="time-chart-bar"
+                      style={`width: ${chartPeak ? ((row.seconds * 100) / chartPeak).toFixed(1) : 0}%`}
+                    ></div>
+                  </div>
+                  <div class="text-end small text-muted">{row.duration}</div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        </section>
+      </div>
+    {/if}
+
+    {#if selectedProject}
+      <div class="col-12">
+        <section class="card shadow-sm h-100">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-baseline gap-3 mb-3">
+              <h2 class="h5 mb-0">
+                {allDates ? "Project over time" : "Project time on the selected day"}
+              </h2>
+              <span class="small text-muted">{selectedProject.title}</span>
+            </div>
+            {#if !allDates}
+              <div class="time-summary-panel">
+                <span class="text-muted small">{dayHeading(day)}</span>
+                <strong>{formatDuration(projectDaySeconds)}</strong>
+              </div>
+              {#if selectedProject.daily_target_minutes}
+                <p class="text-muted small mb-0 mt-2">
+                  Daily target: {minutesLabel(selectedProject.daily_target_minutes)}.
+                </p>
+              {/if}
+            {:else}
+              <div class="time-chart">
+                {#each projectDays as row (row.date)}
+                  <div class="time-chart-row">
+                    <div class="time-chart-label">{row.label}</div>
+                    <div class="time-chart-track" aria-label={`${row.date}: ${row.duration}`}>
+                      <div
+                        class="time-chart-bar"
+                        style={`width: ${chartPeak ? ((row.seconds * 100) / chartPeak).toFixed(1) : 0}%`}
+                      ></div>
+                    </div>
+                    <div class="text-end small text-muted">{row.duration}</div>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </section>
+      </div>
     {/if}
   </div>
-</section>
+{/if}
 
 <section class="card shadow-sm">
   <div class="card-body">
@@ -293,18 +416,20 @@
                     onchange={(event) =>
                       change(entry, { ended_at: localToIso(event.currentTarget.value) })}
                   />
-                  {#if !entry.ended_at}<span class="badge bg-success">running</span>{/if}
+                  {#if !entry.ended_at}
+                    <span class="badge text-bg-success mt-1">ongoing</span>
+                  {/if}
                 </td>
                 <td class="text-nowrap">{formatDuration(elapsedSeconds(entry, now))}</td>
                 <td>
-                  <input
-                    class="form-control form-control-sm"
-                    type="text"
+                  <textarea
+                    class="form-control form-control-sm time-entry-description"
+                    rows="2"
                     value={entry.description ?? ""}
                     placeholder="What was this session?"
                     onchange={(event) =>
                       change(entry, { description: event.currentTarget.value.trim() || null })}
-                  />
+                  ></textarea>
                 </td>
                 <td class="text-end text-nowrap">
                   {#if !entry.ended_at}
@@ -325,8 +450,29 @@
           </tbody>
         </table>
       </div>
+
+      {#if pageCount > 1}
+        <nav
+          class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3"
+          aria-label="Session pages"
+        >
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            disabled={page <= 1}
+            onclick={() => (page -= 1)}
+          >Previous</button>
+          <span class="small text-muted">Page {page} of {pageCount}</span>
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            disabled={page >= pageCount}
+            onclick={() => (page += 1)}
+          >Next</button>
+        </nav>
+      {/if}
     {:else}
-      <p class="text-muted mb-0">No sessions match these filters.</p>
+      <p class="text-muted mb-0">No sessions match the selected filters.</p>
     {/if}
   </div>
 </section>

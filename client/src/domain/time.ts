@@ -89,6 +89,29 @@ export function dayBounds(day: string): [Date, Date] {
   return [zonedToInstant(day, "00:00:00.000"), zonedToInstant(day, "23:59:59.999")];
 }
 
+/** A day, some days on. Calendar arithmetic, so it stays in UTC throughout. */
+export function addDays(day: string, count: number): string {
+  const moved = new Date(`${day}T00:00:00Z`);
+  moved.setUTCDate(moved.getUTCDate() + count);
+  return moved.toISOString().slice(0, 10);
+}
+
+/** The wall-clock time of an instant in the configured zone - "%H:%M". */
+export function clockLabel(instant: Date, zone = configuredTimezone): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: zone,
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(instant);
+}
+
+/** A day as the charts label it - "%d.%m". */
+export function dayLabel(day: string): string {
+  const [, month, date] = day.split("-");
+  return `${date}.${month}`;
+}
+
 export function parseInstant(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value);
@@ -166,6 +189,41 @@ export function dailyTotalsByProject(
     totals.set(entry.project_uid, (totals.get(entry.project_uid) ?? 0) + seconds);
   }
   return totals;
+}
+
+export interface DayTotal {
+  date: string;
+  label: string;
+  seconds: number;
+  duration: string;
+}
+
+/**
+ * Seconds tracked on each of the last days - the bar chart on the time page.
+ *
+ * Counted by overlap, so a session running across midnight lands on both days
+ * in the proportions it was actually worked, which is the whole reason the
+ * chart is built from ranges rather than from each entry's start.
+ */
+export function dailyTotals(
+  entries: TimeEntry[],
+  endDay: string,
+  days: number,
+  projectUid?: string | null,
+  now: Date = new Date()
+): DayTotal[] {
+  const out: DayTotal[] = [];
+
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = addDays(endDay, -offset);
+    const [from, to] = dayBounds(date);
+    const seconds = entriesForRange(entries, from, to, projectUid).reduce(
+      (sum, entry) => sum + overlapSeconds(entry, from, to, now),
+      0
+    );
+    out.push({ date, label: dayLabel(date), seconds, duration: formatDuration(seconds) });
+  }
+  return out;
 }
 
 export function activeEntry(entries: TimeEntry[]): TimeEntry | null {

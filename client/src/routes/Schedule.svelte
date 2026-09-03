@@ -9,6 +9,7 @@
   import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
   import {
+    MAX_CALENDAR_WEEKS,
     type SheetSlot,
     calendarWeeks,
     dateRangeLabel,
@@ -19,6 +20,7 @@
     weeksToCover,
   } from "../domain/slots";
   import { today } from "../domain/time";
+  import { dismissable } from "../lib/dismiss";
   import { live } from "../lib/live.svelte";
   import { BASE, link } from "../lib/router.svelte";
   import { sync } from "../sync/store.svelte";
@@ -34,7 +36,15 @@
 
   const day = today();
   const byUid = $derived(new Map(projects.value.map((p) => [p.uid, p])));
-  const weekCount = $derived(weeksToCover(slots.value, day));
+  // The window reaches the last booking on its own; this is how far past it the
+  // page has been stretched by hand, two weeks at a time.
+  let requestedWeeks = $state(0);
+  const weekCount = $derived(
+    Math.min(Math.max(weeksToCover(slots.value, day), requestedWeeks), MAX_CALENDAR_WEEKS)
+  );
+  const moreWeeks = $derived(
+    weekCount < MAX_CALENDAR_WEEKS ? Math.min(weekCount + 2, MAX_CALENDAR_WEEKS) : null
+  );
   const weeks = $derived(
     calendarWeeks(slots.value, weekCount, day).map((week, index) => ({
       label: weekLabel(index),
@@ -154,6 +164,18 @@
       </div>
     </section>
   {/each}
+
+  {#if moreWeeks}
+    <!-- Only for looking further ahead than anything booked: the window already
+         stretches to reach the last booking. -->
+    <div class="schedule-more">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm"
+        onclick={() => (requestedWeeks = moreWeeks)}
+      >Show more weeks</button>
+    </div>
+  {/if}
 </div>
 
 {#if picking}
@@ -161,7 +183,7 @@
 {/if}
 
 {#if dayOffOpen}
-  <div class="planner-backdrop">
+  <div class="planner-backdrop" use:dismissable={() => (dayOffOpen = false)}>
     <div class="planner-dialog planner-dialog-narrow" role="dialog" aria-label="Take a day off">
       <header class="planner-header">
         <h2 class="planner-title">Day off</h2>

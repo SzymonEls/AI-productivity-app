@@ -10,6 +10,7 @@
   import type { LocalDatabase } from "../db/schema";
   import {
     activeEntry,
+    clockLabel,
     dayBounds,
     elapsedSeconds,
     entriesForRange,
@@ -17,6 +18,7 @@
     overlapSeconds,
     today,
   } from "../domain/time";
+  import { dismissable } from "../lib/dismiss";
   import { live } from "../lib/live.svelte";
   import { sync } from "../sync/store.svelte";
   import type { TimeEntry } from "../sync/types";
@@ -80,9 +82,11 @@
 
   async function stop() {
     if (!running) return;
-    await updateRow<TimeEntry>(database, "time_entry", running.uid, {
-      ended_at: new Date().toISOString(),
-    });
+    // Whatever is in the box goes with the session being closed, the way the
+    // server's "end session" carried the description in its form.
+    const changes: Partial<TimeEntry> = { ended_at: new Date().toISOString() };
+    if (running.uid === mineRunning?.uid) changes.description = description.trim() || null;
+    await updateRow<TimeEntry>(database, "time_entry", running.uid, changes);
     await after();
   }
 
@@ -101,11 +105,11 @@
   }
 
   function clock(iso: string): string {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return clockLabel(new Date(iso));
   }
 </script>
 
-<div class="modal-backdrop-shim">
+<div class="modal-backdrop-shim" use:dismissable={onclose}>
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content project-timer-modal">
       <div class="modal-header project-timer-modal-header">
@@ -140,6 +144,12 @@
             ? "What was done in this session..."
             : "Start a new session to add its description."}
           bind:value={description}
+          onkeydown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              void saveDescription();
+            }
+          }}
         ></textarea>
 
         <div class="project-timer-sessions mt-3">
@@ -149,13 +159,16 @@
               <p class="text-muted small mb-0">No sessions recorded today.</p>
             {:else}
               {#each todays as entry (entry.uid)}
-                <div class="d-flex justify-content-between gap-2 small py-1 border-bottom">
-                  <span>
-                    {clock(entry.started_at)} – {entry.ended_at ? clock(entry.ended_at) : "running"}
-                    {#if entry.description}<span class="text-muted"> · {entry.description}</span>{/if}
-                  </span>
-                  <span class="text-nowrap">{formatDuration(elapsedSeconds(entry, now))}</span>
-                </div>
+                <article class="project-timer-session" class:is-running={!entry.ended_at}>
+                  <div class="project-timer-session-meta">
+                    <span>{clock(entry.started_at)}-{entry.ended_at ? clock(entry.ended_at) : "now"}</span>
+                    <strong>{formatDuration(elapsedSeconds(entry, now))}</strong>
+                    {#if !entry.ended_at}<span class="badge text-bg-success">now</span>{/if}
+                  </div>
+                  <p class="project-timer-session-description">
+                    {entry.description || "No description"}
+                  </p>
+                </article>
               {/each}
             {/if}
           </div>

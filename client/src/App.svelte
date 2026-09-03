@@ -4,7 +4,7 @@
 
   import { SignedOut, signOut, start } from "./boot";
   import type { LocalDatabase } from "./db/schema";
-  import { useTimezone } from "./domain/time";
+  import { activeEntry, elapsedSeconds, formatDuration, useTimezone } from "./domain/time";
   import { readAppearance, toggleSafeMode, toggleTheme } from "./lib/appearance";
   import { BASE, link, router } from "./lib/router.svelte";
   import Home from "./routes/Home.svelte";
@@ -19,6 +19,7 @@
   import Tags from "./routes/Tags.svelte";
   import Timeline from "./routes/Timeline.svelte";
   import { sync } from "./sync/store.svelte";
+  import type { TimeEntry } from "./sync/types";
   import AppSettings from "./ui/AppSettings.svelte";
   import ConflictDialog from "./ui/ConflictDialog.svelte";
   import Icon from "./ui/Icon.svelte";
@@ -30,6 +31,7 @@
   let username = $state("");
   let database = $state<LocalDatabase | null>(null);
   let titles = $state(new Map<string, string>());
+  let entries = $state<TimeEntry[]>([]);
   let resolving = $state(false);
   let switcher = $state<{ open: () => void } | null>(null);
   let settingsOpen = $state(false);
@@ -85,6 +87,31 @@
     return () => subscription.unsubscribe();
   });
 
+  $effect(() => {
+    if (!database) return;
+    const store = database;
+    const subscription = liveQuery(() => store.timeEntries.toArray()).subscribe({
+      next: (rows) => (entries = rows),
+    });
+    return () => subscription.unsubscribe();
+  });
+
+  // The running timer follows you around the application, as the pill in
+  // base.html did: with the project's page shut there is otherwise nothing
+  // saying a session is still going.
+  const running = $derived(activeEntry(entries));
+  let now = $state(new Date());
+  $effect(() => {
+    if (!running) return;
+    const tick = setInterval(() => (now = new Date()), 1000);
+    return () => clearInterval(tick);
+  });
+  const runningTitle = $derived(
+    (running?.project_uid ? titles.get(running.project_uid) : "") ||
+      running?.project_title_snapshot ||
+      "a project"
+  );
+
   onDestroy(() => sync.detach());
 
   const titleOf = (uid: string) => titles.get(uid) ?? "";
@@ -123,6 +150,18 @@
                stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           <span class="switcher-kbd" aria-hidden="true">⌘K</span>
         </button>
+      {/if}
+      {#if status === "ready" && running?.project_uid}
+        <a
+          class="active-timer-link"
+          href={`${BASE}/projects/${running.project_uid}?open_timer=1`}
+          use:link
+          title={`Timer running: ${runningTitle} (${formatDuration(elapsedSeconds(running, now))})`}
+        >
+          <span class="active-timer-dot" aria-hidden="true"></span>
+          <span class="active-timer-label">{formatDuration(elapsedSeconds(running, now))}</span>
+          <span class="active-timer-icon" aria-hidden="true">⏱</span>
+        </a>
       {/if}
     </div>
 

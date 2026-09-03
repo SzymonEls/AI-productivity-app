@@ -7,6 +7,7 @@
    */
   import { untrack } from "svelte";
 
+  import { dismissable } from "../lib/dismiss";
   import type { Project } from "../sync/types";
 
   let {
@@ -25,7 +26,7 @@
   let isPrivate = $state(untrack(() => project.is_private));
 </script>
 
-<div class="modal-backdrop-shim">
+<div class="modal-backdrop-shim" use:dismissable={onclose}>
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">

@@ -10,6 +10,8 @@
 
 import { Marked } from "marked";
 
+import { minutesLabel } from "./slots";
+
 /**
  * The whole definition of a tag, and the third place it has been written.
  *
@@ -196,4 +198,48 @@ export function stripRepeatedTitle(content: string, title: string): string {
     return content;
   }
   return content;
+}
+
+/**
+ * The whole project as one Markdown file - buildProjectMarkdown() from the
+ * original page's script.
+ *
+ * The plan on its own is not the project: what you hand to someone, or keep as
+ * a copy, needs the name at the top and the three cards beside the plan. Empty
+ * ones are left out rather than written as headings with nothing under them.
+ */
+export function projectMarkdown(project: {
+  title: string;
+  short_goal: string;
+  frequency: string;
+  daily_target_minutes: number | null;
+  long_goal: string;
+}): string {
+  const sections = [`# ${project.title.trim() || "Project"}`];
+
+  const thoughts = project.short_goal.trim();
+  if (thoughts) sections.push(`## Thoughts\n\n${thoughts}`);
+
+  const frequency = project.frequency.trim();
+  if (frequency) sections.push(`## Frequency\n\n${frequency}`);
+
+  const target = minutesLabel(project.daily_target_minutes);
+  if (target) sections.push(`## Daily target\n\n${target}`);
+
+  const plan = project.long_goal.trim();
+  if (plan) sections.push(`## Plan\n\n${plan}`);
+
+  return `${sections.join("\n\n")}\n`;
+}
+
+/** The file that download lands in: "Dom i ogród" becomes "dom-i-ogrod.md". */
+export function markdownFilename(title: string): string {
+  const slug = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return `${slug || "project"}.md`;
 }

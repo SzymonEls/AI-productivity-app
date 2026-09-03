@@ -5,6 +5,7 @@
    * nothing here reaches the server, and nothing here is synchronised.
    */
   import { type Appearance, chosen, setSetting } from "../lib/appearance";
+  import { dismissable } from "../lib/dismiss";
   import Icon from "./Icon.svelte";
 
   let { onclose }: { onclose: () => void } = $props();
@@ -69,7 +70,7 @@
   }
 </script>
 
-<div class="modal-backdrop-shim">
+<div class="modal-backdrop-shim" use:dismissable={onclose}>
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">

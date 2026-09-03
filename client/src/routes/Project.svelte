@@ -13,12 +13,21 @@
    */
   import { deleteRow, updateRow } from "../db/mutate";
   import type { LocalDatabase } from "../db/schema";
-  import { renderPlan } from "../domain/markdown";
+  import { markdownFilename, projectMarkdown, renderPlan } from "../domain/markdown";
   import { NoSuchSection, appendSection, removeSection } from "../domain/plan-sections";
-  import { slotsForDate } from "../domain/slots";
-  import { lastSessionLabel, today } from "../domain/time";
+  import { minutesLabel, slotsForDate } from "../domain/slots";
+  import {
+    activeEntry,
+    dayBounds,
+    entriesForRange,
+    formatDuration,
+    lastSessionLabel,
+    overlapSeconds,
+    today,
+  } from "../domain/time";
   import { live } from "../lib/live.svelte";
   import { BASE, link, router } from "../lib/router.svelte";
+  import { sectionControls } from "../lib/section-controls";
   import { sync } from "../sync/store.svelte";
   import type { Project } from "../sync/types";
   import PlanEditor from "../ui/PlanEditor.svelte";
@@ -31,7 +40,27 @@
 
   const projects = live(() => database.projects.toArray(), []);
   const slots = live(() => database.daySlots.toArray(), []);
+  const entries = live(() => database.timeEntries.toArray(), []);
   const project = $derived(projects.value.find((candidate) => candidate.uid === uid));
+
+  // The button carries the running clock, as it did on the server: with the
+  // dialog shut there would otherwise be nothing on the page saying the timer
+  // is still going.
+  const running = $derived(activeEntry(entries.value));
+  const timerRunning = $derived(running?.project_uid === uid);
+  let now = $state(new Date());
+  $effect(() => {
+    if (!timerRunning) return;
+    const tick = setInterval(() => (now = new Date()), 1000);
+    return () => clearInterval(tick);
+  });
+  const trackedToday = $derived.by(() => {
+    const [from, to] = dayBounds(today());
+    return entriesForRange(entries.value, from, to, uid).reduce(
+      (sum, entry) => sum + overlapSeconds(entry, from, to, now),
+      0
+    );
+  });
 
   // Only today's booking, because "done" lives on the slot and so clears itself
   // tomorrow - there is nothing to finish on a day this project is not booked.
@@ -72,6 +101,14 @@
       document.removeEventListener("pointerdown", close, true);
       document.removeEventListener("keydown", onKey);
     };
+  });
+
+  // "?open_timer=1" - what the running-timer pill in the navbar links to. The
+  // query is dropped once it has been acted on, so a reload does not reopen it.
+  $effect(() => {
+    if (new URLSearchParams(router.search).get("open_timer") !== "1") return;
+    timing = true;
+    router.clearQuery();
   });
 
   const html = $derived(project ? renderPlan(project.long_goal) : "");
@@ -155,6 +192,7 @@
   /** A finished section leaves the plan and joins the archive - both are text. */
   async function archiveSection(index: number) {
     if (!project) return;
+    if (!window.confirm("Move this section to the archive?")) return;
     try {
       const { plan, section } = removeSection(project.long_goal, index);
       await save(
@@ -168,6 +206,7 @@
 
   async function restoreSection(index: number) {
     if (!project) return;
+    if (!window.confirm("Restore this section from the archive to the plan?")) return;
     try {
       const { plan, section } = removeSection(project.archived_long_goal, index);
       await save(
@@ -179,14 +218,17 @@
     }
   }
 
-  /** The plan, as a file. It is Markdown in the database, so nothing converts. */
+  /**
+   * The project, as a file. Everything on this page is Markdown in the
+   * database already, so the download only has to put the parts in order.
+   */
   function downloadMarkdown() {
     if (!project) return;
-    const blob = new Blob([project.long_goal], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([projectMarkdown(project)], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `${project.title.replace(/[^\w\- ]+/g, "").trim() || "plan"}.md`;
+    anchor.download = markdownFilename(project.title);
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -214,6 +256,61 @@
     await save({ long_goal: lines.join("\n") });
   }
 
+  /** The plan in classic Markdown mode, which edits its own draft. */
+  async function savePlan() {
+    await save({ long_goal: planDraft });
+    editing = null;
+  }
+
+  function saveOpenSection() {
+    if (editing === null) return;
+    void (editing === "long_goal" ? savePlan() : commit(editing as keyof Project));
+  }
+
+  /**
+   * Enter in a one-line field, Ctrl/⌘+Enter in a box: save the section.
+   *
+   * On the server these all landed on the same form submit, which is why Enter
+   * did the obvious thing everywhere. Nothing submits now, so each field says
+   * so itself.
+   */
+  function commitOnKey(event: KeyboardEvent, multiline = false) {
+    if (event.key !== "Enter") return;
+    if (multiline && !(event.ctrlKey || event.metaKey)) return;
+    event.preventDefault();
+    saveOpenSection();
+  }
+
+  // Both hang off an open editor: its draft has not reached the database yet,
+  // so closing the tab loses it - the warning the original form carried - and
+  // Ctrl/⌘+S is the other way the original saved one.
+  $effect(() => {
+    if (editing === null) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+      event.preventDefault();
+      saveOpenSection();
+    };
+    window.addEventListener("beforeunload", warn);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
+  /** Grow a textarea to its content, as the original did while typing. */
+  function autoresize(node: HTMLTextAreaElement) {
+    const fit = () => {
+      node.style.height = "auto";
+      node.style.height = `${node.scrollHeight}px`;
+    };
+    fit();
+    node.addEventListener("input", fit);
+    return { destroy: () => node.removeEventListener("input", fit) };
+  }
+
   function onPlanClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
     if (!target.matches("input.task-list-checkbox")) return;
@@ -230,7 +327,12 @@
       <div class="d-flex align-items-center gap-2 flex-wrap">
         {#if editing === "title"}
           <div class="project-title-edit">
-            <input type="text" class="form-control form-control-lg" bind:value={draft} />
+            <input
+              type="text"
+              class="form-control form-control-lg"
+              bind:value={draft}
+              onkeydown={(event) => commitOnKey(event)}
+            />
           </div>
           <div class="inline-section-controls">
             <button type="button" class="btn btn-primary btn-sm" onclick={() => commit("title")}>Save</button>
@@ -259,10 +361,15 @@
 
     <div class="project-detail-actions">
       <button type="button" class="btn btn-primary project-timer-toggle" onclick={() => (timing = true)}>
-        <i class="fa-regular fa-clock" aria-hidden="true"></i><span>Track time</span>
+        <i class="fa-regular fa-clock" aria-hidden="true"></i>
+        <span>Track time</span>
+        {#if timerRunning}
+          <span class="project-timer-button-clock">{formatDuration(trackedToday)}</span>
+        {/if}
       </button>
       <button type="button" class="btn btn-outline-secondary" onclick={() => (planning = true)}>
-        <i class="fa-regular fa-calendar" aria-hidden="true"></i><span>Plan next session</span>
+        <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+        <span>Plan next session</span>
       </button>
 
       {#if todaySlot}
@@ -279,7 +386,8 @@
               .then(() => sync.refresh())
               .then(() => void sync.run())}
         >
-          <i class="fa-regular fa-circle-check" aria-hidden="true"></i><span>{todaySlot.is_done ? "Done" : "Mark done"}</span>
+          <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+          <span>{todaySlot.is_done ? "Done" : "Mark done"}</span>
         </button>
       {/if}
 
@@ -310,6 +418,12 @@
                 class="dropdown-item"
                 onclick={() => {
                   menuOpen = false;
+                  if (
+                    !project.is_archived &&
+                    !window.confirm(
+                      "Archive this project? You can restore it from the archived projects list."
+                    )
+                  ) return;
                   save({ is_archived: !project.is_archived },
                     project.is_archived ? "Restored." : "Archived.");
                 }}
@@ -355,14 +469,7 @@
               <span class="plan-save-status" aria-live="polite">{planStatus}</span>
             {:else if editing === "long_goal"}
               <div class="inline-section-controls">
-                <button
-                  type="button"
-                  class="btn btn-primary btn-sm"
-                  onclick={async () => {
-                    await save({ long_goal: planDraft });
-                    editing = null;
-                  }}
-                >Save</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick={savePlan}>Save</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" onclick={() => (editing = null)}>
                   Cancel
                 </button>
@@ -414,12 +521,18 @@
                 class="form-control inline-edit-textarea long-goal-markdown-field"
                 rows="14"
                 bind:value={planDraft}
+                onkeydown={(event) => commitOnKey(event, true)}
               ></textarea>
             {:else if project.long_goal.trim()}
               <div
                 class="markdown-content long-goal-preview"
                 role="presentation"
                 onclick={onPlanClick}
+                use:sectionControls={{
+                  icon: "fa-box-archive",
+                  label: "Archive section",
+                  onpick: archiveSection,
+                }}
               >{@html interactive}</div>
             {:else}
               <p class="text-muted mb-0">This plan is empty.</p>
@@ -463,7 +576,13 @@
 
           <div class="private-hideable">
             {#if editing === "short_goal"}
-              <textarea class="form-control inline-edit-textarea" rows="4" bind:value={draft}></textarea>
+              <textarea
+                class="form-control inline-edit-textarea"
+                rows="4"
+                use:autoresize
+                bind:value={draft}
+                onkeydown={(event) => commitOnKey(event, true)}
+              ></textarea>
             {:else if project.short_goal.trim()}
               <p class="preserve-lines mb-0">{project.short_goal}</p>
             {:else}
@@ -491,7 +610,12 @@
             </div>
           </div>
           {#if editing === "frequency"}
-            <input type="text" class="form-control" bind:value={draft} />
+            <input
+              type="text"
+              class="form-control"
+              bind:value={draft}
+              onkeydown={(event) => commitOnKey(event)}
+            />
           {:else}
             <p class="preserve-lines mb-0">{project.frequency || "Not set"}</p>
           {/if}
@@ -517,11 +641,20 @@
             </div>
           </div>
           {#if editing === "daily_target_minutes"}
-            <input type="number" min="0" class="form-control" bind:value={draft} placeholder="Minutes" />
-          {:else}
-            <p class="mb-0">
-              {project.daily_target_minutes ? `${project.daily_target_minutes} min` : "No target"}
+            <input
+              type="number"
+              min="0"
+              step="5"
+              class="form-control"
+              bind:value={draft}
+              placeholder="e.g. 120"
+              onkeydown={(event) => commitOnKey(event)}
+            />
+            <p class="form-text mb-0">
+              Minutes to aim for on a day this project is in slot A or B. Leave empty for no target.
             </p>
+          {:else}
+            <p class="mb-0">{minutesLabel(project.daily_target_minutes, "No target")}</p>
           {/if}
         </div>
       </section>

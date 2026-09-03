@@ -7,7 +7,7 @@
  */
 
 import type { DaySlot, Project } from "../sync/types";
-import { firstPlanSectionTitle, lastSessionLabel, today } from "./time";
+import { addDays, firstPlanSectionTitle, lastSessionLabel, today } from "./time";
 
 export const SLOTS = ["A", "B", "C"] as const;
 export type SlotName = (typeof SLOTS)[number];
@@ -23,11 +23,9 @@ export const HEALTH_PLANNING_WEIGHT = 0.4;
 export const HEALTH_GOOD_PERCENT = 75;
 export const HEALTH_WARN_PERCENT = 50;
 
-export function addDays(day: string, count: number): string {
-  const moved = new Date(`${day}T00:00:00Z`);
-  moved.setUTCDate(moved.getUTCDate() + count);
-  return moved.toISOString().slice(0, 10);
-}
+// Calendar arithmetic lives with the rest of it in time.ts; the schedule reads
+// dates through this module, so it goes back out from here.
+export { addDays };
 
 export type SlotMap = Record<SlotName, DaySlot | null>;
 

@@ -7,6 +7,8 @@
    */
   import { renderPlan } from "../domain/markdown";
   import { sectionRanges } from "../domain/plan-sections";
+  import { dismissable } from "../lib/dismiss";
+  import { sectionControls } from "../lib/section-controls";
 
   let {
     markdown,
@@ -16,37 +18,9 @@
 
   const html = $derived(renderPlan(markdown));
   const sections = $derived(sectionRanges(markdown));
-
-  /**
-   * The restore buttons are put into the rendered sections after the fact, the
-   * way the previous frontend did: the renderer produces the server's markup,
-   * and the controls are decoration on top of it.
-   */
-  function decorate(node: HTMLElement) {
-    function place() {
-      node.querySelectorAll(".project-markdown-section").forEach((section, index) => {
-        if (section.querySelector("[data-restore-section]")) return;
-
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "project-section-archive-button";
-        button.dataset.restoreSection = String(index);
-        button.title = "Restore section from archive";
-        button.setAttribute("aria-label", "Restore section from archive");
-        button.innerHTML = '<i class="fa-solid fa-rotate-left" aria-hidden="true"></i>';
-        button.addEventListener("click", () => onrestore(index));
-        section.querySelector(".project-markdown-section-card")?.appendChild(button);
-      });
-    }
-
-    place();
-    const observer = new MutationObserver(place);
-    observer.observe(node, { childList: true, subtree: true });
-    return { destroy: () => observer.disconnect() };
-  }
 </script>
 
-<div class="modal-backdrop-shim">
+<div class="modal-backdrop-shim" use:dismissable={onclose}>
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
       <div class="modal-header">
@@ -57,7 +31,14 @@
         {#if sections.length === 0}
           <p class="text-muted mb-0">No archived sections.</p>
         {:else}
-          <div class="markdown-content" use:decorate>{@html html}</div>
+          <div
+            class="markdown-content"
+            use:sectionControls={{
+              icon: "fa-rotate-left",
+              label: "Restore section from archive",
+              onpick: onrestore,
+            }}
+          >{@html html}</div>
         {/if}
       </div>
     </div>

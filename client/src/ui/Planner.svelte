@@ -16,6 +16,7 @@
     slotCandidates,
   } from "../domain/slots";
   import { today } from "../domain/time";
+  import { dismissable } from "../lib/dismiss";
   import { live } from "../lib/live.svelte";
   import { sync } from "../sync/store.svelte";
   import type { DaySlot } from "../sync/types";
@@ -75,7 +76,7 @@
   }
 </script>
 
-<div class="planner-backdrop">
+<div class="planner-backdrop" use:dismissable={onclose}>
   <div class="planner-dialog" role="dialog" aria-modal="true" aria-label="Session planner">
     <header class="planner-header">
       <h2 class="h6 mb-0">
