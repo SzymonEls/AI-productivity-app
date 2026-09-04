@@ -14,10 +14,14 @@ BASE_DIR = os.path.dirname(os.path.dirname(PACKAGE_DIR))
 # not sit inside the code it outlives.
 INSTANCE_PATH = os.path.join(BASE_DIR, "instance")
 INSTANCE_ENV_PATH = os.path.join(INSTANCE_PATH, ".env")
-ROOT_ENV_PATH = os.path.join(BASE_DIR, ".env")
 
+# instance/.env and nothing else. A repository root .env was read as well, which
+# gave one setting two homes and no visible rule about which of them won. The
+# root file still has a job in a Docker deployment, but it is Compose's: it
+# fills in ${...} in docker-compose.yml and never reaches the application.
+# Reading it here made those two look like one file, which is the usual cause of
+# "it ignores my settings" - see the header of docker-compose.yml.
 load_dotenv(INSTANCE_ENV_PATH)
-load_dotenv(ROOT_ENV_PATH)
 
 
 def parse_bool(value, default=False):
