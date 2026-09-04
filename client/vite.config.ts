@@ -1,4 +1,6 @@
-import { defineConfig } from "vite";
+// defineConfig comes from vitest rather than vite so the `test` block below
+// type-checks. It is the same function for `vite build`; only the typings differ.
+import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // Flask keeps serving the sign-in pages and the synchronisation API. In
@@ -30,5 +32,13 @@ export default defineConfig(({ command }) => ({
       "/manifest.webmanifest": FLASK,
       "/service-worker.js": FLASK,
     },
+  },
+
+  test: {
+    environment: "node",
+    // A real IndexedDB implementation rather than a stub: the transaction
+    // boundaries in db/mutate.ts are the point of that file, and a stub that
+    // ignores them would pass while the thing being tested was broken.
+    setupFiles: ["./src/test-setup.ts"],
   },
 }));
