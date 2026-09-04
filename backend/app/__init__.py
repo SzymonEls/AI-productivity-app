@@ -1,10 +1,8 @@
 import os
-from datetime import datetime, timezone
 
 from flask import Flask, jsonify, request
-from flask_login import current_user
-from flask_migrate import stamp as stamp_migrations, upgrade as apply_migrations
-from sqlalchemy import inspect, text
+from flask_migrate import upgrade as apply_migrations
+from sqlalchemy import inspect
 
 from .config import Config
 
@@ -46,7 +44,6 @@ def create_app(config_class=Config):
     register_pruning_command(app)
     if should_initialize_database(app):
         run_database_migrations(app)
-        initialize_database(app)
 
     return app
 
@@ -149,204 +146,20 @@ def run_database_migrations(app):
             current_revision = MigrationContext.configure(connection).get_current_revision()
 
         if current_revision is None and table_names:
-            # Existing local database predates Alembic tracking. Its schema is
-            # kept compatible by the ad-hoc bootstrap below, so mark it as
-            # being at the latest migration instead of replaying every
-            # migration's upgrade() against tables that already exist.
-            stamp_migrations()
-            return
+            # Tables, but no alembic_version: a database from before migrations
+            # were adopted. This used to stamp it at head and carry on, which is
+            # a guess - stamp() always writes head, without looking at the
+            # schema. Right for a database that really is current and has only
+            # lost its bookkeeping row; silently wrong for an older one, which
+            # then reports itself as up to date while columns are missing.
+            # Nothing here can tell the two apart, so it stops and asks.
+            message = (
+                "This database has tables but no alembic_version: it predates "
+                "migrations, and nothing here can tell which revision its schema "
+                "really matches. Nothing was changed. Stamp it by hand "
+                "(flask db stamp <rev>) and start again."
+            )
+            app.logger.error(message)
+            raise RuntimeError(message)
 
         apply_migrations()
-
-
-def initialize_database(app):
-    """
-    Create tables automatically when the configured database is empty.
-
-    This keeps first-run local setup simple while still allowing the project
-    to adopt migrations as it grows.
-    """
-    from .models import ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
-
-    with app.app_context():
-        inspector = inspect(db.engine)
-        table_names = inspector.get_table_names()
-
-        if not table_names:
-            # Only create tables for a brand-new database.
-            # Once tables exist, we leave schema changes to migrations.
-            db.create_all()
-            return
-
-        if "projects" in table_names:
-            project_columns = {column["name"] for column in inspector.get_columns("projects")}
-            if "updated_at" not in project_columns:
-                # Lightweight compatibility step for older local SQLite files.
-                db.session.execute(text("ALTER TABLE projects ADD COLUMN updated_at DATETIME"))
-                db.session.execute(
-                    text("UPDATE projects SET updated_at = created_at WHERE updated_at IS NULL")
-                )
-                db.session.commit()
-            if "frequency" not in project_columns:
-                # Keep existing local databases usable when new project fields are added.
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN frequency VARCHAR(255) "
-                        "DEFAULT 'Once a week' NOT NULL"
-                    )
-                )
-                db.session.commit()
-            if "is_starred" not in project_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN is_starred BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
-            if "archived_long_goal" not in project_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN archived_long_goal TEXT "
-                        "DEFAULT '' NOT NULL"
-                    )
-                )
-                db.session.commit()
-            if "is_archived" not in project_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN is_archived BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
-            if "is_private" not in project_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN is_private BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
-
-        if "users" in table_names:
-            user_columns = {column["name"] for column in inspector.get_columns("users")}
-            if "session_token" not in user_columns:
-                # Pre-Alembic local databases are stamped at head rather than
-                # migrated, so the column has to be added here as well.
-                import secrets
-
-                db.session.execute(
-                    text(
-                        "ALTER TABLE users ADD COLUMN session_token VARCHAR(64) "
-                        "DEFAULT '' NOT NULL"
-                    )
-                )
-                for row in db.session.execute(text("SELECT id FROM users")).fetchall():
-                    db.session.execute(
-                        text("UPDATE users SET session_token = :token WHERE id = :id"),
-                        {"token": secrets.token_hex(32), "id": row.id},
-                    )
-                db.session.commit()
-
-        if "project_timeline_groups" not in table_names:
-            ProjectTimelineGroup.__table__.create(bind=db.engine)
-        else:
-            timeline_group_columns = {column["name"] for column in inspector.get_columns("project_timeline_groups")}
-            if "is_backlog" not in timeline_group_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE project_timeline_groups ADD COLUMN is_backlog BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
-
-        if "project_timeline_items" not in table_names:
-            ProjectTimelineItem.__table__.create(bind=db.engine)
-        else:
-            timeline_item_columns = {column["name"] for column in inspector.get_columns("project_timeline_items")}
-            if "is_private" not in timeline_item_columns:
-                db.session.execute(
-                    text(
-                        "ALTER TABLE project_timeline_items ADD COLUMN is_private BOOLEAN "
-                        "DEFAULT 0 NOT NULL"
-                    )
-                )
-                db.session.commit()
-
-        if "project_time_entries" not in table_names:
-            ProjectTimeEntry.__table__.create(bind=db.engine)
-        else:
-            time_entry_columns = inspector.get_columns("project_time_entries")
-            time_entry_column_names = {column["name"] for column in time_entry_columns}
-            if "project_title_snapshot" not in time_entry_column_names:
-                db.session.execute(
-                    text("ALTER TABLE project_time_entries ADD COLUMN project_title_snapshot VARCHAR(150)")
-                )
-                db.session.execute(
-                    text(
-                        "UPDATE project_time_entries SET project_title_snapshot = ("
-                        "SELECT title FROM projects WHERE projects.id = project_time_entries.project_id"
-                        ") WHERE project_title_snapshot IS NULL AND project_id IS NOT NULL"
-                    )
-                )
-                db.session.commit()
-
-            project_id_column = next(
-                column for column in time_entry_columns if column["name"] == "project_id"
-            )
-            if not project_id_column["nullable"]:
-                _allow_null_time_entry_project_id(db)
-
-
-def _allow_null_time_entry_project_id(db):
-    """
-    Relax project_time_entries.project_id to nullable so deleting a project
-    orphans its time entries instead of failing/cascading. SQLite has no
-    ALTER COLUMN, so the table is rebuilt; other dialects can alter in place.
-    """
-    if db.engine.dialect.name == "sqlite":
-        db.session.execute(text("ALTER TABLE project_time_entries RENAME TO project_time_entries_old"))
-        db.session.execute(
-            text(
-                """
-                CREATE TABLE project_time_entries (
-                    id INTEGER NOT NULL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    project_id INTEGER,
-                    started_at DATETIME NOT NULL,
-                    ended_at DATETIME,
-                    description TEXT,
-                    project_title_snapshot VARCHAR(150),
-                    created_at DATETIME NOT NULL,
-                    updated_at DATETIME NOT NULL,
-                    FOREIGN KEY(project_id) REFERENCES projects (id),
-                    FOREIGN KEY(user_id) REFERENCES users (id)
-                )
-                """
-            )
-        )
-        db.session.execute(
-            text(
-                "INSERT INTO project_time_entries "
-                "(id, user_id, project_id, started_at, ended_at, description, "
-                "project_title_snapshot, created_at, updated_at) "
-                "SELECT id, user_id, project_id, started_at, ended_at, description, "
-                "project_title_snapshot, created_at, updated_at "
-                "FROM project_time_entries_old"
-            )
-        )
-        db.session.execute(text("DROP TABLE project_time_entries_old"))
-        db.session.execute(
-            text(
-                "CREATE INDEX ix_project_time_entries_user_project_started "
-                "ON project_time_entries (user_id, project_id, started_at)"
-            )
-        )
-        db.session.execute(
-            text("CREATE INDEX ix_project_time_entries_user_ended ON project_time_entries (user_id, ended_at)")
-        )
-    else:
-        db.session.execute(text("ALTER TABLE project_time_entries ALTER COLUMN project_id DROP NOT NULL"))
-    db.session.commit()

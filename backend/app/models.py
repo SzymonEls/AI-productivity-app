@@ -224,9 +224,7 @@ class ProjectTimeEntry(SyncMixin, db.Model):
     __table_args__ = sync_table_args(
         "project_time_entries",
         # These two exist in every database - migration 20260520_0009 creates
-        # them, and _allow_null_time_entry_project_id() in app/__init__.py
-        # re-creates them by hand when it rebuilds the table for an old SQLite
-        # file. They were never declared here, so autogenerate kept proposing to
+        # them. They were never declared here, so autogenerate kept proposing to
         # drop them; 20260808_0016 says in its docstring that the drops were
         # deleted from it on purpose. Declaring them is what ends that, and it
         # needs no DDL: the indexes are already there.

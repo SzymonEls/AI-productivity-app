@@ -5,11 +5,11 @@ Revises: 20260705_0015
 Create Date: 2026-08-09
 
 Autogenerate also wanted to drop ix_project_time_entries_user_ended and
-ix_project_time_entries_user_project_started. Those indexes are not declared on
-the model - they are created by _allow_null_time_entry_project_id() in
-app/__init__.py when it rebuilds the table for old SQLite files - so dropping
-them here would quietly remove indexes the application relies on. Both drops
-were deleted from this migration on purpose.
+ix_project_time_entries_user_project_started. Those indexes are created by
+migration 20260520_0009, but were not declared on the model when this migration
+was written, so dropping them here would quietly remove indexes the application
+relies on. Both drops were deleted from this migration on purpose. (The model
+declares them now, which is what stopped autogenerate proposing the drops.)
 """
 from alembic import op
 import sqlalchemy as sa

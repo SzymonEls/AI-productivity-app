@@ -123,10 +123,13 @@ The schema in the code matches migration `20260901_0021`.
 1. **The database updates itself at startup**, disabled in Docker with
    `SKIP_DB_BOOTSTRAP=1`. Don't change that in passing.
 
-2. **Two parallel schema mechanisms.** `initialize_database` in
-   [backend/app/__init__.py](../backend/app/__init__.py) adds missing columns with raw
-   `ALTER TABLE`, kept so old local files still open. **Do not extend it** - make
-   new changes with a migration.
+2. **Migrations are the only schema mechanism.** There used to be a second one:
+   `initialize_database` in [backend/app/__init__.py](../backend/app/__init__.py)
+   added missing columns with raw `ALTER TABLE` so old local files still opened.
+   It was removed - its hand-maintained list had fallen behind the migrations it
+   mirrored, so it no longer opened those files anyway. A database with tables
+   but no `alembic_version` now stops the application at startup with an
+   explanation, rather than being stamped at head on a guess.
 
 3. **A deletion is a row, not an absence.** `soft_delete` in
    [backend/app/api/revisions.py](../backend/app/api/revisions.py) sets `deleted_at`, stamps a
@@ -185,8 +188,6 @@ The schema in the code matches migration `20260901_0021`.
 
 ## What not to touch (and why)
 
-- **The raw `ALTER TABLE` in `initialize_database`** - backward compatibility for
-  old local databases. Change the schema with a migration.
 - **The startup bootstrap and `SKIP_DB_BOOTSTRAP`** - deliberately disabled in
   Docker so workers don't race.
 - **`OPENAI_API_KEY` and the `requests` package** - present but unused. Don't

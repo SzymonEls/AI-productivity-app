@@ -66,10 +66,11 @@ don't add them.
 
 ### ⚠️ Conflicting convention in the repo (resolution)
 
-**Schema evolution.** Two mechanisms exist: Alembic migrations in [backend/migrations/](../backend/migrations/)
-**and** raw `ALTER TABLE` in `initialize_database` ([backend/app/__init__.py:314-484](../backend/app/__init__.py#L314-L484)).
-**The authoritative one: Alembic migrations.** The block in `__init__.py` is backward compatibility for old databases —
-treat it as frozen and don't add new columns there.
+**Schema evolution.** Alembic migrations in [backend/migrations/](../backend/migrations/) are
+the only mechanism. There was a second one — raw `ALTER TABLE` in `initialize_database` in
+`backend/app/__init__.py` — kept for databases predating migrations; it was removed once its
+hand-maintained list had fallen behind the migrations it mirrored. Change the schema with a
+migration, and don't reintroduce a parallel path.
 
 (The second conflict listed here — two copies of `_get_or_create_timeline` — went away in 1.5.0
 when the `ai` blueprint was removed, and the surviving copy left with the Jinja views in 2.0.0.)
