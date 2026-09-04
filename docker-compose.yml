@@ -1,10 +1,10 @@
 # One file for every deployment. What an instance is - private or a public
-# read-only demo - is decided by app/instance/.env, not by this file.
+# read-only demo - is decided by instance/.env, not by this file.
 #
 # Two different .env files are involved, and mixing them up is the usual cause
 # of "it ignores my settings":
 #   ./.env               read by Compose, only to fill in ${...} below
-#   ./app/instance/.env  read by the application itself (mounted into it)
+#   ./instance/.env      read by the application itself (mounted into it)
 services:
   web:
     build:
@@ -21,18 +21,18 @@ services:
       FLASK_ENV: production
       SKIP_DB_BOOTSTRAP: "1"
       # Set here as well as in .env, because an .env left over from an older
-      # deployment still names /app/instance - a path nothing mounts any more.
+      # deployment still names /app/app/instance - a path nothing mounts any more.
       # Environment variables win over the file, so this keeps such an instance
       # pointed at the real database.
-      DATABASE_URL: sqlite:////app/app/instance/app.db
+      DATABASE_URL: sqlite:////app/instance/app.db
     # No published port: the reverse proxy shares the reverse_proxy network and
     # reaches the container by name on port 8000. Publishing one would only
     # collide with the other instance on the host. Add a mapping such as
     # "8010:8000" if your proxy runs on the host instead of in a container.
     volumes:
-      # /app is the repository root, so its app/instance is /app/app/instance -
-      # the directory config.py actually reads .env and the database from.
-      - ./app/instance:/app/app/instance
+      # /app is the repository root, and config.py reads .env and the database
+      # from the instance directory beside the code rather than inside it.
+      - ./instance:/app/instance
     networks:
       - reverse_proxy
 

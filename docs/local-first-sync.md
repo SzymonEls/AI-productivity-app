@@ -175,7 +175,7 @@ out (including that signing out deletes the local copy), the theme, safe mode,
   browser, so offline loading of the *shell* is untested. Offline reading of the
   *data* is verified.
 - **The two-stage Docker build.** Docker was unavailable. The paths were worked
-  through (`vite` writes to `/app/static/client`, `COPY --from` takes it) but the
+  through (`vite` writes to `/backend/app/static/client`, `COPY --from` takes it) but the
   first deploy has to prove it. Measure the Node stage's peak memory then: it
   runs on the deployment host, beside the container it is replacing.
 - **Native mouse dragging on the schedule.** Everything checkable was checked —
@@ -188,8 +188,8 @@ out (including that signing out deletes the local copy), the theme, safe mode,
 
 ## Traps for whoever works on this next
 
-**The protocol is written twice.** `app/api/protocol.py` and
-`client/src/sync/types.ts` describe the same tables. They drifting apart is what
+**The protocol is written twice.** `backend/app/api/protocol.py` and
+`frontend/src/sync/types.ts` describe the same tables. They drifting apart is what
 this codebase is most exposed to; the checklist says to change both.
 
 **Never `db.session.delete` a synchronised row.** Use `soft_delete`, which also
@@ -207,29 +207,29 @@ on `do_orm_execute` reaches relationship lazy loads, which a hand-written
 `execution_options(include_tombstones=True)`.
 
 **A golden file is worth more than an assumption.** Regenerate
-`client/src/domain/__golden__*.json` from the Python rather than editing them.
+`frontend/src/domain/__golden__*.json` from the Python rather than editing them.
 
-**Run both suites**: `pytest` and `cd client && npm run test`.
+**Run both suites**: `cd backend && pytest`, and `cd frontend && npm run test`.
 
 ---
 
 ## Running it
 
 ```bash
-source .venv/bin/activate && pip install -r requirements.txt
+source .venv/bin/activate && pip install -r backend/requirements.txt
 ```
 
 ```bash
-cd client && npm install && npm run build && cd ..
+cd frontend && npm install && npm run build && cd ..
 ```
 
 ```bash
-python run.py
+python backend/run.py
 ```
 
 There is no Node process in production; `npm run build` writes static files that
-Flask serves. `npm run dev` in `client/` gives hot reload on port 5173 and
-proxies the API to Flask — run `python run.py` alongside it.
+Flask serves. `npm run dev` in `frontend/` gives hot reload on port 5173 and
+proxies the API to Flask — run `python backend/run.py` alongside it.
 
 To compare against the old interface, a worktree of `main` on another port is
 the way it was done here:

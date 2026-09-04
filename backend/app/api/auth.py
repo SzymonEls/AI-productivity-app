@@ -5,7 +5,7 @@ PWA, being thrown out to a server-rendered page leaves the application shell -
 different chrome, a full reload, and a page the app-shell cache has no reason to
 hold. Everything else about them is unchanged.
 
-What deliberately does NOT move is the lockout. app/auth/lockout.py counts
+What deliberately does NOT move is the lockout. app/lockout.py counts
 failures per email address in the database, and it works the same whoever draws
 the form; leaving it here means a client cannot decline to enforce it.
 """
@@ -14,7 +14,7 @@ from flask import current_app, jsonify, request
 from flask_login import current_user, login_required, login_user, logout_user
 from sqlalchemy.exc import SQLAlchemyError
 
-from ..auth import lockout
+from .. import lockout
 from ..extensions import db
 from ..models import User
 from .security import issue_token

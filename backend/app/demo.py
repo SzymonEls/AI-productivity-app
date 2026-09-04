@@ -18,7 +18,7 @@ from flask import flash, jsonify, redirect, request, url_for
 from markupsafe import Markup
 from sqlalchemy.exc import SQLAlchemyError
 
-from config import BASE_DIR
+from .config import BASE_DIR
 
 from .extensions import db
 from .markdown_utils import render_markdown

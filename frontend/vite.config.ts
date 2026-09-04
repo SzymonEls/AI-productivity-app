@@ -17,7 +17,10 @@ export default defineConfig(({ command }) => ({
   base: command === "build" ? "/static/client/" : "/",
 
   build: {
-    outDir: "../app/static/client",
+    // Into the backend's static folder, because Flask is what serves the built
+    // client in production. The directory is git-ignored; nothing is committed
+    // from here.
+    outDir: "../backend/app/static/client",
     emptyOutDir: true,
     manifest: true,
   },

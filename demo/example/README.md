@@ -19,7 +19,7 @@ It is a convenience copy, not the source of truth: it was produced by
 Drop it in and start the app with demo mode on:
 
 ```bash
-cp demo/example/app.db app/instance/app.db
+cp demo/example/app.db instance/app.db
 ```
 
 ```bash

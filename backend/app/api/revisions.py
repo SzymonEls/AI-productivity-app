@@ -9,7 +9,7 @@ that survives long enough to be reported. Both draw from ``next_rev``, the
 per-user counter that gives every change a place in one order.
 
 This is a module beside routes.py rather than logic inside it, for the same
-reason app/auth/lockout.py is: it is shared by every blueprint that writes, and
+reason app/lockout.py is: it is shared by every blueprint that writes, and
 inlining it would mean five copies of a rule that has to stay identical.
 """
 

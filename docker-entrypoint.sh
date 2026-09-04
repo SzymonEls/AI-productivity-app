@@ -3,16 +3,16 @@ set -eu
 
 export SKIP_DB_BOOTSTRAP="${SKIP_DB_BOOTSTRAP:-1}"
 
-# The repository root is /app, so config.py reads /app/app/instance/.env. Writing
+# The repository root is /app, so config.py reads /app/instance/.env. Writing
 # anywhere else produces a file the application never looks at.
-INSTANCE_DIR="/app/app/instance"
+INSTANCE_DIR="/app/instance"
 ENV_FILE="${INSTANCE_DIR}/.env"
 
 mkdir -p "$INSTANCE_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
     SECRET_KEY="${SECRET_KEY:-$(python -c 'import secrets; print(secrets.token_urlsafe(48))')}"
-    DATABASE_URL="${DATABASE_URL:-sqlite:////app/app/instance/app.db}"
+    DATABASE_URL="${DATABASE_URL:-sqlite:////app/instance/app.db}"
     REGISTRATION_ENABLED="${REGISTRATION_ENABLED:-true}"
     CALENDAR_TIMEZONE="${CALENDAR_TIMEZONE:-Europe/Warsaw}"
     OPENAI_API_KEY="${OPENAI_API_KEY:-}"
@@ -36,7 +36,7 @@ fi
 # half converted, and "db downgrade" drops columns rather than restoring content.
 # The copy costs a few megabytes and is the only thing standing between a failed
 # deploy and lost data. Keeping the last few is enough - they are ordered by name.
-DB_FILE="$(python -c 'from config import Config; uri = Config.SQLALCHEMY_DATABASE_URI; print(uri[10:] if uri.startswith("sqlite:///") else "")')"
+DB_FILE="$(python -c 'from app.config import Config; uri = Config.SQLALCHEMY_DATABASE_URI; print(uri[10:] if uri.startswith("sqlite:///") else "")')"
 if [ -n "$DB_FILE" ] && [ -f "$DB_FILE" ]; then
     DB_REV="$(flask --app run.py db current 2>/dev/null | awk 'NF {rev = $1} END {print rev}')"
     cp "$DB_FILE" "${DB_FILE}.bak-${DB_REV:-unknown}-$(date +%Y%m%d-%H%M%S)"
@@ -51,7 +51,7 @@ flask --app run.py db upgrade
 # .env file above rather than the container environment, so ask the app itself
 # instead of testing a shell variable. seed-demo is idempotent, so a restart
 # never overwrites the demo database; pass --reset to rebuild it.
-if python -c 'import sys; from config import Config; sys.exit(0 if Config.DEMO_MODE else 1)'; then
+if python -c 'import sys; from app.config import Config; sys.exit(0 if Config.DEMO_MODE else 1)'; then
     flask --app run.py seed-demo
 fi
 

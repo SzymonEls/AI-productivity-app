@@ -10,7 +10,7 @@ it wrote to goes with it.
 This deletes data. downgrade() recreates the table, but empty - there is nowhere
 to restore the plans from. Back up before upgrading a live instance:
 
-    sqlite3 app/instance/app.db ".dump daily_plans" > daily-plans-backup.sql
+    sqlite3 instance/app.db ".dump daily_plans" > daily-plans-backup.sql
 
 has_table() is checked both ways so the migration is safe on a database that
 never had the table (or already lost it), mirroring 20260704_0014.

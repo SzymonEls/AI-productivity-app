@@ -9,13 +9,13 @@ board and time tracking.
 
 Two halves, and one thing crossing between them.
 
-- **The client** (`client/`) — Svelte 5 and TypeScript, built by Vite into
-  `app/static/client/`. It owns every view, every rule about what may be booked
+- **The client** (`frontend/`) — Svelte 5 and TypeScript, built by Vite into
+  `backend/app/static/client/`. It owns every view, every rule about what may be booked
   when, and its own copy of the data in IndexedDB. It works with no network.
-- **The server** (`app/`) — Flask. It authenticates, stores the shared copy, and
+- **The server** (`backend/app/`) — Flask. It authenticates, stores the shared copy, and
   answers two questions: what changed since a given point, and here is what I
   changed, what of it can you take. It renders no pages.
-- **The protocol** (`app/api/protocol.py` and `client/src/sync/types.ts`) — the
+- **The protocol** (`backend/app/api/protocol.py` and `frontend/src/sync/types.ts`) — the
   same description of the same tables, written twice. Changing one without the
   other is the mistake this codebase is most exposed to.
 
@@ -24,12 +24,12 @@ unverified are recorded in [local-first-sync.md](local-first-sync.md).
 
 ## Startup
 
-- Factory `create_app()` in [app/__init__.py](../app/__init__.py); `run.py` makes
+- Factory `create_app()` in [backend/app/__init__.py](../backend/app/__init__.py); `run.py` makes
   `app = create_app()`; Gunicorn serves `run:app`.
-- `Config` in [config.py](../config.py), fed from `app/instance/.env` then `.env`.
+- `Config` in [config.py](../backend/app/config.py), fed from `instance/.env` then `.env`.
 - The application migrates its own database at startup, disabled in Docker with
   `SKIP_DB_BOOTSTRAP=1` so several workers do not race.
-- The client is **built, not served live**: `cd client && npm run build`. There
+- The client is **built, not served live**: `cd frontend && npm run build`. There
   is no Node process in production. `npm run dev` exists for working on the
   frontend and proxies `/api` and `/auth` to Flask.
 
@@ -37,24 +37,24 @@ unverified are recorded in [local-first-sync.md](local-first-sync.md).
 
 | Path | What it does |
 |---|---|
-| [app/__init__.py](../app/__init__.py) | Assembles the app; JSON errors, database update at startup. |
-| [app/models.py](../app/models.py) | Every table, and the synchronisation columns on most of them. |
-| [app/api/](../app/api/) | The whole of the server's job. `routes.py` (pull, push, export), `auth.py` (signing in), `protocol.py` (what crosses the wire), `revisions.py` (stamping writes, tombstones), `pruning.py`, `security.py` (CSRF). |
-| [app/auth/lockout.py](../app/auth/lockout.py) | Failed sign-ins, counted per email address in the database. |
-| [app/clock.py](../app/clock.py) | The configured time zone, and what "today" means. |
-| [app/main/routes.py](../app/main/routes.py) | The shell, the manifest and the service worker. Nothing else. |
-| [app/demo.py](../app/demo.py) | Read-only demo mode and the `seed-demo` command. Inert when off. |
-| [app/markdown_utils.py](../app/markdown_utils.py) | Only the demo document still needs this; the plan is rendered in the client. |
-| [client/src/domain/](../client/src/domain/) | The rules, ported from Python: `slots.ts`, `time.ts`, `markdown.ts`, `tags.ts`, `plan-sections.ts`. |
-| [client/src/db/](../client/src/db/) | The local copy, and the outbox every change passes through. |
-| [client/src/sync/](../client/src/sync/) | Pull, push, conflicts, and what the button knows. |
-| [client/src/routes/](../client/src/routes/) | One file per view. |
-| [migrations/](../migrations/) | Database change history (Alembic). |
+| [backend/app/__init__.py](../backend/app/__init__.py) | Assembles the app; JSON errors, database update at startup. |
+| [backend/app/models.py](../backend/app/models.py) | Every table, and the synchronisation columns on most of them. |
+| [backend/app/api/](../backend/app/api/) | The whole of the server's job. `routes.py` (pull, push, export), `auth.py` (signing in), `protocol.py` (what crosses the wire), `revisions.py` (stamping writes, tombstones), `pruning.py`, `security.py` (CSRF). |
+| [backend/app/lockout.py](../backend/app/lockout.py) | Failed sign-ins, counted per email address in the database. |
+| [backend/app/clock.py](../backend/app/clock.py) | The configured time zone, and what "today" means. |
+| [backend/app/shell.py](../backend/app/shell.py) | The shell, the manifest and the service worker. Nothing else. |
+| [backend/app/demo.py](../backend/app/demo.py) | Read-only demo mode and the `seed-demo` command. Inert when off. |
+| [backend/app/markdown_utils.py](../backend/app/markdown_utils.py) | Only the demo document still needs this; the plan is rendered in the client. |
+| [frontend/src/domain/](../frontend/src/domain/) | The rules, ported from Python: `slots.ts`, `time.ts`, `markdown.ts`, `tags.ts`, `plan-sections.ts`. |
+| [frontend/src/db/](../frontend/src/db/) | The local copy, and the outbox every change passes through. |
+| [frontend/src/sync/](../frontend/src/sync/) | Pull, push, conflicts, and what the button knows. |
+| [frontend/src/routes/](../frontend/src/routes/) | One file per view. |
+| [backend/migrations/](../backend/migrations/) | Database change history (Alembic). |
 
 ## How a change travels
 
 1. A view calls `createRow`, `updateRow` or `deleteRow` in
-   [client/src/db/mutate.ts](../client/src/db/mutate.ts). The row and an entry in
+   [frontend/src/db/mutate.ts](../frontend/src/db/mutate.ts). The row and an entry in
    the outbox are written in **one** IndexedDB transaction. The screen updates
    from the local copy; nothing waited for a network.
 2. `sync.run()` pulls, then pushes. It runs on start-up, on regaining a
@@ -67,7 +67,7 @@ unverified are recorded in [local-first-sync.md](local-first-sync.md).
 
 ## Data model
 
-All tables are in [app/models.py](../app/models.py), all with UTC
+All tables are in [backend/app/models.py](../backend/app/models.py), all with UTC
 `created_at`/`updated_at`.
 
 - **User** — username, email (both unique), hashed password, `session_token`
@@ -102,32 +102,34 @@ The schema in the code matches migration `20260901_0021`.
 
 ## Responsibility boundaries
 
-- **The rules live in the client**, in `client/src/domain/`, as pure functions
+- **The rules live in the client**, in `frontend/src/domain/`, as pure functions
   that work out what should change and hand it back. The caller writes it
   through `db/mutate.ts`.
 - **The server enforces one invariant**: one live booking per (user, date, slot),
   as a partial unique index. The two-block rule and everything else about
   planning is a client rule now. For a single-person self-hosted application
   that is a deliberate trade; it is a real change to the trust model.
-- **Configuration**: only [config.py](../config.py) reads environment variables.
+- **Configuration**: only [config.py](../backend/app/config.py) reads environment variables.
 
 ## Non-obvious things
 
-0. **In Docker the instance directory is `/app/app/instance`, not `/app/instance`.**
-   The image puts the repository root at `/app`, so the repo's own `app/instance`
-   sits one level deeper - and that is where config.py looks for `.env` and the
-   database. The volume, the entrypoint and `DATABASE_URL` must all name it.
+0. **The instance directory sits at the project root, not inside the package.**
+   `instance/` holds the live database, the real `.env` and the secrets - data
+   that outlives the code beside it. In Docker the repository root is `/app`, so
+   it is `/app/instance`, and the volume, the entrypoint and `DATABASE_URL` must
+   all name that. A deployment created before 2.1 mounted `/app/app/instance`;
+   move the directory on the host and correct `DATABASE_URL` in its `.env`.
 
 1. **The database updates itself at startup**, disabled in Docker with
    `SKIP_DB_BOOTSTRAP=1`. Don't change that in passing.
 
 2. **Two parallel schema mechanisms.** `initialize_database` in
-   [app/__init__.py](../app/__init__.py) adds missing columns with raw
+   [backend/app/__init__.py](../backend/app/__init__.py) adds missing columns with raw
    `ALTER TABLE`, kept so old local files still open. **Do not extend it** - make
    new changes with a migration.
 
 3. **A deletion is a row, not an absence.** `soft_delete` in
-   [app/api/revisions.py](../app/api/revisions.py) sets `deleted_at`, stamps a
+   [backend/app/api/revisions.py](../backend/app/api/revisions.py) sets `deleted_at`, stamps a
    revision, and **empties the content columns immediately** (`__sync_payload__`
    on each model), so a deleted private plan stops existing on the server at the
    next sync. What is kept for the retention window is the bare fact that the
@@ -160,13 +162,13 @@ The schema in the code matches migration `20260901_0021`.
    nobody on the other side of it.
 
 9. **A tag is not stored anywhere.** `#shop` is text inside `long_goal`.
-   `client/src/domain/tags.ts` reads the plans and groups what it finds. A tag
+   `frontend/src/domain/tags.ts` reads the plans and groups what it finds. A tag
    starts with a letter, may not follow a word character or `(`, and only counts
    inside a list item. The JavaScript pattern uses `\p{L}` rather than `\w`,
    which in JavaScript is ASCII and would cut `#dom-i-ogród` short.
 
 10. **The health score is a convention, not a measurement.** `systemHealth` in
-    `client/src/domain/slots.ts` mixes the done-ratio over the seven days *before
+    `frontend/src/domain/slots.ts` mixes the done-ratio over the seven days *before
     today* with the share of active projects having a next session, weighted
     60/40, banded at 75 and 50. Today is deliberately outside the window.
 

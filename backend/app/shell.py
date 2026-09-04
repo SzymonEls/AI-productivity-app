@@ -32,7 +32,7 @@ def client(_client_route=None):
     index = os.path.join(_client_directory(), "index.html")
     if not os.path.exists(index):
         return (
-            "The client has not been built. Run: cd client && npm install && npm run build",
+            "The client has not been built. Run: cd frontend && npm install && npm run build",
             503,
         )
 

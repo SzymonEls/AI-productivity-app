@@ -12,8 +12,8 @@ from datetime import datetime, timedelta, timezone
 
 from flask import current_app
 
-from ..extensions import db
-from ..models import LoginAttempt
+from .extensions import db
+from .models import LoginAttempt
 
 
 def _settings():

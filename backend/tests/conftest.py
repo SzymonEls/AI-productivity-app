@@ -20,7 +20,7 @@ def app(tmp_path):
     reloading config.py: app/__init__.py binds Config at import time and would
     keep using the old one however many times the module were reloaded.
     """
-    from config import Config
+    from app.config import Config
 
     class TestConfig(Config):
         SQLALCHEMY_DATABASE_URI = f"sqlite:///{tmp_path / 'test.db'}"

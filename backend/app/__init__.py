@@ -6,7 +6,7 @@ from flask_login import current_user
 from flask_migrate import stamp as stamp_migrations, upgrade as apply_migrations
 from sqlalchemy import inspect, text
 
-from config import Config
+from .config import Config
 
 from .extensions import db, login_manager, migrate
 from .api.revisions import register_tombstone_filter, register_write_stamping
@@ -34,7 +34,7 @@ def create_app(config_class=Config):
     from .api.routes import api_bp
     from .api.pruning import register_pruning_command
     from .demo import register_demo_mode
-    from .main.routes import main_bp
+    from .shell import main_bp
 
     app.register_blueprint(api_bp)
     # Last, because it answers every address the others did not claim.

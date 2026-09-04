@@ -4,8 +4,15 @@ from datetime import timedelta
 from dotenv import load_dotenv
 from sqlalchemy.engine import make_url
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_PATH = os.path.join(BASE_DIR, "app", "instance")
+# This file lives in backend/app/, so the project root is two levels up. Paths
+# below are anchored there rather than beside the code: the database, the .env
+# and the shipped documents belong to the deployment, not to the Python package.
+PACKAGE_DIR = os.path.abspath(os.path.dirname(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(PACKAGE_DIR))
+# Flask would put this beside the package by default. Kept at the project root
+# instead, so the Docker volume has one short path to mount and the data does
+# not sit inside the code it outlives.
+INSTANCE_PATH = os.path.join(BASE_DIR, "instance")
 INSTANCE_ENV_PATH = os.path.join(INSTANCE_PATH, ".env")
 ROOT_ENV_PATH = os.path.join(BASE_DIR, ".env")
 
