@@ -1,6 +1,8 @@
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from . import lockout
 from ..extensions import db
 from ..models import User
@@ -114,6 +116,29 @@ def change_password():
             return redirect(url_for("main.home"))
 
     return render_template("auth/change_password.html")
+
+
+@auth_bp.route("/api-token/regenerate", methods=["POST"])
+@login_required
+def regenerate_api_token():
+    """Issue a new API token from the settings page.
+
+    A password change deliberately leaves the token alone, so this is the one
+    way to retire one - which is what you reach for when a token has been on a
+    machine you no longer trust.
+    """
+    user = current_user._get_current_object()
+    user.regenerate_api_token()
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to issue a new token.", "danger")
+        return redirect(url_for("auth.change_password"))
+
+    flash("A new API token is ready. Paste it into the app - the old one stopped working.", "success")
+    return redirect(url_for("auth.change_password"))
 
 
 @auth_bp.route("/logout")
