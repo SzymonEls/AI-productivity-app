@@ -29,6 +29,7 @@ def create_app(config_class=Config):
     migrate.init_app(app, db)
 
     from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .api.routes import api_bp
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
     from .main.routes import main_bp
@@ -39,6 +40,7 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp)
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
+    app.register_blueprint(api_bp)
     register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)

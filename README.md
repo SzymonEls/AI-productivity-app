@@ -39,6 +39,9 @@ container, no external services.
   ring like any other.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
+- **JSON API** — `/api/v1` exposes today's slots and start/stop for the timer, authenticated by a
+  bearer token you generate on the account page. It is what the macOS menu bar client talks to;
+  the token is separate from your password, so changing one leaves the other working.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.
 
 ## Stack

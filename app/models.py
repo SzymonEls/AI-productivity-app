@@ -21,6 +21,12 @@ class User(UserMixin, db.Model):
     session_token = db.Column(
         db.String(64), nullable=False, default=lambda: secrets.token_hex(32)
     )
+    # Bearer credential for the JSON API the menu bar app talks to. Separate
+    # from session_token on purpose: changing a password throws the browsers
+    # out, and a desktop app that keeps working through that is the point.
+    api_token = db.Column(
+        db.String(64), nullable=False, default=lambda: secrets.token_urlsafe(32)
+    )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     projects = db.relationship(
@@ -67,6 +73,15 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def regenerate_api_token(self):
+        """Issue a new API token, which retires the one handed out before it.
+
+        The old value is overwritten rather than kept alongside, so a token
+        that leaked stops working the moment this is called.
+        """
+        self.api_token = secrets.token_urlsafe(32)
+        return self.api_token
 
     def get_id(self):
         """Identify the session by user *and* password generation.

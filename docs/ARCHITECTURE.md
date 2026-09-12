@@ -25,7 +25,8 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
-| [app/auth/](../app/auth/) | Registration, login, logout, password change. |
+| [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
+| [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
@@ -49,7 +50,9 @@ The same pattern everywhere (example: editing a project):
 
 All tables are in [app/models.py](../app/models.py). All of them have `created_at`/`updated_at` (UTC).
 
-- **User** — username, email (both unique), hashed password.
+- **User** — username, email (both unique), hashed password. `session_token` is half of what the
+  cookies carry, so a password change invalidates them; `api_token` is the separate bearer
+  credential for `/api/v1`, which a password change deliberately leaves alone.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
   the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
   the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
@@ -72,7 +75,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 
-The schema in the code matches the latest migration (`20260809_0018`).
+The schema in the code matches the latest migration (`20260912_0021`).
 
 ## Responsibility boundaries
 
@@ -157,6 +160,17 @@ The schema in the code matches the latest migration (`20260809_0018`).
     complete it put a permanent floor under the score that no amount of missed sessions could break
     through. Read the other way round it is the "Not scheduled" list on the same page, so the two
     always agree.
+
+13. **The API answers a click, the web page answers a form — so their `start` rules differ.**
+    `POST /time-tracking/projects/<id>/start` refuses with a 409 while another project's timer
+    runs, because the web page has room to say so and a Stop button to press. The menu bar has
+    neither: one click means "this is what I am on now", so `POST /api/v1/timer/start`
+    ([app/api/routes.py](../app/api/routes.py)) stops whatever was running and reports it back as
+    `stopped`. Two rules on purpose, not an oversight — keep them apart.
+14. **`/api/v1` is unreachable with a cookie, and the pages are unreachable with a token.**
+    The API uses `_token_required` rather than `@login_required`, which would redirect a desktop
+    client to an HTML login page it can only read as a confusing 200. Nothing in `app/api/`
+    touches `current_user`; the authenticated user is put on `g.api_user` instead.
 
 ## What not to touch (and why)
 
