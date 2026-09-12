@@ -101,7 +101,7 @@
 
             <div class="dashboard-section system-health system-health-{{ health.level }}">
                 <h2 class="h6 mb-1">System health</h2>
-                <p class="text-muted small mb-3">Sessions done and projects planned, over the {{ health.window_days }} days before today.</p>
+                <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done.</p>
                 <div class="system-health-body">
                     {# pathLength normalises the ring to 100 units, so the dash is
                        the percentage itself and the radius can change freely. #}
@@ -128,12 +128,24 @@
                             <span class="system-health-part-label">Sessions done</span>
                             <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
                         </li>
-                        <li>
-                            <span class="system-health-part-label">Projects planned</span>
-                            <span class="system-health-part-value">{{ health.planned_projects }} / {{ health.active_projects }}</span>
-                        </li>
                     </ul>
                 </div>
+                {# Planning is not in the score - having every project booked ahead
+                   is the baseline, not something to be paid for - so it sits
+                   underneath as a state: settled, or asking to be dealt with. #}
+                <p class="system-health-planning {{ 'is-ok' if health.planning_ok else 'is-warn' }}">
+                    {% if health.planning_ok %}
+                        {{ icon("check-circle") }}
+                        <span>All projects have a next session planned.</span>
+                    {% else %}
+                        {{ icon("alert-triangle") }}
+                        <span>
+                            {{ health.unplanned_projects }}
+                            {{ "project has" if health.unplanned_projects == 1 else "projects have" }}
+                            no next session planned.
+                        </span>
+                    {% endif %}
+                </p>
             </div>
 
             {# The tags live in the plans as text and are searched for on the page

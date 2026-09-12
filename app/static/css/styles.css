@@ -1858,7 +1858,8 @@ button.picker-row:hover {
     text-decoration: underline;
 }
 
-/* System health — one ring for the last week of sessions and planning.
+/* System health — one ring for the last week of sessions. Planning is not in
+   the ring; it gets its own strip below, on its own accent.
    The three bands only change --health-accent; everything below reads it. */
 .system-health {
     --health-accent: var(--success);
@@ -1944,6 +1945,33 @@ button.picker-row:hover {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* The planning strip carries its own accent rather than the ring's: a week of
+   missed sessions says nothing about whether the next ones are booked. */
+.system-health-planning {
+    --planning-accent: var(--success);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.45rem;
+    margin: 0.85rem 0 0;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid color-mix(in srgb, var(--planning-accent) 45%, transparent);
+    border-radius: 0.5rem;
+    background: color-mix(in srgb, var(--planning-accent) 10%, var(--surface));
+    color: var(--planning-accent);
+    font-size: 0.8rem;
+    line-height: 1.35;
+}
+
+.system-health-planning.is-warn {
+    --planning-accent: var(--warning);
+}
+
+.system-health-planning .app-icon {
+    flex: none;
+    /* Nudged onto the first line's baseline rather than its box. */
+    margin-top: 0.1rem;
 }
 
 /* Schedule page — three weeks of calendar sheets -------------------- */

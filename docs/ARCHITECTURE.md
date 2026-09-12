@@ -142,14 +142,21 @@ The schema in the code matches the latest migration (`20260809_0018`).
     JavaScript's `\w` is ASCII and would cut `#dom-i-ogród` short.
 
 12. **The home page's health score is a convention, not a measurement.** `system_health`
-    ([app/projects/slots.py](../app/projects/slots.py)) mixes two ratios — how many of the sessions
+    ([app/projects/slots.py](../app/projects/slots.py)) is one ratio — how many of the sessions
     booked over the 7 days **before today** were marked done (A, B and C alike; an unfilled slot
-    counts on neither side of it), and the share of active projects that have a next session booked —
-    weighted 60/40, with the bands at 75 and 50 deciding the colour. The window and those four
-    numbers are constants at the top of the file; change them there, not in the template. Two
-    consequences worth knowing: today is deliberately outside the window, so the score moves in the
-    morning only when yesterday was left unfinished, and a week with nothing booked scores zero on
-    the sessions half rather than dividing by zero.
+    counts on neither side of it) — with the bands at 75 and 50 deciding the colour. The window and
+    those two numbers are constants at the top of the file; change them there, not in the template.
+    Two consequences worth knowing: today is deliberately outside the window, so the score moves in
+    the morning only when yesterday was left unfinished, and a week with nothing booked scores zero
+    rather than dividing by zero.
+
+    **Planning is reported, not scored.** Whether every active project has a next session booked
+    comes back from the same call (`planning_ok` and the counts beside it) and the home page shows it
+    as a green or amber strip under the ring. It used to be 40% of the number, which was wrong twice
+    over: having booked ahead is the baseline rather than an achievement, and because it is normally
+    complete it put a permanent floor under the score that no amount of missed sessions could break
+    through. Read the other way round it is the "Not scheduled" list on the same page, so the two
+    always agree.
 
 ## What not to touch (and why)
 
