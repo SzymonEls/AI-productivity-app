@@ -101,38 +101,59 @@
 
             <div class="dashboard-section system-health system-health-{{ health.level }}">
                 <h2 class="h6 mb-1">System health</h2>
-                <p class="text-muted small mb-3">Sessions done and projects planned, over the {{ health.window_days }} days before today.</p>
+                <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done.</p>
+                {# A row per ring, one under the other, each next to its own
+                   numbers. The two circles share a centre line: the planning one
+                   is drawn smaller but sits in a box as wide as the score's, so
+                   both rows of text start at the same place. #}
                 <div class="system-health-body">
-                    {# pathLength normalises the ring to 100 units, so the dash is
-                       the percentage itself and the radius can change freely. #}
-                    <div class="system-health-gauge" role="img" aria-label="System health {{ health.percent }} out of 100">
-                        <svg viewBox="0 0 84 84" aria-hidden="true">
-                            <circle class="system-health-track" cx="42" cy="42" r="36" pathLength="100" />
-                            {# At 0 there is no arc to draw, and the round cap would
-                               leave a dot on the ring that reads as a tiny score. #}
-                            {% if health.percent %}
-                                <circle
-                                    class="system-health-value"
-                                    cx="42"
-                                    cy="42"
-                                    r="36"
-                                    pathLength="100"
-                                    style="stroke-dasharray: {{ health.percent }} 100"
-                                />
-                            {% endif %}
-                        </svg>
-                        <span class="system-health-score">{{ health.percent }}</span>
-                    </div>
-                    <ul class="system-health-parts">
-                        <li>
+                    <div class="system-health-row">
+                        {# pathLength normalises the ring to 100 units, so the dash is
+                           the percentage itself and the radius can change freely. #}
+                        <div class="system-health-gauge" role="img" aria-label="System health {{ health.percent }} out of 100">
+                            <svg viewBox="0 0 84 84" aria-hidden="true">
+                                <circle class="system-health-track" cx="42" cy="42" r="36" pathLength="100" />
+                                {# At 0 there is no arc to draw, and the round cap would
+                                   leave a dot on the ring that reads as a tiny score. #}
+                                {% if health.percent %}
+                                    <circle
+                                        class="system-health-value"
+                                        cx="42"
+                                        cy="42"
+                                        r="36"
+                                        pathLength="100"
+                                        style="stroke-dasharray: {{ health.percent }} 100"
+                                    />
+                                {% endif %}
+                            </svg>
+                            <span class="system-health-score">{{ health.percent }}</span>
+                        </div>
+                        <p class="system-health-row-text">
                             <span class="system-health-part-label">Sessions done</span>
                             <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
-                        </li>
-                        <li>
-                            <span class="system-health-part-label">Projects planned</span>
+                        </p>
+                    </div>
+                    <div class="system-health-row">
+                        {# Planning is not in the score - having every project booked
+                           ahead is the baseline, not something to be paid for - so it
+                           gets a ring of its own, smaller and with no percentage in
+                           it: the state is either settled or it is not. The circle is
+                           always whole, so nobody reads it as a second score. #}
+                        <div
+                            class="system-health-planning {{ 'is-ok' if health.planning_ok else 'is-warn' }}"
+                            role="img"
+                            aria-label="{% if health.planning_ok %}Every project has a next session planned{% else %}{{ health.unplanned_projects }} of {{ health.active_projects }} projects have no next session planned{% endif %}"
+                        >
+                            <svg viewBox="0 0 44 44" aria-hidden="true">
+                                <circle class="system-health-planning-ring" cx="22" cy="22" r="18" />
+                            </svg>
+                            {{ icon("check" if health.planning_ok else "x", 18) }}
+                        </div>
+                        <p class="system-health-row-text">
+                            <span class="system-health-part-label">Planned ahead</span>
                             <span class="system-health-part-value">{{ health.planned_projects }} / {{ health.active_projects }}</span>
-                        </li>
-                    </ul>
+                        </p>
+                    </div>
                 </div>
             </div>
 

@@ -36,17 +36,17 @@ ARCHIVE_WEEKS = 3
 # empty sheets.
 MAX_CALENDAR_WEEKS = 12
 
-# The health score on the home page: the last week of finished sessions weighed
-# against how much of the project list has a next session planned. The sessions
-# half measures the bookings that were actually made - A, B and C alike - so an
-# empty slot is neither a session missed nor one to make up for.
+# The health score on the home page: the last week of finished sessions, and
+# nothing else. It measures the bookings that were actually made - A, B and C
+# alike - so an empty slot is neither a session missed nor one to make up for.
+# Planning deliberately stays out of it: every project is meant to have a next
+# session booked, so having done that is the baseline rather than an achievement,
+# and paying for it put a floor under the score that a week of missed sessions
+# could not break through. It is reported alongside instead, as a state to be in
+# or out of - see the planning keys in system_health().
 # The window ends yesterday. Today is still being worked on, and counting its
 # bookings would open every morning with a drop that the day then undoes.
 HEALTH_WINDOW_DAYS = 7
-# Doing the work counts for more than having planned it, but not by much - a week
-# of sessions with nothing lined up afterwards is not a healthy system either.
-HEALTH_SESSIONS_WEIGHT = 0.6
-HEALTH_PLANNING_WEIGHT = 0.4
 # Below these the ring turns amber and then red.
 HEALTH_GOOD_PERCENT = 75
 HEALTH_WARN_PERCENT = 50
@@ -274,15 +274,18 @@ def session_counts_since(user_id, first_day, last_day):
 
 def system_health(user_id, unplanned=None):
     """
-    One 0-100 figure for "is this system being used", from two halves.
+    One 0-100 figure for "is the work getting done", plus the planning state.
 
-    *Sessions* - of the sessions booked over the week before today, how many were
-    ticked off. Only booked slots count, in A, B and C alike: a slot nobody
-    filled was never a session to miss, so leaving one empty neither helps nor
-    hurts. Today is left out entirely, so the score only falls in the morning if
-    yesterday was left unfinished.
-    *Planning* - the share of active projects that have a next session booked,
-    which is the "Not scheduled" list read the other way round.
+    The score is the sessions alone: of the sessions booked over the week before
+    today, how many were ticked off. Only booked slots count, in A, B and C
+    alike - a slot nobody filled was never a session to miss, so leaving one
+    empty neither helps nor hurts. Today is left out entirely, so the score only
+    falls in the morning if yesterday was left unfinished.
+
+    Planning rides along but scores nothing. The ``planning_*` keys say whether
+    every active project has a next session booked - the "Not scheduled" list
+    read the other way round - and the caller shows that as a state rather than
+    folding it into the number; see the note on HEALTH_WINDOW_DAYS.
 
     ``unplanned`` takes the list the caller already has (the home page renders
     it) so the same query does not run twice; leave it out and it is fetched.
@@ -294,20 +297,8 @@ def system_health(user_id, unplanned=None):
     )
     # A week with nothing booked scores zero rather than full marks: there is no
     # completion rate to read off it, and an empty week is not a healthy one.
-    sessions_score = done / booked if booked else 0.0
+    percent = round(done / booked * 100) if booked else 0
 
-    if unplanned is None:
-        unplanned = unscheduled_projects(user_id)
-    unplanned_count = len(unplanned)
-    active_count = Project.query.filter_by(user_id=user_id, is_archived=False).count()
-    # No projects at all is not a failure to plan them, so it scores full marks
-    # rather than zero - the sessions half already says the system is idle.
-    planned_count = max(active_count - unplanned_count, 0)
-    planning_score = 1.0 if not active_count else planned_count / active_count
-
-    percent = round(
-        (sessions_score * HEALTH_SESSIONS_WEIGHT + planning_score * HEALTH_PLANNING_WEIGHT) * 100
-    )
     if percent >= HEALTH_GOOD_PERCENT:
         level = "good"
     elif percent >= HEALTH_WARN_PERCENT:
@@ -315,12 +306,22 @@ def system_health(user_id, unplanned=None):
     else:
         level = "bad"
 
+    if unplanned is None:
+        unplanned = unscheduled_projects(user_id)
+    unplanned_count = len(unplanned)
+    active_count = Project.query.filter_by(user_id=user_id, is_archived=False).count()
+    planned_count = max(active_count - unplanned_count, 0)
+
     return {
         "percent": percent,
         "level": level,
         "window_days": HEALTH_WINDOW_DAYS,
         "done_sessions": done,
         "booked_sessions": booked,
+        # An empty project list has nothing left to plan, so it reads as settled
+        # rather than as a warning - the same way the "Not scheduled" list above
+        # it says every project is planned when there is nothing in it.
+        "planning_ok": not unplanned_count,
         "planned_projects": planned_count,
         "active_projects": active_count,
         "unplanned_projects": unplanned_count,

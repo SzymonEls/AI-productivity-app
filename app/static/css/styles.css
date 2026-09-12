@@ -1858,7 +1858,8 @@ button.picker-row:hover {
     text-decoration: underline;
 }
 
-/* System health — one ring for the last week of sessions and planning.
+/* System health — a big ring for the last week of sessions, and a small one
+   under it that is only ever ok or not ok, for planning.
    The three bands only change --health-accent; everything below reads it. */
 .system-health {
     --health-accent: var(--success);
@@ -1873,9 +1874,27 @@ button.picker-row:hover {
 }
 
 .system-health-body {
+    display: grid;
+    gap: 0.6rem;
+}
+
+/* One ring and its numbers. Both rows give the ring the same width, so the two
+   circles line up on one centre and the text starts at the same place. */
+.system-health-row {
     display: flex;
     align-items: center;
     gap: 1rem;
+}
+
+.system-health-row-text {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 0.85rem;
 }
 
 .system-health-gauge {
@@ -1918,24 +1937,6 @@ button.picker-row:hover {
     color: var(--health-accent);
 }
 
-.system-health-parts {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.4rem;
-    min-width: 0;
-    flex: 1 1 auto;
-    font-size: 0.85rem;
-}
-
-.system-health-parts li {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-}
-
 .system-health-part-label {
     color: var(--muted-foreground);
 }
@@ -1944,6 +1945,44 @@ button.picker-row:hover {
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* The planning ring: a second, smaller circle that is only ever ok or not ok.
+   It carries its own accent rather than the score's - a week of missed sessions
+   says nothing about whether the next ones are booked - and its circle is always
+   whole, so it reads as a state rather than as a second percentage. */
+.system-health-planning {
+    --planning-accent: var(--success);
+    position: relative;
+    flex: none;
+    display: grid;
+    place-items: center;
+    /* As wide as the score's gauge, so the smaller circle it draws still sits
+       under the middle of that one; only the height follows the circle. */
+    width: 5.25rem;
+    height: 2.75rem;
+    color: var(--planning-accent);
+}
+
+.system-health-planning.is-warn {
+    --planning-accent: var(--warning);
+}
+
+.system-health-planning svg:first-child {
+    width: 2.75rem;
+    height: 2.75rem;
+}
+
+.system-health-planning-ring {
+    fill: color-mix(in srgb, var(--planning-accent) 10%, transparent);
+    stroke: var(--planning-accent);
+    /* Thinner than the score's ring, in proportion to the smaller radius. */
+    stroke-width: 5;
+}
+
+.system-health-planning .app-icon {
+    position: absolute;
+    stroke-width: 2.5;
 }
 
 /* Schedule page — three weeks of calendar sheets -------------------- */
