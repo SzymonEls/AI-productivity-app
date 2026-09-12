@@ -23,8 +23,9 @@ container, no external services.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time against a target.
   Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
-  were ticked off. Only finished work moves it — under the ring, a separate strip says whether every
-  project has a next session planned, green when it does and amber when it does not.
+  were ticked off. Only finished work moves it — beside it, a second and smaller ring says whether
+  every project has a next session planned: green with a ✓ when they all do, amber with a ✗ when
+  they do not.
 - **Schedule** — a month of day sheets, each showing its A/B/C blocks in the same colours as
   the home page: dashed grey while free, amber once booked, green when the session is done. The
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a

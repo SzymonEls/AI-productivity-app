@@ -152,7 +152,7 @@ The schema in the code matches the latest migration (`20260809_0018`).
 
     **Planning is reported, not scored.** Whether every active project has a next session booked
     comes back from the same call (`planning_ok` and the counts beside it) and the home page shows it
-    as a green or amber strip under the ring. It used to be 40% of the number, which was wrong twice
+    as a second, smaller ring beside the score: green with a check when every project is booked ahead, amber with a cross when some are not. It used to be 40% of the number, which was wrong twice
     over: having booked ahead is the baseline rather than an achievement, and because it is normally
     complete it put a permanent floor under the score that no amount of missed sessions could break
     through. Read the other way round it is the "Not scheduled" list on the same page, so the two
