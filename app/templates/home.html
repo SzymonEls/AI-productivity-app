@@ -102,8 +102,12 @@
             <div class="dashboard-section system-health system-health-{{ health.level }}">
                 <h2 class="h6 mb-1">System health</h2>
                 <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done.</p>
+                {# A row per ring, one under the other, each next to its own
+                   numbers. The two circles share a centre line: the planning one
+                   is drawn smaller but sits in a box as wide as the score's, so
+                   both rows of text start at the same place. #}
                 <div class="system-health-body">
-                    <div class="system-health-gauges">
+                    <div class="system-health-row">
                         {# pathLength normalises the ring to 100 units, so the dash is
                            the percentage itself and the radius can change freely. #}
                         <div class="system-health-gauge" role="img" aria-label="System health {{ health.percent }} out of 100">
@@ -124,6 +128,12 @@
                             </svg>
                             <span class="system-health-score">{{ health.percent }}</span>
                         </div>
+                        <p class="system-health-row-text">
+                            <span class="system-health-part-label">Sessions done</span>
+                            <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
+                        </p>
+                    </div>
+                    <div class="system-health-row">
                         {# Planning is not in the score - having every project booked
                            ahead is the baseline, not something to be paid for - so it
                            gets a ring of its own, smaller and with no percentage in
@@ -139,17 +149,11 @@
                             </svg>
                             {{ icon("check" if health.planning_ok else "x", 18) }}
                         </div>
-                    </div>
-                    <ul class="system-health-parts">
-                        <li>
-                            <span class="system-health-part-label">Sessions done</span>
-                            <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
-                        </li>
-                        <li>
+                        <p class="system-health-row-text">
                             <span class="system-health-part-label">Planned ahead</span>
                             <span class="system-health-part-value">{{ health.planned_projects }} / {{ health.active_projects }}</span>
-                        </li>
-                    </ul>
+                        </p>
+                    </div>
                 </div>
             </div>
 

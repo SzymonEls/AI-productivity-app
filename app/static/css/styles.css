@@ -1859,7 +1859,7 @@ button.picker-row:hover {
 }
 
 /* System health — a big ring for the last week of sessions, and a small one
-   beside it that is only ever ok or not ok, for planning.
+   under it that is only ever ok or not ok, for planning.
    The three bands only change --health-accent; everything below reads it. */
 .system-health {
     --health-accent: var(--success);
@@ -1874,17 +1874,27 @@ button.picker-row:hover {
 }
 
 .system-health-body {
+    display: grid;
+    gap: 0.6rem;
+}
+
+/* One ring and its numbers. Both rows give the ring the same width, so the two
+   circles line up on one centre and the text starts at the same place. */
+.system-health-row {
     display: flex;
     align-items: center;
     gap: 1rem;
 }
 
-/* The two rings sit together on the left, the numbers read as their legend. */
-.system-health-gauges {
+.system-health-row-text {
     display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    flex: none;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.5rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    margin: 0;
+    font-size: 0.85rem;
 }
 
 .system-health-gauge {
@@ -1927,24 +1937,6 @@ button.picker-row:hover {
     color: var(--health-accent);
 }
 
-.system-health-parts {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 0.4rem;
-    min-width: 0;
-    flex: 1 1 auto;
-    font-size: 0.85rem;
-}
-
-.system-health-parts li {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.5rem;
-}
-
 .system-health-part-label {
     color: var(--muted-foreground);
 }
@@ -1965,7 +1957,9 @@ button.picker-row:hover {
     flex: none;
     display: grid;
     place-items: center;
-    width: 2.75rem;
+    /* As wide as the score's gauge, so the smaller circle it draws still sits
+       under the middle of that one; only the height follows the circle. */
+    width: 5.25rem;
     height: 2.75rem;
     color: var(--planning-accent);
 }
@@ -1975,8 +1969,8 @@ button.picker-row:hover {
 }
 
 .system-health-planning svg:first-child {
-    width: 100%;
-    height: 100%;
+    width: 2.75rem;
+    height: 2.75rem;
 }
 
 .system-health-planning-ring {
