@@ -242,9 +242,24 @@ The schema in the code matches the latest migration (`20260915_0023`).
     then works out the occurrences **for the days the page is showing**, every time it renders: the
     download is everything, the expansion is the window. Storing events instead would mean deciding
     how far ahead to expand a weekly meeting that repeats forever, and re-deciding it whenever the
-    window grew; parsing a few hundred lines is cheaper than that (9 ms for a 407-event calendar,
-    the same for a five-week window as for the twelve-week maximum), and it means a feed that stops
+    window grew; parsing a few hundred lines is cheaper than that, and it means a feed that stops
     answering keeps showing the calendar it last knew about instead of emptying the sheets.
+
+    **The expansion is cached per version of the calendar** (`_expanded` in
+    [feeds.py](../app/integrations/feeds.py)), keyed on the feed, its `fetched_at`, the window and
+    the timezone, and bounded at `MAX_CACHED_WINDOWS`. Without it the same text was re-parsed on
+    every render, which is most of what a schedule page costs once there are calendars on it:
+
+    | calendars (407 events each) | render, uncached | render, cached |
+    |---|---|---|
+    | none | 3.6 ms | 3.6 ms |
+    | 1 | 12.5 ms | 4.0 ms |
+    | 3 | 30.5 ms | 4.5 ms |
+    | 10 (the maximum) | 93.6 ms | 6.6 ms |
+
+    A re-read changes `fetched_at`, so the first render after one pays the ~90 ms again and the
+    rest come off the cache — and that first one is the background refresh request, not a page
+    anybody is waiting on. Nothing is invalidated by hand; old keys age out.
 
     Inside that, a recurring event is **walked from its own DTSTART**, not from the window: `COUNT`
     is an ordinal, and an occurrence is only the fifth if the four before it were worked out too.

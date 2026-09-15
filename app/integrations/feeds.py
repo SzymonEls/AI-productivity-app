@@ -30,6 +30,7 @@ The rest of the timing follows from that:
 import ipaddress
 import socket
 import time
+from collections import OrderedDict
 from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
@@ -285,6 +286,41 @@ def refresh_due(user, force=False):
     return read
 
 
+# Days worked out from one copy of one calendar, kept in the worker that did the
+# work. The schedule re-renders far more often than a calendar changes - every
+# click on the board is another render of the same five weeks - and the answer
+# cannot differ while the text, the window and the zone are the same, so it is
+# worked out once per version instead of once per page.
+#
+# Keyed on ``fetched_at``, so a re-read is a new key and the old one simply ages
+# out; there is nothing to invalidate by hand. Entries are never handed out raw -
+# events_by_date() copies each line before it goes anywhere near a template - so
+# nothing downstream can write into what is cached here.
+_EXPANDED = OrderedDict()
+# The bound is on entries, because one entry is a window rather than a file: a
+# busy calendar's five weeks is about 38 kB of small dicts, so a cache filled to
+# here holds roughly 8 MB in the worker that filled it. Reaching that takes ten
+# busy calendars and a walk back through fifteen archive pages; the usual state
+# of this thing is a handful of entries.
+MAX_CACHED_WINDOWS = 200
+
+
+def _expanded(feed, first_day, last_day, zone):
+    """One calendar's days over one window, off the cache when it can be."""
+    key = (feed.id, feed.fetched_at, first_day, last_day, str(zone))
+
+    cached = _EXPANDED.get(key)
+    if cached is not None:
+        _EXPANDED.move_to_end(key)
+        return cached
+
+    days = events_by_day(feed.cached_ics, first_day, last_day, zone)
+    _EXPANDED[key] = days
+    while len(_EXPANDED) > MAX_CACHED_WINDOWS:
+        _EXPANDED.popitem(last=False)
+    return days
+
+
 def events_by_date(user_id, first_day, last_day, feeds=None):
     """``{date: [event, ...]}`` over a range, from every switched-on calendar.
 
@@ -298,8 +334,9 @@ def events_by_date(user_id, first_day, last_day, feeds=None):
         if not feed.is_enabled or not feed.cached_ics:
             continue
 
-        for day, entries in events_by_day(feed.cached_ics, first_day, last_day, zone).items():
+        for day, entries in _expanded(feed, first_day, last_day, zone).items():
             for entry in entries:
+                # A copy per line, which is also what keeps the cache read-only.
                 by_date.setdefault(day, []).append({**entry, "calendar": feed.name})
 
     # One day's events read in the order the day does, whichever calendars they
