@@ -30,9 +30,16 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
-# A recurring event is expanded occurrence by occurrence, so a rule with no
-# COUNT and no UNTIL needs a stop of its own. Well past any window a page shows.
+# How many occurrences of one rule a page may be handed. It is a page of day
+# sheets, so this is far past anything that could be drawn on it.
 MAX_OCCURRENCES = 2000
+# And how many rounds the walk may take to get there, which is a different
+# number entirely: a rule is walked from its own start, and a daily meeting
+# standing since 2019 is already 2,800 rounds away from this week. Conflating
+# the two is what made such a rule vanish from the sheets - the walk stopped
+# short of today and the page saw nothing at all. This is about fifty years of
+# daily, and a round is one timedelta.
+MAX_STEPS = 20000
 # Weekday codes as RRULE spells them, in Python's Monday-is-0 order.
 WEEKDAYS = ("MO", "TU", "WE", "TH", "FR", "SA", "SU")
 # "DTSTART;TZID=Europe/Warsaw:20260915T090000" - the name, its parameters and
@@ -259,13 +266,20 @@ def _day_of(value, zone):
     return value
 
 
-def _occurrence_starts(event, until_day, zone):
-    """The start of every occurrence of one event up to ``until_day``.
+def _occurrence_starts(event, keep_from, until_day, zone):
+    """The occurrences of one event that reach the window, as their starts.
 
     A non-recurring event has exactly one. A recurring one is walked forward
-    from its own start: the window a page asks for is weeks wide at most, so
-    counting up to it costs less than the arithmetic to jump straight there,
-    and the same walk handles COUNT, UNTIL and the cap together.
+    from its own start, because that is where the rule counts from: COUNT is an
+    ordinal, and an occurrence is only the fifth if the four before it were
+    worked out too. The walk is therefore over the rule's whole life, but only
+    what reaches the window is kept - ``keep_from`` is the first day the page
+    shows, less however many days the event runs, so one that starts before the
+    window and ends inside it is still there.
+
+    Walking rather than jumping straight to the window keeps COUNT, UNTIL,
+    BYDAY and the month-length rules in one place, and a round is a timedelta:
+    seven years of a daily rule is a few thousand of them.
     """
     start = event.start
     rule = event.rrule
@@ -304,10 +318,13 @@ def _occurrence_starts(event, until_day, zone):
 
     starts = []
     index = 0
-    # Two caps, because the two ways round can each run away: a rule with
-    # neither COUNT nor UNTIL, and a monthly one whose day does not exist in
-    # most months and so produces nothing to measure the window against.
-    while index < MAX_OCCURRENCES and len(starts) < MAX_OCCURRENCES:
+    # What the rule has produced, in its own terms, which is what COUNT counts -
+    # not what is kept below.
+    produced = 0
+    # Two caps for two ways of running away: a rule with neither COUNT nor
+    # UNTIL, and a monthly one whose day does not exist in most months and so
+    # produces nothing to measure the window against.
+    while index < MAX_STEPS and len(starts) < MAX_OCCURRENCES:
         if step is not None:
             base = start + step(index)
         else:
@@ -329,8 +346,13 @@ def _occurrence_starts(event, until_day, zone):
                 return starts
             if day <= until_day:
                 past_window = False
-            starts.append(moment)
-            if count is not None and len(starts) >= count:
+            produced += 1
+            # Everything before the window is counted and dropped. Keeping it
+            # would fill the cap with years nobody is looking at, and that is
+            # exactly how a long-standing daily rule used to lose today.
+            if day >= keep_from:
+                starts.append(moment)
+            if count is not None and produced >= count:
                 return starts
 
         if past_window:
@@ -379,8 +401,11 @@ def events_by_day(text, first_day, last_day, zone):
     by_day = {}
     for event in events:
         length = event.end - event.start if event.end and event.end > event.start else timedelta(0)
+        # An event that runs for days is still on the page when it started
+        # before it, so the expansion has to reach back that far and no further.
+        keep_from = first_day - timedelta(days=max(length.days, 0))
 
-        for start in _occurrence_starts(event, last_day, zone):
+        for start in _occurrence_starts(event, keep_from, last_day, zone):
             start_day = _day_of(start, zone)
             if start_day in event.exdates:
                 continue

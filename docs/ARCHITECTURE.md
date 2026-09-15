@@ -235,13 +235,24 @@ The schema in the code matches the latest migration (`20260915_0023`).
     line back, and an emptied line is left as it was**, because clearing the text by accident is
     not the same gesture as reaching for the ×, and only one of the two is meant to lose it.
 
-17. **A subscribed calendar is cached as text and expanded per page.** `CalendarFeed.cached_ics`
-    holds the .ics exactly as it arrived, and `events_by_day`
-    ([app/integrations/ical.py](../app/integrations/ical.py)) works out the occurrences for the
-    days a page is showing, every time it renders. Storing events instead would mean deciding how
-    far ahead to expand a weekly meeting that repeats forever, and re-deciding it whenever the
-    window grew; parsing a few hundred lines is cheaper than that, and it means a feed that stops
+17. **A subscribed calendar is cached whole and expanded per page.** There is no such thing as
+    asking an iCal URL for a date range — the file is the whole calendar or nothing — so
+    `fetch_feed` takes all of it (capped at `MAX_FEED_BYTES`) and `CalendarFeed.cached_ics` holds
+    it exactly as it arrived. `events_by_day` ([app/integrations/ical.py](../app/integrations/ical.py))
+    then works out the occurrences **for the days the page is showing**, every time it renders: the
+    download is everything, the expansion is the window. Storing events instead would mean deciding
+    how far ahead to expand a weekly meeting that repeats forever, and re-deciding it whenever the
+    window grew; parsing a few hundred lines is cheaper than that (9 ms for a 407-event calendar,
+    the same for a five-week window as for the twelve-week maximum), and it means a feed that stops
     answering keeps showing the calendar it last knew about instead of emptying the sheets.
+
+    Inside that, a recurring event is **walked from its own DTSTART**, not from the window: `COUNT`
+    is an ordinal, and an occurrence is only the fifth if the four before it were worked out too.
+    Everything before the window is counted and dropped. The two limits that bound the walk are
+    therefore different numbers and must stay that way — `MAX_OCCURRENCES` is how many occurrences
+    a page may be handed, `MAX_STEPS` is how far the walk may travel to reach them. Conflating them
+    is a real bug this code has already had: a daily meeting standing since 2019 is 2,800 rounds
+    from this week, the walk stopped at 2,000, and the event silently vanished from every sheet.
 
     **Nothing is fetched while a page renders.** There is no scheduler in this app, so the
     schedule page is still what drives the reading — but it does it *after* it is on the screen,
