@@ -16,7 +16,7 @@ from ..time_tracking.service import (
     today_project_summary,
     utc_now,
 )
-from .day_notes import add_note, delete_note, notes_from, shift_notes_forward
+from .day_notes import add_note, delete_note, notes_from, shift_notes_forward, update_note
 from .slots import (
     ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
@@ -619,6 +619,29 @@ def add_day_note():
         return jsonify({"ok": False, "message": "Pick a day."}), 400
 
     note, message = add_note(current_user.id, day, payload.get("body"))
+    if note is None:
+        return jsonify({"ok": False, "message": message}), 400
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the note."}), 500
+
+    return jsonify({"ok": True, "message": message, "note": {"id": note.id, "body": note.body}})
+
+
+@projects_bp.route("/schedule/notes/update", methods=["POST"])
+@login_required
+def update_day_note():
+    """Rewrite one note, by id. Its day does not change - only the line does."""
+
+    payload = request.get_json(silent=True) or request.form
+    note_id = _coerce_int(payload.get("note_id"))
+    if note_id is None:
+        return jsonify({"ok": False, "message": "Pick a note."}), 400
+
+    note, message = update_note(current_user.id, note_id, payload.get("body"))
     if note is None:
         return jsonify({"ok": False, "message": message}), 400
 

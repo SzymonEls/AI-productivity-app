@@ -25,7 +25,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
-| [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding and removing one, and moving a day's notes along with its bookings when a day is taken off. |
+| [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
@@ -215,6 +215,11 @@ The schema in the code matches the latest migration (`20260915_0022`).
     ([app/static/js/day-notes.js](../app/static/js/day-notes.js)) serves the board and the archive.
     A note is also the one thing on a sheet that outlives the project it was written about: it has
     no `project_id`, so deleting a project takes its bookings and leaves the notes.
+
+    The line itself is the control that rewrites it — a `<button>` styled back down to plain text,
+    swapped for an input in place. Enter and clicking away keep what was typed; **Escape puts the
+    line back, and an emptied line is left as it was**, because clearing the text by accident is
+    not the same gesture as reaching for the ×, and only one of the two is meant to lose it.
 
 ## What not to touch (and why)
 

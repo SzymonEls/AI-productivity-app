@@ -2338,10 +2338,33 @@ button.picker-row:hover {
     content: "";
 }
 
+/* A button styled back down to the line of text it is: clicking it opens the
+   note for rewriting, so it has to be a real control, and it has to look like
+   nothing at all until it is reached for. */
 .day-note-text {
     flex: 1 1 auto;
     min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     overflow-wrap: anywhere;
+    cursor: text;
+}
+
+.day-note-text:hover,
+.day-note-text:focus-visible {
+    text-decoration: underline dotted;
+    text-underline-offset: 2px;
+}
+
+/* Spelled out rather than left to the browser's own [hidden] rule: a button
+   carries a display of its own, and this one is taken off the row every time
+   the line is opened for rewriting. */
+.day-note-text[hidden] {
+    display: none;
 }
 
 /* Out of the way until the note is hovered or the × is tabbed to: the list is
@@ -2414,6 +2437,12 @@ button.picker-row:hover {
     background: var(--surface);
     color: var(--foreground);
     font-size: 0.8rem;
+}
+
+/* Standing in for a line rather than under the list, so it takes the row. */
+.day-note-input[data-note-edit] {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .day-note-input:focus {

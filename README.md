@@ -34,7 +34,8 @@ container, no external services.
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
   Under the blocks, behind the same dashed line the date sits behind, is that day's note list:
-  a + adds a line, a × takes one away, and a day takes as many as get written.
+  a + adds a line, a click on one rewrites it where it stands, a × takes it away, and a day takes
+  as many as get written.
   "Day off", next to the archive link, asks for a date and frees it: that day and everything
   planned on it and after it — notes included — move one day later, bar a session already ticked
   off, which stays on the day it happened; the page shows as many weeks as it takes to keep the

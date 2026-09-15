@@ -57,6 +57,28 @@ def add_note(user_id, day, body):
     return note, "Note added."
 
 
+def update_note(user_id, note_id, body):
+    """Rewrite one note. Returns ``(note, message)``; the caller commits.
+
+    ``note`` is None when nothing was written or the note has gone. Emptying a
+    note leaves it as it was rather than deleting it: a line cleared by accident
+    is not the same gesture as reaching for the ×, and only one of the two is
+    meant to lose the text.
+    """
+    body = (body or "").strip()
+    if not body:
+        return None, "Write something first."
+    if len(body) > DAY_NOTE_MAX_LENGTH:
+        return None, f"A note is at most {DAY_NOTE_MAX_LENGTH} characters."
+
+    note = DayNote.query.filter_by(id=note_id, user_id=user_id).first()
+    if note is None:
+        return None, "That note is gone."
+
+    note.body = body
+    return note, "Note saved."
+
+
 def delete_note(user_id, note_id):
     """Remove one note. Returns ``(ok, message)``; the caller commits.
 

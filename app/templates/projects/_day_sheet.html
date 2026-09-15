@@ -110,7 +110,15 @@
         <ul class="day-note-list" data-note-list>
             {%- for note in day.notes %}
                 <li class="day-note" data-note data-note-id="{{ note.id }}">
-                    <span class="day-note-text">{{ note.body }}</span>
+                    {# A button rather than a span: the line is the thing you
+                       click to rewrite it, and that has to be reachable by
+                       keyboard too. It is styled back down to plain text. #}
+                    <button
+                        type="button"
+                        class="day-note-text"
+                        data-note-text
+                        title="Click to edit this note"
+                    >{{ note.body }}</button>
                     <button
                         type="button"
                         class="icon-button day-note-remove"
