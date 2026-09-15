@@ -1073,7 +1073,20 @@ hr, .dropdown-divider { border-color: var(--border); }
     font-size: 0.85rem;
 }
 
-.project-archived-note .btn { --bs-btn-padding-y: 0.15rem; }
+/* The button borrows the strip's amber rather than the default grey outline,
+   which read as a stray control dropped on a coloured bar. Same --bs-btn-*
+   handles the outline variants above use, so it follows the theme into dark. */
+.project-archived-note .btn {
+    --bs-btn-padding-y: 0.15rem;
+    --bs-btn-color: color-mix(in srgb, var(--warning) 75%, var(--foreground));
+    --bs-btn-border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+    --bs-btn-hover-bg: color-mix(in srgb, var(--warning) 22%, var(--surface));
+    --bs-btn-hover-border-color: var(--warning);
+    --bs-btn-hover-color: var(--foreground);
+    --bs-btn-active-bg: color-mix(in srgb, var(--warning) 30%, var(--surface));
+    --bs-btn-active-border-color: var(--warning);
+    --bs-btn-active-color: var(--foreground);
+}
 
 /* ------------------------------------------------------------------ *
  * Responsive niceties
