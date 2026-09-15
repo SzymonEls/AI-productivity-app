@@ -48,16 +48,21 @@
             <span>Track time</span>
             <span class="project-timer-button-clock d-none" data-timer-button-clock>00:00:00</span>
         </button>
-        <button
-            type="button"
-            class="btn btn-outline-secondary"
-            data-plan-session
-            data-project-id="{{ project.id }}"
-            data-project-title="{{ project.title }}"
-        >
-            <i class="fa-regular fa-calendar" aria-hidden="true"></i>
-            <span>Plan next session</span>
-        </button>
+        {# An archived project is out of the planning: the dialog would open on a
+           grid where every block refuses it, so it is not offered at all. Its
+           sessions already booked keep their own controls below. #}
+        {% if not project.is_archived %}
+            <button
+                type="button"
+                class="btn btn-outline-secondary"
+                data-plan-session
+                data-project-id="{{ project.id }}"
+                data-project-title="{{ project.title }}"
+            >
+                <i class="fa-regular fa-calendar" aria-hidden="true"></i>
+                <span>Plan next session</span>
+            </button>
+        {% endif %}
         {% if today_slot %}
             {# Only shown when the project actually has a session today - there is
                nothing to finish otherwise. The flag lives on today's slot, so it
@@ -96,7 +101,7 @@
                             <button
                                 type="submit"
                                 class="dropdown-item"
-                                onclick="return confirm('Archive this project? You can restore it from the archived projects list.');"
+                                onclick="return confirm('Archive this project? Sessions already booked for it stay in the schedule; it just stops coming up when you plan new ones. You can restore it from the archived projects list.');"
                             ><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archive project</button>
                         </form>
                     </li>
@@ -116,11 +121,21 @@
 </header>
 
 {% if project.is_archived %}
-    <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <span>This project is archived. It's hidden from your dashboard.</span>
+    {# One line, in the amber the schedule already uses for a booked block: the
+       badge by the title says "archived", so this only has to say what that
+       costs - no more planning - and what it left standing. #}
+    <div class="alert alert-warning project-archived-note d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            Out of the planning.
+            {% if planned_sessions %}
+                Still booked: {{ planned_sessions | join(" and ") }}.
+            {% else %}
+                Nothing booked from today on.
+            {% endif %}
+        </span>
         <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">
             <input type="hidden" name="next" value="detail">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive Project</button>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive</button>
         </form>
     </div>
 {% endif %}

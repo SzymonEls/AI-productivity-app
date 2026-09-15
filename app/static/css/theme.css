@@ -556,13 +556,21 @@ a {
 .switcher-item.is-current .switcher-dot { background: var(--primary); box-shadow: 0 0 0 0.16rem var(--primary-soft); }
 .switcher-item .switcher-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .switcher-item .switcher-badge { color: var(--muted-foreground); font-size: 0.85rem; }
-.switcher-item .switcher-current-tag {
+.switcher-item .switcher-current-tag,
+.switcher-item .switcher-archived-tag {
     padding: 0.05rem 0.4rem;
     border-radius: var(--radius-pill);
     background: var(--primary-soft);
     color: var(--primary);
     font-size: 0.68rem;
     font-weight: 700;
+}
+
+/* Quieter than "current": it explains an exception rather than pointing
+   somewhere, and the two can sit on the same row. */
+.switcher-item .switcher-archived-tag {
+    background: var(--surface-hover);
+    color: var(--muted-foreground);
 }
 
 .switcher-empty { padding: 1.5rem; text-align: center; color: var(--muted-foreground); }
@@ -1055,6 +1063,29 @@ hr, .dropdown-divider { border-color: var(--border); }
     background: var(--surface-2);
     color: var(--foreground);
     border-color: var(--border);
+}
+
+/* A state, not an announcement: one line of small text with the Unarchive
+   button on the end, so it sits under the title without pushing the plan down
+   the page. */
+.project-archived-note {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+/* The button borrows the strip's amber rather than the default grey outline,
+   which read as a stray control dropped on a coloured bar. Same --bs-btn-*
+   handles the outline variants above use, so it follows the theme into dark. */
+.project-archived-note .btn {
+    --bs-btn-padding-y: 0.15rem;
+    --bs-btn-color: color-mix(in srgb, var(--warning) 75%, var(--foreground));
+    --bs-btn-border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+    --bs-btn-hover-bg: color-mix(in srgb, var(--warning) 22%, var(--surface));
+    --bs-btn-hover-border-color: var(--warning);
+    --bs-btn-hover-color: var(--foreground);
+    --bs-btn-active-bg: color-mix(in srgb, var(--warning) 30%, var(--surface));
+    --bs-btn-active-border-color: var(--warning);
+    --bs-btn-active-color: var(--foreground);
 }
 
 /* ------------------------------------------------------------------ *

@@ -445,6 +445,41 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
     return window
 
 
+def _booking_labels(bookings):
+    """A ``(today_slot, future_slot)`` pair named: ``["today in slot A", ...]``.
+
+    Empty when nothing is booked. The planner's note, the banner on an archived
+    project and the archived list all say the same thing about the same two
+    bookings, so they word it in one place.
+    """
+    today_slot, future_slot = bookings
+
+    labels = []
+    if today_slot is not None:
+        labels.append(f"today in slot {today_slot.slot}")
+    if future_slot is not None:
+        labels.append(f"{future_slot.slot_date.strftime('%d %b')} in slot {future_slot.slot}")
+    return labels
+
+
+def planned_session_labels(user_id, project_id):
+    """What this project still has booked from today on, as named sessions."""
+    return _booking_labels(project_bookings(user_id, project_id))
+
+
+def planned_session_labels_by_project(user_id):
+    """``{project_id: ["today in slot A", ...]}`` for every booked project.
+
+    The bulk form of planned_session_labels(), on bookings_by_project() rather
+    than a query per project - the archived list asks this of a whole page of
+    projects at once.
+    """
+    return {
+        project_id: _booking_labels(bookings)
+        for project_id, bookings in bookings_by_project(user_id).items()
+    }
+
+
 def booking_note(user_id, project_id):
     """
     Where this project already stands, as the one line the planner shows.
@@ -453,13 +488,7 @@ def booking_note(user_id, project_id):
     once per booking - only repeats itself. One sentence names both bookings and
     the rule behind them, or nothing at all when the project is free to plan.
     """
-    today_slot, future_slot = project_bookings(user_id, project_id)
-
-    booked = []
-    if today_slot is not None:
-        booked.append(f"today in slot {today_slot.slot}")
-    if future_slot is not None:
-        booked.append(f"{future_slot.slot_date.strftime('%d %b')} in slot {future_slot.slot}")
+    booked = planned_session_labels(user_id, project_id)
     if not booked:
         return ""
 
