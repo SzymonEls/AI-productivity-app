@@ -1065,6 +1065,16 @@ hr, .dropdown-divider { border-color: var(--border); }
     border-color: var(--border);
 }
 
+/* A state, not an announcement: one line of small text with the Unarchive
+   button on the end, so it sits under the title without pushing the plan down
+   the page. */
+.project-archived-note {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+}
+
+.project-archived-note .btn { --bs-btn-padding-y: 0.15rem; }
+
 /* ------------------------------------------------------------------ *
  * Responsive niceties
  * ------------------------------------------------------------------ */

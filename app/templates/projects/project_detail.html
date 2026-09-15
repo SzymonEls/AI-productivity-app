@@ -121,26 +121,21 @@
 </header>
 
 {% if project.is_archived %}
-    {# What archiving actually did, rather than "it's hidden": the plan and the
-       tracked time are untouched, the sessions already booked still happen, and
-       what stops is the project coming up when there is a block to fill. #}
-    <div class="alert alert-secondary d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-            <span>
-                This project is archived. It stays out of the planning — off the home page, out of
-                the block picker on the schedule and out of the project switcher.
-            </span>
+    {# One line, in the amber the schedule already uses for a booked block: the
+       badge by the title says "archived", so this only has to say what that
+       costs - no more planning - and what it left standing. #}
+    <div class="alert alert-warning project-archived-note d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            Out of the planning.
             {% if planned_sessions %}
-                <div class="small mt-1">
-                    The sessions already booked stand: {{ planned_sessions | join(" and ") }}.
-                </div>
+                Still booked: {{ planned_sessions | join(" and ") }}.
             {% else %}
-                <div class="small mt-1">Nothing is booked for it from today on.</div>
+                Nothing booked from today on.
             {% endif %}
-        </div>
+        </span>
         <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">
             <input type="hidden" name="next" value="detail">
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive Project</button>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive</button>
         </form>
     </div>
 {% endif %}
