@@ -2299,7 +2299,8 @@ button.picker-row:hover {
     background: var(--primary-soft);
 }
 
-.day-note-list {
+.day-note-list,
+.day-event-list {
     list-style: none;
     display: grid;
     gap: 0.2rem;
@@ -2308,8 +2309,55 @@ button.picker-row:hover {
     padding: 0;
 }
 
-.day-note-list:empty {
+.day-note-list:empty,
+.day-event-list:empty {
     display: none;
+}
+
+/* A line off a subscribed calendar. It reads as the same kind of thing as a
+   note - a line under the blocks - but in the calendar's own colour and with
+   nothing to click: the calendar owns it, this page only shows it. */
+.day-event {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    min-width: 0;
+    padding-left: 0.55rem;
+    position: relative;
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    line-height: 1.35;
+}
+
+/* A bar rather than the notes' dot, so the two lists are told apart at a
+   glance without a heading over either. */
+.day-event::before {
+    position: absolute;
+    top: 0.35em;
+    left: 0;
+    width: 2px;
+    height: 0.75em;
+    border-radius: 1px;
+    background: var(--tag-color);
+    content: "";
+}
+
+.day-event-time {
+    flex: 0 0 auto;
+    color: var(--tag-color);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.day-event-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* No clock on it, so the bar does the talking. */
+.day-event-all-day .day-event-title {
+    color: var(--foreground);
 }
 
 /* A note is a line of text, so it is marked by a bullet rather than boxed like
@@ -2455,6 +2503,27 @@ button.picker-row:hover {
    visibly not settled yet. */
 .day-note.is-pending {
     opacity: 0.55;
+}
+
+/* The integrations page ---------------------------------------------- *
+   A plain settings page; only the address needs help, because a secret iCal
+   URL is longer than any column and must not push the page sideways. */
+.calendar-feed-main {
+    min-width: 0;
+    flex: 1 1 18rem;
+}
+
+.calendar-feed-url {
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-family: var(--bs-font-monospace, monospace);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-feed-off {
+    opacity: 0.6;
 }
 
 /* Tags -------------------------------------------------------------- *

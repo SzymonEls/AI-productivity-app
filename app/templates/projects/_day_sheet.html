@@ -105,6 +105,19 @@
            script adds names its day exactly as a rendered one does. #}
         data-date-label="{{ day.date.strftime('%d %b') }}"
     >
+        {# What the subscribed calendars say is on that day, above the notes
+           written here. They are read-only on purpose: the calendar owns them,
+           and a × that only took one off this page until the next read would be
+           a lie. Switching a calendar off, on the integrations page, is how
+           they go. #}
+        <ul class="day-event-list" data-event-list>
+            {%- for event in day.events %}
+                <li class="day-event{% if event.all_day %} day-event-all-day{% endif %}" title="{{ event.summary }} — {{ event.calendar }}">
+                    {% if event.time_label %}<span class="day-event-time">{{ event.time_label }}</span>{% endif %}
+                    <span class="day-event-title">{{ event.summary }}</span>
+                </li>
+            {%- endfor -%}
+        </ul>
         {# Tight against its items on purpose: an empty list is hidden with
            :empty, and a stray newline inside the <ul> would count as content. #}
         <ul class="day-note-list" data-note-list>

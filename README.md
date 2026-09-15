@@ -35,7 +35,8 @@ container, no external services.
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
   Under the blocks, behind the same dashed line the date sits behind, is that day's note list:
   a + adds a line, a click on one rewrites it where it stands, a × takes it away, and a day takes
-  as many as get written.
+  as many as get written. Above them sit that day's events from any calendar you have
+  subscribed to — see **Calendars** below.
   "Day off", next to the archive link, asks for a date and frees it: that day and everything
   planned on it and after it — notes included — move one day later, bar a session already ticked
   off, which stays on the day it happened; the page shows as many weeks as it takes to keep the
@@ -45,6 +46,15 @@ container, no external services.
   so a session finished on Tuesday can be ticked off on Thursday and counts towards the health
   ring like any other. The note list is live there too: a day is usually only described once it
   has been.
+- **Calendars** — paste a calendar's address in iCal format on the **Integrations** page (under
+  your name in the top right) and its events show up under the blocks of every day sheet, in the
+  past as well as ahead. The public and the private ("secret") address both work; nothing is ever
+  written back, so the private one just shows more. It is the whole integration: no OAuth, no
+  client, no token to expire — a URL that is re-read every half hour while the schedule is open,
+  cached so a calendar that goes down leaves the sheets as they were, and switched off with one
+  button when it should stop showing. Recurring events, all-day events, exceptions and moved
+  occurrences are understood; the events themselves are read-only here, because the calendar owns
+  them.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **JSON API** — `/api/v1` exposes today's slots and start/stop for the timer, authenticated by a
