@@ -6,9 +6,11 @@
   the past can be booked, moved or freed, so the archive renders the same blocks
   without a single control that would be refused.
 
-  It keeps one: the ✓ on a booked block, which ticks the session off after the
-  fact. That changes what a day says happened, not what is planned for it, so it
-  is the one thing the past still answers.
+  It keeps two. The ✓ on a booked block, which ticks the session off after the
+  fact; and the notes under the blocks, which are written about a day rather
+  than planned for it - often once it has been. Both change what a day says
+  happened rather than what is planned for it, so both are things the past still
+  answers, and readonly leaves them alone.
 #}
 {% from "icons.html" import icon %}
 
@@ -86,5 +88,56 @@
                 {{ slot_cell(day, entry, readonly) }}
             {% endfor %}
         </ul>
+        {{ day_notes(day) }}
     </article>
+{% endmacro %}
+
+{% macro day_notes(day) %}
+    {# The foot of the sheet, behind the same perforation the header has: what
+       the day is about, next to what is booked on it. Empty most of the time,
+       so it is the + alone until something is written - a list of notes would
+       otherwise cost every sheet a heading it has nothing to put under. #}
+    <footer
+        class="day-sheet-notes"
+        data-day-notes
+        data-date="{{ day.date.isoformat() }}"
+        {# The date as every label on the sheet already spells it, so a note the
+           script adds names its day exactly as a rendered one does. #}
+        data-date-label="{{ day.date.strftime('%d %b') }}"
+    >
+        {# Tight against its items on purpose: an empty list is hidden with
+           :empty, and a stray newline inside the <ul> would count as content. #}
+        <ul class="day-note-list" data-note-list>
+            {%- for note in day.notes %}
+                <li class="day-note" data-note data-note-id="{{ note.id }}">
+                    <span class="day-note-text">{{ note.body }}</span>
+                    <button
+                        type="button"
+                        class="icon-button day-note-remove"
+                        data-remove-note
+                        title="Remove this note"
+                        aria-label="Remove the note “{{ note.body }}” from {{ day.date.strftime('%d %b') }}"
+                    >{{ icon("x") }}</button>
+                </li>
+            {%- endfor -%}
+        </ul>
+        <button
+            type="button"
+            class="day-note-add"
+            data-add-note
+            title="Add a note to {{ day.date.strftime('%d %b') }}"
+        >{{ icon("plus", size=12) }}<span class="day-note-add-label">Note</span></button>
+        {# Revealed in place by the + and hidden again when it is left empty, so
+           a sheet with nothing to say stays the height it was. #}
+        <div class="day-note-editor" data-note-editor hidden>
+            <input
+                type="text"
+                class="day-note-input"
+                data-note-input
+                maxlength="{{ day_note_max_length }}"
+                placeholder="Note for {{ day.date.strftime('%d %b') }}"
+                aria-label="New note for {{ day.date.strftime('%d %b') }}"
+            >
+        </div>
+    </footer>
 {% endmacro %}

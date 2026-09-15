@@ -62,6 +62,13 @@ class User(UserMixin, db.Model):
         lazy=True,
         order_by=lambda: (ProjectDaySlot.slot_date, ProjectDaySlot.slot),
     )
+    day_notes = db.relationship(
+        "DayNote",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: (DayNote.note_date, DayNote.created_at, DayNote.id),
+    )
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -264,6 +271,45 @@ class ProjectDaySlot(db.Model):
         db.UniqueConstraint("user_id", "slot_date", "slot", name="uq_project_day_slot"),
         db.Index("ix_project_day_slots_user_date", "user_id", "slot_date"),
         db.Index("ix_project_day_slots_project_date", "project_id", "slot_date"),
+    )
+
+
+# A day sheet is narrow and a note is a line on it rather than a paragraph; the
+# limit is on the column and checked again when a note is saved.
+DAY_NOTE_MAX_LENGTH = 200
+
+
+class DayNote(db.Model):
+    """One line of notes against one day, kept under that day's three blocks.
+
+    A day holds a list of these rather than one block of free text: the sheet
+    renders them as a list, and a single row is what the + adds and the × takes
+    away. Nothing about a note is unique - a day takes as many as get written -
+    so their order is the order they were written in.
+
+    Unlike a booking, a note belongs to no project and so is never cascaded away
+    by one: it describes the day, not the work planned on it, and outlives
+    whatever was booked there. It goes when it is deleted, or with the account.
+    """
+
+    __tablename__ = "day_notes"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    note_date = db.Column(db.Date, nullable=False)
+    body = db.Column(db.String(DAY_NOTE_MAX_LENGTH), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="day_notes")
+
+    __table_args__ = (
+        db.Index("ix_day_notes_user_date", "user_id", "note_date"),
     )
 
 

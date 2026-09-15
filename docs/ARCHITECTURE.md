@@ -25,6 +25,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
+| [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
@@ -76,12 +77,21 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 
-The schema in the code matches the latest migration (`20260912_0021`).
+- **DayNote** — one line of notes against one day (`note_date`, `body`, at most
+  `DAY_NOTE_MAX_LENGTH` characters). Nothing unique about it: a day takes as many as get written,
+  and their order is the order they were written in. It belongs to the user and the date, never to
+  a project, so no project deletion cascades it away — see point 16.
+
+The schema in the code matches the latest migration (`20260915_0022`).
 
 ## Responsibility boundaries
 
 - **Business logic and database access live inside the `routes.py` functions.** There is no separate service/repository layer.
-- **The only exception:** time and timezone calculations are extracted into [app/time_tracking/service.py](../app/time_tracking/service.py).
+- **The exceptions are date arithmetic:** time and timezone calculations in
+  [app/time_tracking/service.py](../app/time_tracking/service.py), and the two day-keyed modules
+  that build on them — [app/projects/slots.py](../app/projects/slots.py) (the A/B/C blocks) and
+  [app/projects/day_notes.py](../app/projects/day_notes.py) (the notes under them), both of which
+  are shared by the schedule page, the archive and the home page rather than belonging to one view.
 - **Presentation:** [app/markdown_utils.py](../app/markdown_utils.py) (Markdown→HTML) + Jinja templates.
 - **Configuration:** only [config.py](../config.py) reads environment variables.
 
@@ -131,6 +141,11 @@ The schema in the code matches the latest migration (`20260912_0021`).
     undo it (a block with one in its way is held back too, having nowhere to land) — and the shift
     can push a booking past the edge of the schedule page, which is why that page's window grows to
     the last booked day (`weeks_to_cover`) instead of being a fixed three weeks.
+
+    The day's **notes travel with it**, in `shift_notes_forward`
+    ([app/projects/day_notes.py](../app/projects/day_notes.py)), called by the same endpoint. That
+    one is a plain date change: a note has no "done" to stay behind for and no slot to collide
+    over, so nothing holds one back and nothing needs flushing row by row.
 
 11. **A tag is not stored anywhere.** `#shop` in "- [ ] call the printer #shop" is text in
     `Project.long_goal` and nothing else — no table, no column, nothing to keep in step. The tag
@@ -189,6 +204,17 @@ The schema in the code matches the latest migration (`20260912_0021`).
     still stays out of the list of everything else underneath. The switcher reads today's slots
     first for exactly this reason — which projects to make an exception for is read off them — and
     is still two queries.
+
+16. **A day sheet's notes are live in the archive, and the blocks above them are not.** The same
+    macro draws both pages ([app/templates/projects/_day_sheet.html](../app/templates/projects/_day_sheet.html));
+    `readonly=True` drops every control that would change a booking, because nothing about a day
+    that has been can still be planned. It deliberately leaves two things alone: the ✓ on a booked
+    block, and the note list under it. Both describe what a day *was* rather than what is planned
+    for it, and both are usually filled in afterwards — so `add_day_note` takes any date without
+    asking where it falls, and one script
+    ([app/static/js/day-notes.js](../app/static/js/day-notes.js)) serves the board and the archive.
+    A note is also the one thing on a sheet that outlives the project it was written about: it has
+    no `project_id`, so deleting a project takes its bookings and leaves the notes.
 
 ## What not to touch (and why)
 

@@ -16,6 +16,7 @@ from ..time_tracking.service import (
     today_project_summary,
     utc_now,
 )
+from .day_notes import add_note, delete_note, notes_from, shift_notes_forward
 from .slots import (
     ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
@@ -149,15 +150,20 @@ def schedule():
     if requested is not None:
         week_count = max(week_count, min(requested, MAX_CALENDAR_WEEKS))
 
+    calendar = calendar_weeks(current_user.id, weeks=week_count, start_day=today)
+    # One query for the notes of every sheet on the page, the way the bookings
+    # already come in one.
+    notes = notes_from(current_user.id, today, calendar[-1][-1][0])
     weeks = [
         {
             "label": _week_label(index),
             "range_label": _date_range_label(days[0][0], days[-1][0]),
-            "days": [_serialize_schedule_day(day, booked, today) for day, booked in days],
+            "days": [
+                _serialize_schedule_day(day, booked, today, notes.get(day, ()))
+                for day, booked in days
+            ],
         }
-        for index, days in enumerate(
-            calendar_weeks(current_user.id, weeks=week_count, start_day=today)
-        )
+        for index, days in enumerate(calendar)
     ]
     return render_template(
         "projects/schedule.html",
@@ -183,6 +189,11 @@ def schedule_day_off():
     ok, message, _moved = shift_bookings_forward(current_user.id, day)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
+
+    # A note on a day still to come is part of that day's plan, so it goes where
+    # the blocks go. Nothing can refuse it: unlike a booking, a note has no
+    # finished session to stay put for and no slot to collide over.
+    shift_notes_forward(current_user.id, day)
 
     try:
         db.session.commit()
@@ -216,13 +227,18 @@ def schedule_archive():
     last_day = weeks[0][-1][0]
     earliest = first_booked_day(current_user.id)
 
+    notes = notes_from(current_user.id, first_day, last_day)
+
     return render_template(
         "projects/archive.html",
         weeks=[
             {
                 "label": _past_week_label(week[0][0], today),
                 "range_label": _date_range_label(week[0][0], week[-1][0]),
-                "days": [_serialize_schedule_day(day, booked, today) for day, booked in week],
+                "days": [
+                    _serialize_schedule_day(day, booked, today, notes.get(day, ()))
+                    for day, booked in week
+                ],
             }
             for week in weeks
         ],
@@ -274,8 +290,8 @@ def _date_range_label(first, last):
     return f"{first.strftime('%d %b')} – {last.strftime('%d %b')}"
 
 
-def _serialize_schedule_day(day, booked, today):
-    """One calendar sheet: its three slots, plus what the header has to show."""
+def _serialize_schedule_day(day, booked, today, notes=()):
+    """One calendar sheet: its three slots, its notes, and what the header shows."""
 
     slots = [
         {
@@ -295,6 +311,7 @@ def _serialize_schedule_day(day, booked, today):
         "is_today": day == today,
         "is_weekend": day.weekday() >= 5,
         "slots": slots,
+        "notes": list(notes),
         "booked_count": sum(1 for entry in slots if entry["project"]),
     }
 
@@ -583,6 +600,58 @@ def clear_project_slot():
     if project_id is not None:
         response.update(_schedule_window_payload(project_id))
     return jsonify(response)
+
+
+@projects_bp.route("/schedule/notes", methods=["POST"])
+@login_required
+def add_day_note():
+    """Write one note against a day - any day, the archive's included.
+
+    The blocks of a past sheet refuse every change, because nothing that has
+    already happened can still be planned. A note is the other thing a sheet
+    holds: what the day was like, which is usually only written down once it
+    has been. So this endpoint takes a date without asking where it falls.
+    """
+
+    payload = request.get_json(silent=True) or request.form
+    day = parse_slot_date(payload.get("date"))
+    if day is None:
+        return jsonify({"ok": False, "message": "Pick a day."}), 400
+
+    note, message = add_note(current_user.id, day, payload.get("body"))
+    if note is None:
+        return jsonify({"ok": False, "message": message}), 400
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save the note."}), 500
+
+    return jsonify({"ok": True, "message": message, "note": {"id": note.id, "body": note.body}})
+
+
+@projects_bp.route("/schedule/notes/delete", methods=["POST"])
+@login_required
+def delete_day_note():
+    """Remove one note, by id. The date is not needed: the note carries it."""
+
+    payload = request.get_json(silent=True) or request.form
+    note_id = _coerce_int(payload.get("note_id"))
+    if note_id is None:
+        return jsonify({"ok": False, "message": "Pick a note."}), 400
+
+    ok, message = delete_note(current_user.id, note_id)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to remove the note."}), 500
+
+    return jsonify({"ok": True, "message": message})
 
 
 @projects_bp.route("/archived")
