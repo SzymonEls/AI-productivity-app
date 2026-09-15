@@ -23,6 +23,7 @@ from config import BASE_DIR
 from .extensions import db
 from .markdown_utils import render_markdown
 from .models import (
+    DayNote,
     Project,
     ProjectDaySlot,
     ProjectTimeEntry,
@@ -158,6 +159,7 @@ def seed_demo_data(app, reset=False):
         projects = _seed_projects(user)
         _seed_timeline(user, projects)
         _seed_day_slots(user, projects)
+        _seed_day_notes(user)
         _seed_time_entries(user, projects)
 
         db.session.commit()
@@ -385,6 +387,30 @@ def _seed_day_slots(user, projects):
     # A target so the dashboard shows "45m / 2h" rather than just the elapsed time.
     active[0].daily_target_minutes = 120
     active[1].daily_target_minutes = 45
+
+    db.session.flush()
+
+
+def _seed_day_notes(user):
+    """Write a couple of notes under the blocks, today and on a day gone by.
+
+    One of each, because the two read differently: a note on today is something
+    still to do beside the work, and the one in the archive is what the day
+    turned out to be like - which is the half of the feature a visitor would
+    otherwise have to go looking for.
+    """
+    from .projects.slots import today_local
+
+    today = today_local()
+    notes = [
+        (today, "Call the bike shop before 5"),
+        (today, "Ask about the deadline for the grant form"),
+        (today + timedelta(days=2), "Bring the notes from last week"),
+        (today - timedelta(days=1), "Short session — slept badly"),
+    ]
+
+    for day, body in notes:
+        db.session.add(DayNote(owner=user, note_date=day, body=body))
 
     db.session.flush()
 

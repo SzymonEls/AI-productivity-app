@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import DayNote, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .api.routes import api_bp
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
@@ -56,6 +56,13 @@ def create_app(config_class=Config):
 
 def register_template_context(app):
     """Expose shared feature flags to templates."""
+
+    from .models import DAY_NOTE_MAX_LENGTH
+
+    # A global rather than a context value: the day sheet is an imported macro,
+    # and an import without context sees the globals alone. The note input caps
+    # at exactly the number the server enforces.
+    app.jinja_env.globals["day_note_max_length"] = DAY_NOTE_MAX_LENGTH
 
     @app.context_processor
     def inject_feature_flags():
@@ -363,7 +370,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import DayNote, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -471,6 +478,11 @@ def initialize_database(app):
                     )
                 )
                 db.session.commit()
+
+        # A local database that predates Alembic is stamped at head rather than
+        # migrated, so a table added by a migration has to be created here too.
+        if "day_notes" not in table_names:
+            DayNote.__table__.create(bind=db.engine)
 
         if "project_time_entries" not in table_names:
             ProjectTimeEntry.__table__.create(bind=db.engine)
