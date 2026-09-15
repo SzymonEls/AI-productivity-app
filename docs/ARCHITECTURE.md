@@ -26,6 +26,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
+| [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
@@ -54,6 +55,9 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **User** — username, email (both unique), hashed password. `session_token` is half of what the
   cookies carry, so a password change invalidates them; `api_token` is the separate bearer
   credential for `/api/v1`, which a password change deliberately leaves alone.
+  `calendar_refresh_minutes` is how stale a subscribed calendar may get before the schedule
+  re-reads it — a taste rather than a deployment setting, so it lives here and is set on the
+  Integrations page, clamped to 5…1440 both where it is saved and where it is read.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
   the flags `is_starred`/`is_private`/`is_archived`. `is_archived` takes a project out of the
   planning without touching its bookings — see point 15. `is_private` is a curtain, not a permission:
@@ -82,7 +86,12 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   and their order is the order they were written in. It belongs to the user and the date, never to
   a project, so no project deletion cascades it away — see point 16.
 
-The schema in the code matches the latest migration (`20260915_0022`).
+- **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
+  (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
+  the first keeps a dead URL from being retried on every page render, the second is what the page
+  means by "last read". Events are not stored — see point 17.
+
+The schema in the code matches the latest migration (`20260915_0023`).
 
 ## Responsibility boundaries
 
@@ -92,6 +101,11 @@ The schema in the code matches the latest migration (`20260915_0022`).
   that build on them — [app/projects/slots.py](../app/projects/slots.py) (the A/B/C blocks) and
   [app/projects/day_notes.py](../app/projects/day_notes.py) (the notes under them), both of which
   are shared by the schedule page, the archive and the home page rather than belonging to one view.
+- **Talking to anything outside the process** is likewise kept out of the views:
+  [app/integrations/feeds.py](../app/integrations/feeds.py) fetches, and
+  [app/integrations/ical.py](../app/integrations/ical.py) parses, so
+  [app/integrations/routes.py](../app/integrations/routes.py) is forms and flashes like any other
+  page.
 - **Presentation:** [app/markdown_utils.py](../app/markdown_utils.py) (Markdown→HTML) + Jinja templates.
 - **Configuration:** only [config.py](../config.py) reads environment variables.
 
@@ -220,6 +234,68 @@ The schema in the code matches the latest migration (`20260915_0022`).
     swapped for an input in place. Enter and clicking away keep what was typed; **Escape puts the
     line back, and an emptied line is left as it was**, because clearing the text by accident is
     not the same gesture as reaching for the ×, and only one of the two is meant to lose it.
+
+17. **A subscribed calendar is cached whole and expanded per page.** There is no such thing as
+    asking an iCal URL for a date range — the file is the whole calendar or nothing — so
+    `fetch_feed` takes all of it (capped at `MAX_FEED_BYTES`) and `CalendarFeed.cached_ics` holds
+    it exactly as it arrived. `events_by_day` ([app/integrations/ical.py](../app/integrations/ical.py))
+    then works out the occurrences **for the days the page is showing**, every time it renders: the
+    download is everything, the expansion is the window. Storing events instead would mean deciding
+    how far ahead to expand a weekly meeting that repeats forever, and re-deciding it whenever the
+    window grew; parsing a few hundred lines is cheaper than that, and it means a feed that stops
+    answering keeps showing the calendar it last knew about instead of emptying the sheets.
+
+    **The expansion is cached per version of the calendar** (`_expanded` in
+    [feeds.py](../app/integrations/feeds.py)), keyed on the feed, its `fetched_at`, the window and
+    the timezone, and bounded at `MAX_CACHED_WINDOWS`. Without it the same text was re-parsed on
+    every render, which is most of what a schedule page costs once there are calendars on it:
+
+    | calendars (407 events each) | render, uncached | render, cached |
+    |---|---|---|
+    | none | 3.6 ms | 3.6 ms |
+    | 1 | 12.5 ms | 4.0 ms |
+    | 3 | 30.5 ms | 4.5 ms |
+    | 10 (the maximum) | 93.6 ms | 6.6 ms |
+
+    A re-read changes `fetched_at`, so the first render after one pays the ~90 ms again and the
+    rest come off the cache — and that first one is the background refresh request, not a page
+    anybody is waiting on. Nothing is invalidated by hand; old keys age out.
+
+    Inside that, a recurring event is **walked from its own DTSTART**, not from the window: `COUNT`
+    is an ordinal, and an occurrence is only the fifth if the four before it were worked out too.
+    Everything before the window is counted and dropped. The two limits that bound the walk are
+    therefore different numbers and must stay that way — `MAX_OCCURRENCES` is how many occurrences
+    a page may be handed, `MAX_STEPS` is how far the walk may travel to reach them. Conflating them
+    is a real bug this code has already had: a daily meeting standing since 2019 is 2,800 rounds
+    from this week, the walk stopped at 2,000, and the event silently vanished from every sheet.
+
+    **Nothing is fetched while a page renders.** There is no scheduler in this app, so the
+    schedule page is still what drives the reading — but it does it *after* it is on the screen,
+    not in the render someone is waiting on. The render asks `has_stale_feeds` (one count, no
+    network) and, if anything is due, carries `[data-calendar-refresh]` with the days it is
+    showing; [calendar-feeds.js](../app/static/js/calendar-feeds.js) then posts to
+    `/integrations/calendars/refresh-due`, which runs `refresh_due` and answers with the events
+    for those days, and the page patches in whatever came back different. A stale calendar on a
+    host that takes three seconds to answer costs a 13 ms render and a request nobody is watching,
+    where doing it inline cost three seconds of blank screen.
+
+    While that round runs, the page shows a spinner in its top right — not a request for
+    patience, since the page is already complete, but the honest statement that the event lines
+    may still change underneath. It is the only thing the reader sees of any of this.
+
+    The safeguards behind that are still worth keeping: a feed is only re-read once the user's own
+    `calendar_refresh_minutes` have passed, a failed read counts as a read for that purpose (so a
+    dead URL is retried on that interval rather than on every page), and a round is bounded by
+    `REFRESH_BUDGET_SECONDS`, with whatever is left over staying due for next time. The two
+    fetches that *are* synchronous are both ones a person asked for and is watching: adding a
+    calendar, and "Read them now".
+
+    With JavaScript off, a calendar is read when it is added and when that button is pressed, and
+    not otherwise. That is the trade: the alternative was every reader occasionally paying for it.
+
+    The URL is fetched by the server, so `add_feed` refuses one whose host resolves to a private
+    or loopback address: registration can be open, and without that check the app would be an
+    open proxy into whatever network it is deployed in.
 
 ## What not to touch (and why)
 

@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+
+{% block title %}Integrations{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="d-flex justify-content-between align-items-center mb-4 gap-3 flex-wrap">
+            <div>
+                <h1 class="h2 mb-1">Integrations</h1>
+                <p class="text-muted mb-0">
+                    Calendars read into the schedule. Their events show under the blocks of each
+                    day sheet, beside the notes you write there yourself.
+                </p>
+            </div>
+            <a href="{{ url_for('projects.schedule') }}" class="btn btn-outline-secondary">{{ icon("calendar") }}Schedule</a>
+        </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-1">Add a calendar</h2>
+                {# One field that matters. Everything a calendar service calls this
+                   - "secret address in iCal format", "public address", "subscribe" -
+                   is the same .ics URL, and nothing is ever sent back, so which one
+                   you paste only changes how much it shows. #}
+                <p class="text-body-secondary small mb-3">
+                    Paste the calendar's address in iCal format — the link ending in
+                    <code>.ics</code> that Google, iCloud, Outlook or Nextcloud give you under
+                    "subscribe" or "secret address". The public and the private one both work;
+                    the private one simply shows more. Nothing is ever written back to the
+                    calendar — this only reads.
+                </p>
+                <form method="post" action="{{ url_for('integrations.add_calendar') }}" class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label" for="calendar-name">Name</label>
+                        <input type="text" class="form-control" id="calendar-name" name="name"
+                               maxlength="120" placeholder="Work" autocomplete="off">
+                    </div>
+                    <div class="col-12 col-md-8">
+                        <label class="form-label" for="calendar-url">iCal address</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="calendar-url" name="url"
+                                   placeholder="https://…/basic.ics" autocomplete="off" required>
+                            <button type="submit" class="btn btn-primary">{{ icon("plus") }}Add</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                    <div>
+                        <h2 class="h5 mb-1">Calendars</h2>
+                        <p class="text-body-secondary small mb-0">
+                            Up to {{ max_feeds }} calendars. Opening the schedule after the
+                            interval below has passed re-reads them — in the background, with a
+                            spinner in the corner while it does.
+                        </p>
+                    </div>
+                    {% if feeds %}
+                        <form method="post" action="{{ url_for('integrations.refresh_calendars') }}">
+                            <button type="submit" class="btn btn-outline-secondary btn-sm">{{ icon("reset") }}Read them now</button>
+                        </form>
+                    {% endif %}
+                </div>
+
+                {% if feeds %}
+                    <ul class="list-group list-group-flush calendar-feed-list">
+                        {% for feed in feeds %}
+                            <li class="list-group-item px-0 d-flex justify-content-between align-items-start gap-3 flex-wrap{% if not feed.is_enabled %} calendar-feed-off{% endif %}">
+                                <div class="calendar-feed-main">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="fw-semibold">{{ feed.name }}</span>
+                                        {% if not feed.is_enabled %}
+                                            <span class="badge text-bg-secondary">Off</span>
+                                        {% elif feed.last_error %}
+                                            <span class="badge text-bg-warning">Not reading</span>
+                                        {% endif %}
+                                    </div>
+                                    {# The address can be the secret one, so it is shown as
+                                       the calendar's own line rather than spelled out across
+                                       the page; the full value is in the tooltip. #}
+                                    <p class="calendar-feed-url small mb-0" title="{{ feed.url }}">{{ feed.url }}</p>
+                                    <p class="text-body-secondary small mb-0">
+                                        {% if feed.fetched_at %}
+                                            Last read {{ feed.fetched_at | naturaltime }}.
+                                        {% else %}
+                                            Never read successfully.
+                                        {% endif %}
+                                        {% if feed.last_error %}
+                                            <span class="text-danger">{{ feed.last_error }}</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <form method="post" action="{{ url_for('integrations.toggle_calendar', feed_id=feed.id) }}">
+                                        <input type="hidden" name="enabled" value="{{ 0 if feed.is_enabled else 1 }}">
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                            {{ "Switch off" if feed.is_enabled else "Switch on" }}
+                                        </button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('integrations.remove_calendar', feed_id=feed.id) }}">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
+                                    </form>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-body-secondary small mb-0">
+                        No calendars yet. Add one above and its events start showing on the day
+                        sheets — on the days that have been as well as the ones to come.
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-1">How often</h2>
+                {# The number is a taste rather than a deployment setting, so it
+                   lives on the account and is set here: how live the events have
+                   to feel, against how often the schedule sends a request to
+                   somebody else's server. #}
+                <p class="text-body-secondary small mb-3">
+                    How stale a calendar may get before the schedule re-reads it. Nothing is ever
+                    read while a page is loading: the sheets are drawn from the last copy and the
+                    new one is fetched once the page is up. Shorter means fresher and more
+                    requests; the "Read them now" button ignores this either way.
+                </p>
+                <form method="post" action="{{ url_for('integrations.save_settings') }}" class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label" for="refresh-minutes">Re-read every</label>
+                        <div class="input-group">
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="refresh-minutes"
+                                name="refresh_minutes"
+                                value="{{ refresh_minutes }}"
+                                min="{{ min_refresh_minutes }}"
+                                max="{{ max_refresh_minutes }}"
+                                step="1"
+                                required
+                            >
+                            <span class="input-group-text">minutes</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-outline-primary">Save</button>
+                    </div>
+                </form>
+                <p class="text-body-secondary small mb-0 mt-2">
+                    Between {{ min_refresh_minutes }} minutes and {{ max_refresh_minutes }} (a day).
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

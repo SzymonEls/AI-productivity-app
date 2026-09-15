@@ -28,10 +28,11 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import DayNote, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import CalendarFeed, DayNote, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .api.routes import api_bp
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
+    from .integrations.routes import integrations_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
     from .time_tracking.routes import time_tracking_bp
@@ -41,6 +42,7 @@ def create_app(config_class=Config):
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(integrations_bp)
     register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)
@@ -370,7 +372,7 @@ def initialize_database(app):
     This keeps first-run local setup simple while still allowing the project
     to adopt migrations as it grows.
     """
-    from .models import DayNote, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
+    from .models import CalendarFeed, DayNote, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem
 
     with app.app_context():
         inspector = inspect(db.engine)
@@ -483,6 +485,9 @@ def initialize_database(app):
         # migrated, so a table added by a migration has to be created here too.
         if "day_notes" not in table_names:
             DayNote.__table__.create(bind=db.engine)
+
+        if "calendar_feeds" not in table_names:
+            CalendarFeed.__table__.create(bind=db.engine)
 
         if "project_time_entries" not in table_names:
             ProjectTimeEntry.__table__.create(bind=db.engine)

@@ -7,6 +7,14 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .extensions import db, login_manager
 
 
+# Half an hour is the default a new account gets; the bounds are what the
+# Integrations page will accept, with five minutes low enough to feel live and a
+# day high enough to mean "only when I ask".
+DEFAULT_REFRESH_MINUTES = 30
+MIN_REFRESH_MINUTES = 5
+MAX_REFRESH_MINUTES = 1440
+
+
 class User(UserMixin, db.Model):
     """Authenticated user model."""
 
@@ -26,6 +34,13 @@ class User(UserMixin, db.Model):
     # out, and a desktop app that keeps working through that is the point.
     api_token = db.Column(
         db.String(64), nullable=False, default=lambda: secrets.token_urlsafe(32)
+    )
+    # How stale a subscribed calendar may get before the schedule page goes and
+    # re-reads it. On the user rather than in the config file: it is a taste
+    # ("how live does this have to feel") and it is set from the Integrations
+    # page, not by whoever deploys the app.
+    calendar_refresh_minutes = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_REFRESH_MINUTES
     )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -68,6 +83,13 @@ class User(UserMixin, db.Model):
         cascade="all, delete-orphan",
         lazy=True,
         order_by=lambda: (DayNote.note_date, DayNote.created_at, DayNote.id),
+    )
+    calendar_feeds = db.relationship(
+        "CalendarFeed",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: (CalendarFeed.created_at, CalendarFeed.id),
     )
 
     def set_password(self, password):
@@ -310,6 +332,50 @@ class DayNote(db.Model):
 
     __table_args__ = (
         db.Index("ix_day_notes_user_date", "user_id", "note_date"),
+    )
+
+
+class CalendarFeed(db.Model):
+    """One subscribed iCal URL, and the last copy of it we managed to fetch.
+
+    The whole integration: a URL the user pastes in, read on a timer and mirrored
+    into the day sheets. Nothing is ever sent back to the calendar, so a "public"
+    and a "private" iCal address are the same thing here - the secret one just
+    shows more.
+
+    The body is cached rather than the events parsed out of it. Which occurrences
+    a page needs depends on the days it is showing, so the text is kept as it
+    arrived and expanded per page; it also means a feed that stops answering
+    keeps showing what it last said instead of emptying the sheets.
+
+    ``checked_at`` is every attempt and ``fetched_at`` only the ones that worked:
+    a feed that 404s must not be retried on every page render, and the page has
+    to be able to say how old what it is showing really is.
+    """
+
+    __tablename__ = "calendar_feeds"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    url = db.Column(db.String(2000), nullable=False)
+    is_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    cached_ics = db.Column(db.Text, nullable=False, default="")
+    checked_at = db.Column(db.DateTime, nullable=True)
+    fetched_at = db.Column(db.DateTime, nullable=True)
+    last_error = db.Column(db.String(255), nullable=False, default="")
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="calendar_feeds")
+
+    __table_args__ = (
+        db.Index("ix_calendar_feeds_user", "user_id"),
     )
 
 
