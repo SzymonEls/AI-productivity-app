@@ -219,6 +219,9 @@
                                 <span class="switcher-title">{{ project.title }}</span>
                                 {% if project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
                                 {% if project.is_private %}<span class="switcher-badge" title="Private" aria-hidden="true">🔒</span>{% endif %}
+                                {# Only ever reached through a slot today: an archived project is
+                                   otherwise off this list, and the tag says why it is here. #}
+                                {% if project.is_archived %}<span class="switcher-archived-tag" title="Archived — still booked for today">archived</span>{% endif %}
                                 {% if project.is_current %}<span class="switcher-current-tag">current</span>{% endif %}
                             </a>
                         {% endfor %}

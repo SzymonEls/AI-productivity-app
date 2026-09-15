@@ -10,7 +10,10 @@ container, no external services.
 
 - **Projects** — each one has a short goal, a cadence and a long plan written in Markdown.
   Headings become steps, checkboxes stay checkable in the rendered view, and a finished
-  section can be archived out of the plan without leaving the page. A project marked private
+  section can be archived out of the plan without leaving the page. Archiving the whole project
+  takes it out of the planning — off the home page, out of the block picker on the schedule, out of
+  ⌘K — while the sessions already booked for it stay in the schedule and still count; the project
+  page says so, and one still due today keeps its place in ⌘K. A project marked private
   carries no padlock anywhere — that would point it out. Switch on **safe mode** (the shield next
   to the theme switch) and such a project opens with its plan and its thoughts behind a button
   each; a reveal is remembered for five minutes, and reaching for the shield again drops it.

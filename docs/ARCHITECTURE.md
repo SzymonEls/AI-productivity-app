@@ -54,7 +54,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   cookies carry, so a password change invalidates them; `api_token` is the separate bearer
   credential for `/api/v1`, which a password change deliberately leaves alone.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
-  the flags `is_starred`/`is_private`/`is_archived`. `is_private` is a curtain, not a permission:
+  the flags `is_starred`/`is_private`/`is_archived`. `is_archived` takes a project out of the
+  planning without touching its bookings — see point 15. `is_private` is a curtain, not a permission:
   the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
   only drawn while **safe mode** is on — a browser-side switch (`app-safe-mode` in localStorage,
   `data-safe-mode` on `<html>`, toggled by the shield in the navbar) that lives entirely in
@@ -171,6 +172,23 @@ The schema in the code matches the latest migration (`20260912_0021`).
     The API uses `_token_required` rather than `@login_required`, which would redirect a desktop
     client to an HTML login page it can only read as a confusing 200. Nothing in `app/api/`
     touches `current_user`; the authenticated user is put on `g.api_user` instead.
+15. **Archiving a project is about planning, not about hiding it.** `is_archived` takes the
+    project out of every surface that exists to *fill a block* — the "Not scheduled" list and the
+    health count on the home page, the picker behind an empty block on the schedule, the timeline,
+    the tag search, the project switcher — and `assign_slot`
+    ([app/projects/slots.py](../app/projects/slots.py)) refuses it a slot outright, which is why the
+    project page drops its "Plan next session" button rather than opening a dialog that can only say
+    no. What it deliberately does **not** do is touch `project_day_slots`: a session already booked
+    still stands, still shows on the schedule board and the home page, can still be moved, freed or
+    ticked off, and still counts towards the health score. That is the whole point — you archive
+    something you have stopped taking on, not something you have stopped doing this week.
+
+    One exception follows from it, in `build_project_switcher_context`
+    ([app/__init__.py](../app/__init__.py)): an archived project **sitting in a slot today** is back
+    in ⌘K, under "Today" and tagged `archived`. It is today's work, so it has to be reachable; it
+    still stays out of the list of everything else underneath. The switcher reads today's slots
+    first for exactly this reason — which projects to make an exception for is read off them — and
+    is still two queries.
 
 ## What not to touch (and why)
 

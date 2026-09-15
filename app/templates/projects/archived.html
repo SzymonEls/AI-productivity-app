@@ -7,7 +7,10 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h1 class="h2 mb-1">Archived Projects</h1>
-        <p class="text-muted mb-0">Projects you've archived. Restore one to bring it back to your dashboard.</p>
+        <p class="text-muted mb-0">
+            Projects you've archived: out of the planning, but not out of the schedule — a session
+            already booked still happens. Restore one to bring it back to your dashboard.
+        </p>
     </div>
     <a href="{{ url_for('main.home') }}" class="btn btn-outline-secondary">Back to home</a>
 </div>
@@ -19,6 +22,12 @@
                 <div>
                     <a href="{{ url_for('projects.project_detail', project_id=project.id) }}" class="fw-semibold text-decoration-none">{{ project.title }}</a>
                     <p class="text-muted mb-0 small">Last modified {{ project.updated_at | naturaltime }}</p>
+                    {% set booked = planned_sessions.get(project.id) %}
+                    {% if booked %}
+                        {# Archiving left these standing, so the list says so rather than
+                           letting a session turn up on the schedule unaccounted for. #}
+                        <p class="text-muted mb-0 small">Still booked: {{ booked | join(" and ") }}.</p>
+                    {% endif %}
                 </div>
                 <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">
                     <button type="submit" class="btn btn-outline-primary btn-sm">{{ icon("restore") }}Unarchive</button>

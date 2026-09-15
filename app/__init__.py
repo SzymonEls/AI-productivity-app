@@ -97,24 +97,36 @@ def register_template_context(app):
 def build_project_switcher_context():
     """Today's slotted projects first, then everything else alphabetically.
 
+    An archived project is off the list - it is not something to switch to and
+    plan any more - with one exception: the one still sitting in a slot today.
+    Archiving leaves the sessions already booked where they are, so that project
+    is today's work like any other and has to be reachable from here; it shows
+    under "Today" with an Archived tag and stays out of the list below.
+
     Runs on every authenticated render, so it stays at two queries with a fixed
-    cost - projects, then today's slots. The previous timeline-grouped version
-    queried the items of each group in a loop, which grew with the number of
-    sections.
+    cost - today's slots, then the projects. The previous timeline-grouped
+    version queried the items of each group in a loop, which grew with the
+    number of sections.
     """
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
 
     from .models import Project, ProjectDaySlot
     from .projects.slots import SLOTS, today_local
 
     try:
-        projects = (
-            Project.query.filter_by(user_id=current_user.id, is_archived=False)
-            .order_by(func.lower(Project.title).asc())
-            .all()
-        )
+        # Today's slots come first: which archived projects the list has to make
+        # an exception for is read off them.
         booked_today = (
             ProjectDaySlot.query.filter_by(user_id=current_user.id, slot_date=today_local()).all()
+        )
+        booked_today_ids = {booking.project_id for booking in booked_today}
+        projects = (
+            Project.query.filter(
+                Project.user_id == current_user.id,
+                or_(Project.is_archived.is_(False), Project.id.in_(booked_today_ids)),
+            )
+            .order_by(func.lower(Project.title).asc())
+            .all()
         )
     except Exception:  # noqa: BLE001 - never let the nav break a page render
         return [], None
@@ -131,6 +143,7 @@ def build_project_switcher_context():
             "url": url_for("projects.project_detail", project_id=project.id),
             "is_starred": bool(project.is_starred),
             "is_private": bool(project.is_private),
+            "is_archived": bool(project.is_archived),
             "is_current": project.id == current_project_id,
             "slot": slot,
         }
@@ -149,7 +162,13 @@ def build_project_switcher_context():
     if today_entries:
         nav_groups.append({"name": "Today", "projects": today_entries, "is_backlog": False})
 
-    rest = [entry(project) for project in projects if project.id not in scheduled_ids]
+    # Everything else, bar the archived: they are only ever in this list through
+    # a slot today, and that has just been taken care of above.
+    rest = [
+        entry(project)
+        for project in projects
+        if project.id not in scheduled_ids and not project.is_archived
+    ]
     if rest:
         nav_groups.append(
             {

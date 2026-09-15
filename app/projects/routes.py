@@ -30,6 +30,8 @@ from .slots import (
     move_booking,
     parse_slot_date,
     past_calendar_weeks,
+    planned_session_labels,
+    planned_session_labels_by_project,
     schedule_window,
     set_block_done,
     set_session_done,
@@ -591,7 +593,13 @@ def archived_projects():
         .order_by(func.lower(Project.title).asc())
         .all()
     )
-    return render_template("projects/archived.html", projects=projects)
+    return render_template(
+        "projects/archived.html",
+        projects=projects,
+        # Archiving leaves the bookings alone, so this page says which of them
+        # are still due - one query for the page rather than one per row.
+        planned_sessions=planned_session_labels_by_project(current_user.id),
+    )
 
 
 @projects_bp.route("/<int:project_id>/archive", methods=["POST"])
@@ -600,7 +608,11 @@ def archive_project(project_id):
     project = _get_user_project_or_404(project_id)
     project.is_archived = True
     db.session.commit()
-    flash("Project archived.", "info")
+    flash(
+        "Project archived — it stays out of the planning, "
+        "but the sessions already booked for it stand.",
+        "info",
+    )
     return redirect(url_for("main.home"))
 
 
@@ -684,6 +696,11 @@ def project_detail(project_id):
         daily_target_label=_minutes_label(project.daily_target_minutes),
         today_slot=today_booking.slot if today_booking else "",
         today_session_done=bool(today_booking and today_booking.is_done),
+        # What archiving left standing, for the banner to name. Only asked for
+        # when there is a banner to put it in.
+        planned_sessions=planned_session_labels(current_user.id, project.id)
+        if project.is_archived
+        else [],
     )
 
 
