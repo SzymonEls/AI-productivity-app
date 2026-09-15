@@ -16,7 +16,7 @@ from ..time_tracking.service import (
     today_project_summary,
     utc_now,
 )
-from ..integrations.feeds import events_by_date, refresh_due
+from ..integrations.feeds import events_by_date, has_stale_feeds
 from .day_notes import add_note, delete_note, notes_from, shift_notes_forward, update_note
 from .slots import (
     ARCHIVE_WEEKS,
@@ -156,10 +156,9 @@ def schedule():
     # One query for the notes of every sheet on the page, the way the bookings
     # already come in one.
     notes = notes_from(current_user.id, today, last_day)
-    # Subscribed calendars are read here rather than on a schedule of their own:
-    # this page is the reason they exist, and a feed is only re-read once it has
-    # gone stale, so most renders do no work at all. See integrations/feeds.py.
-    refresh_due(current_user.id)
+    # Off the cached copy of each calendar, with no network in sight: re-reading
+    # one is the page's job but not the render's, so it happens once the page is
+    # up. See the note above [data-calendar-refresh] in the template.
     events = events_by_date(current_user.id, today, last_day)
     weeks = [
         {
@@ -179,6 +178,9 @@ def schedule():
         weeks=weeks,
         today=today,
         week_count=week_count,
+        calendar_window=(today, last_day),
+        # Nothing to ask for when every calendar is fresh, or there are none.
+        refresh_calendars=has_stale_feeds(current_user.id),
         # Two more weeks per click, up to the point where the page would be all
         # empty sheets.
         more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,
@@ -237,7 +239,6 @@ def schedule_archive():
     earliest = first_booked_day(current_user.id)
 
     notes = notes_from(current_user.id, first_day, last_day)
-    refresh_due(current_user.id)
     events = events_by_date(current_user.id, first_day, last_day)
 
     return render_template(
@@ -259,6 +260,8 @@ def schedule_archive():
             1 for week in weeks for _, booked in week for entry in booked.values() if entry
         ),
         range_label=_date_range_label(first_day, last_day),
+        calendar_window=(first_day, last_day),
+        refresh_calendars=has_stale_feeds(current_user.id),
         # No point offering a page older than the first booking there has ever been.
         earlier_until=first_day - timedelta(days=1)
         if earliest is not None and earliest < first_day

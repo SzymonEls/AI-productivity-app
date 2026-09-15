@@ -240,15 +240,24 @@ The schema in the code matches the latest migration (`20260915_0023`).
     window grew; parsing a few hundred lines is cheaper than that, and it means a feed that stops
     answering keeps showing the calendar it last knew about instead of emptying the sheets.
 
-    **The fetching happens during a GET**, in `refresh_due`
-    ([app/integrations/feeds.py](../app/integrations/feeds.py)), called by the schedule and the
-    archive before they render — point 5 all over again, and for the same reason: there is no
-    scheduler in this app, and the page that needs the data is the one place that knows it is
-    wanted. Three things keep it from turning a page load into a wait on someone else's server:
-    a feed is only re-read once every `REFRESH_AFTER`, a failed read still counts as a read for
-    that purpose (so a dead URL costs one slow render per half hour, not one per page), and the
-    whole round is bounded by `REFRESH_BUDGET_SECONDS` — whatever is left over stays due for the
-    next render.
+    **Nothing is fetched while a page renders.** There is no scheduler in this app, so the
+    schedule page is still what drives the reading — but it does it *after* it is on the screen,
+    not in the render someone is waiting on. The render asks `has_stale_feeds` (one count, no
+    network) and, if anything is due, carries `[data-calendar-refresh]` with the days it is
+    showing; [calendar-feeds.js](../app/static/js/calendar-feeds.js) then posts to
+    `/integrations/calendars/refresh-due`, which runs `refresh_due` and answers with the events
+    for those days, and the page patches in whatever came back different. A stale calendar on a
+    host that takes three seconds to answer costs a 13 ms render and a request nobody is watching,
+    where doing it inline cost three seconds of blank screen.
+
+    The safeguards behind that are still worth keeping: a feed is only re-read once every
+    `REFRESH_AFTER`, a failed read counts as a read for that purpose (so a dead URL is retried
+    twice an hour rather than on every page), and a round is bounded by `REFRESH_BUDGET_SECONDS`,
+    with whatever is left over staying due for next time. The two fetches that *are* synchronous
+    are both ones a person asked for and is watching: adding a calendar, and "Read them now".
+
+    With JavaScript off, a calendar is read when it is added and when that button is pressed, and
+    not otherwise. That is the trade: the alternative was every reader occasionally paying for it.
 
     The URL is fetched by the server, so `add_feed` refuses one whose host resolves to a private
     or loopback address: registration can be open, and without that check the app would be an

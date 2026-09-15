@@ -8,13 +8,22 @@ file on a web server - and this reads it on a timer. There is no OAuth, no API
 client, no token to expire and nothing written back, which is why a public and a
 private iCal address behave identically here: the private one simply shows more.
 
-Fetching happens while a page renders, which is why the timing matters:
+Fetching never happens while a page renders. The schedule and the archive read
+the cached copy and nothing else, and the page then asks - once it is on the
+screen - whether anything has gone stale; ``refresh_due`` runs in that request,
+not in the one the reader is waiting on. Otherwise every thirtieth visit to the
+schedule would be a wait on someone else's server.
+
+The rest of the timing follows from that:
 
 * a feed is only re-read once every ``REFRESH_AFTER``, and a feed that failed
-  counts as read for that purpose too, so a dead URL costs one slow render an
-  hour rather than one per page;
-* every fetch has a short timeout and a size cap, and a failure leaves the last
-  good copy in place, so the sheets keep showing the calendar they knew about.
+  counts as read for that purpose too, so a dead URL is retried twice an hour
+  rather than on every page;
+* every fetch has a short timeout and a size cap, the round has a budget, and a
+  failure leaves the last good copy in place, so the sheets keep showing the
+  calendar they last knew about;
+* a calendar is read once, synchronously, when it is added - that is a form
+  being submitted, where a wait is what "does this address work?" costs.
 """
 
 import ipaddress
@@ -24,6 +33,8 @@ from datetime import timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
+
+from sqlalchemy import or_
 
 from ..extensions import db
 from ..models import CalendarFeed
@@ -214,18 +225,38 @@ def _reason(error):
     return str(reason)[:160] or error.__class__.__name__
 
 
+def stale_cutoff():
+    """The moment before which a copy counts as stale."""
+    return (utc_now() - REFRESH_AFTER).replace(tzinfo=None)
+
+
+def has_stale_feeds(user_id):
+    """Is there anything worth re-reading? One query, no network.
+
+    The schedule renders with this rather than with a refresh: it decides
+    whether the page bothers asking at all, so a reader with no calendars - or
+    with fresh ones - costs nothing beyond the count.
+    """
+    return bool(
+        CalendarFeed.query.filter(
+            CalendarFeed.user_id == user_id,
+            CalendarFeed.is_enabled.is_(True),
+            or_(CalendarFeed.checked_at.is_(None), CalendarFeed.checked_at < stale_cutoff()),
+        ).count()
+    )
+
+
 def refresh_due(user_id, force=False):
     """Re-read the feeds that have gone stale. Returns how many were read.
 
-    Called while the schedule and the archive render, which is the one thing to
-    keep in mind here: it may not turn a page load into a wait on someone else's
-    server. Hence the budget - once it is spent the rest stay due, and the next
-    render picks up where this one left off.
+    Called from a request of its own - the one the schedule page makes once it
+    is already on the screen, and the button on the integrations page - never
+    from a render somebody is waiting on. The budget still applies: a round that
+    runs long leaves the rest due, and the next one picks up where it left off.
 
-    ``force`` is the button on the integrations page, which means "now" rather
-    than "when it is due"; it still keeps the budget.
+    ``force`` is the button, which means "now" rather than "when it is due".
     """
-    cutoff = (utc_now() - REFRESH_AFTER).replace(tzinfo=None)
+    cutoff = stale_cutoff()
     due = [
         feed
         for feed in user_feeds(user_id)

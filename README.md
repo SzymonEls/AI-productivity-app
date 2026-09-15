@@ -50,9 +50,10 @@ container, no external services.
   your name in the top right) and its events show up under the blocks of every day sheet, in the
   past as well as ahead. The public and the private ("secret") address both work; nothing is ever
   written back, so the private one just shows more. It is the whole integration: no OAuth, no
-  client, no token to expire — a URL that is re-read every half hour while the schedule is open,
-  cached so a calendar that goes down leaves the sheets as they were, and switched off with one
-  button when it should stop showing. Recurring events, all-day events, exceptions and moved
+  client, no token to expire — a URL that is re-read every half hour, never while a page is
+  loading (the schedule renders from the last copy and refreshes itself once it is up), cached so
+  a calendar that goes down leaves the sheets as they were, and switched off with one button when
+  it should stop showing. Recurring events, all-day events, exceptions and moved
   occurrences are understood; the events themselves are read-only here, because the calendar owns
   them.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
