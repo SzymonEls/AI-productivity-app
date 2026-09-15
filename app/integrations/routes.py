@@ -19,9 +19,9 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
 from ..projects.slots import parse_slot_date
+from ..models import MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES
 from .feeds import (
     MAX_FEEDS_PER_USER,
-    REFRESH_AFTER,
     add_feed,
     delete_feed,
     events_by_date,
@@ -43,7 +43,9 @@ def integrations_page():
         "integrations/index.html",
         feeds=user_feeds(current_user.id),
         max_feeds=MAX_FEEDS_PER_USER,
-        refresh_minutes=int(REFRESH_AFTER.total_seconds() // 60),
+        refresh_minutes=current_user.calendar_refresh_minutes,
+        min_refresh_minutes=MIN_REFRESH_MINUTES,
+        max_refresh_minutes=MAX_REFRESH_MINUTES,
     )
 
 
@@ -124,7 +126,7 @@ def refresh_calendars():
     """Read every calendar now, rather than when it next falls due."""
 
     try:
-        count = refresh_due(current_user.id, force=True)
+        count = refresh_due(current_user, force=True)
     except SQLAlchemyError:
         db.session.rollback()
         flash("Failed to save what the calendars said.", "danger")
@@ -134,6 +136,36 @@ def refresh_calendars():
         flash("Nothing to read — no calendar is switched on.", "warning")
     else:
         flash(f"Read {count} calendar{'' if count == 1 else 's'}.", "success")
+    return redirect(url_for("integrations.integrations_page"))
+
+
+@integrations_bp.route("/settings", methods=["POST"])
+@login_required
+def save_settings():
+    """How often the calendars are re-read, in minutes.
+
+    Clamped rather than refused: the field is a number box with the same bounds
+    on it, so anything outside them arrived some other way and "as close as I
+    will go" is a better answer than an error.
+    """
+
+    try:
+        minutes = int(request.form.get("refresh_minutes", ""))
+    except ValueError:
+        flash("Give the interval in whole minutes.", "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    minutes = max(MIN_REFRESH_MINUTES, min(minutes, MAX_REFRESH_MINUTES))
+    current_user.calendar_refresh_minutes = minutes
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to save the setting.", "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    flash(f"Calendars are re-read every {minutes} minutes.", "success")
     return redirect(url_for("integrations.integrations_page"))
 
 
@@ -159,7 +191,7 @@ def refresh_due_calendars():
         return jsonify({"ok": False, "message": "Which days?"}), 400
 
     try:
-        read = refresh_due(current_user.id)
+        read = refresh_due(current_user)
     except SQLAlchemyError:
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save what the calendars said."}), 500

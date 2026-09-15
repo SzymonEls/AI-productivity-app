@@ -7,6 +7,14 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .extensions import db, login_manager
 
 
+# Half an hour is the default a new account gets; the bounds are what the
+# Integrations page will accept, with five minutes low enough to feel live and a
+# day high enough to mean "only when I ask".
+DEFAULT_REFRESH_MINUTES = 30
+MIN_REFRESH_MINUTES = 5
+MAX_REFRESH_MINUTES = 1440
+
+
 class User(UserMixin, db.Model):
     """Authenticated user model."""
 
@@ -26,6 +34,13 @@ class User(UserMixin, db.Model):
     # out, and a desktop app that keeps working through that is the point.
     api_token = db.Column(
         db.String(64), nullable=False, default=lambda: secrets.token_urlsafe(32)
+    )
+    # How stale a subscribed calendar may get before the schedule page goes and
+    # re-reads it. On the user rather than in the config file: it is a taste
+    # ("how live does this have to feel") and it is set from the Integrations
+    # page, not by whoever deploys the app.
+    calendar_refresh_minutes = db.Column(
+        db.Integer, nullable=False, default=DEFAULT_REFRESH_MINUTES
     )
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 

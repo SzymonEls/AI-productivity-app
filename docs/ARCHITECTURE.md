@@ -55,6 +55,9 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **User** — username, email (both unique), hashed password. `session_token` is half of what the
   cookies carry, so a password change invalidates them; `api_token` is the separate bearer
   credential for `/api/v1`, which a password change deliberately leaves alone.
+  `calendar_refresh_minutes` is how stale a subscribed calendar may get before the schedule
+  re-reads it — a taste rather than a deployment setting, so it lives here and is set on the
+  Integrations page, clamped to 5…1440 both where it is saved and where it is read.
 - **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
   the flags `is_starred`/`is_private`/`is_archived`. `is_archived` takes a project out of the
   planning without touching its bookings — see point 15. `is_private` is a curtain, not a permission:
@@ -250,11 +253,16 @@ The schema in the code matches the latest migration (`20260915_0023`).
     host that takes three seconds to answer costs a 13 ms render and a request nobody is watching,
     where doing it inline cost three seconds of blank screen.
 
-    The safeguards behind that are still worth keeping: a feed is only re-read once every
-    `REFRESH_AFTER`, a failed read counts as a read for that purpose (so a dead URL is retried
-    twice an hour rather than on every page), and a round is bounded by `REFRESH_BUDGET_SECONDS`,
-    with whatever is left over staying due for next time. The two fetches that *are* synchronous
-    are both ones a person asked for and is watching: adding a calendar, and "Read them now".
+    While that round runs, the page shows a spinner in its top right — not a request for
+    patience, since the page is already complete, but the honest statement that the event lines
+    may still change underneath. It is the only thing the reader sees of any of this.
+
+    The safeguards behind that are still worth keeping: a feed is only re-read once the user's own
+    `calendar_refresh_minutes` have passed, a failed read counts as a read for that purpose (so a
+    dead URL is retried on that interval rather than on every page), and a round is bounded by
+    `REFRESH_BUDGET_SECONDS`, with whatever is left over staying due for next time. The two
+    fetches that *are* synchronous are both ones a person asked for and is watching: adding a
+    calendar, and "Read them now".
 
     With JavaScript off, a calendar is read when it is added and when that button is pressed, and
     not otherwise. That is the trade: the alternative was every reader occasionally paying for it.

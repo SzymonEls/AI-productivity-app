@@ -8,6 +8,12 @@
  * instead: once the page is on the screen, and only when the server said on the
  * way out that something had gone stale.
  *
+ * The one thing the reader sees of all this is the spinner in the top right,
+ * which is there for as long as the round takes. It is not asking for patience -
+ * the page is already complete and usable - it is saying that the event lines
+ * may still change under them, which is the honest state of the page while
+ * somebody else's server is being waited on.
+ *
  * Nothing is redrawn unless the round actually read something and the days came
  * back different, so the usual case is one small request and no repaint. Only
  * the event lines are touched; the notes below them are the reader's and may
@@ -25,6 +31,13 @@
 
     const ENDPOINT = "/integrations/calendars/refresh-due";
     const statusOutput = document.querySelector("[data-schedule-status], [data-archive-status]");
+    const spinner = document.querySelector("[data-calendar-spinner]");
+
+    function spin(on) {
+        if (spinner) {
+            spinner.hidden = !on;
+        }
+    }
 
     function setStatus(message, tone) {
         if (!statusOutput || !message) {
@@ -84,36 +97,40 @@
         return changed;
     }
 
-    // After the page is up, and out of the way of everything it is still doing.
-    window.setTimeout(() => {
-        fetch(ENDPOINT, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            body: JSON.stringify({ from: root.dataset.calendarFrom, to: root.dataset.calendarTo }),
+    // Straight away: this script runs at the end of the page, so "the page is
+    // up" has already happened, and the spinner should be there from the first
+    // moment the reader looks at the corner rather than a beat later.
+    spin(true);
+    fetch(ENDPOINT, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+        },
+        body: JSON.stringify({ from: root.dataset.calendarFrom, to: root.dataset.calendarTo }),
+    })
+        .then(async (response) => {
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || "Could not read the calendars.");
+            }
+            return payload;
         })
-            .then(async (response) => {
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "Could not read the calendars.");
-                }
-                return payload;
-            })
-            .then((payload) => {
-                if (!payload.days) {
-                    return;
-                }
-                const changed = paint(payload.days);
-                if (changed) {
-                    setStatus("Calendars updated.", "success");
-                }
-            })
-            .catch(() => {
-                /* The sheets already show the last copy the server had, which is
-                   the right thing to be looking at when a calendar cannot be
-                   reached. The integrations page is where that is reported. */
-            });
-    }, 250);
+        .then((payload) => {
+            if (!payload.days) {
+                return;
+            }
+            const changed = paint(payload.days);
+            if (changed) {
+                setStatus("Calendars updated.", "success");
+            }
+        })
+        .catch(() => {
+            /* The sheets already show the last copy the server had, which is
+               the right thing to be looking at when a calendar cannot be
+               reached. The integrations page is where that is reported. */
+        })
+        .finally(() => {
+            spin(false);
+        });
 })();

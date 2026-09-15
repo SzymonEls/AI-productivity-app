@@ -55,8 +55,9 @@
                     <div>
                         <h2 class="h5 mb-1">Calendars</h2>
                         <p class="text-body-secondary small mb-0">
-                            Read again every {{ refresh_minutes }} minutes while the schedule is
-                            open, up to {{ max_feeds }} calendars.
+                            Up to {{ max_feeds }} calendars. Opening the schedule after the
+                            interval below has passed re-reads them — in the background, with a
+                            spinner in the corner while it does.
                         </p>
                     </div>
                     {% if feeds %}
@@ -114,6 +115,47 @@
                         sheets — on the days that have been as well as the ones to come.
                     </p>
                 {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-1">How often</h2>
+                {# The number is a taste rather than a deployment setting, so it
+                   lives on the account and is set here: how live the events have
+                   to feel, against how often the schedule sends a request to
+                   somebody else's server. #}
+                <p class="text-body-secondary small mb-3">
+                    How stale a calendar may get before the schedule re-reads it. Nothing is ever
+                    read while a page is loading: the sheets are drawn from the last copy and the
+                    new one is fetched once the page is up. Shorter means fresher and more
+                    requests; the "Read them now" button ignores this either way.
+                </p>
+                <form method="post" action="{{ url_for('integrations.save_settings') }}" class="row g-2 align-items-end">
+                    <div class="col-auto">
+                        <label class="form-label" for="refresh-minutes">Re-read every</label>
+                        <div class="input-group">
+                            <input
+                                type="number"
+                                class="form-control"
+                                id="refresh-minutes"
+                                name="refresh_minutes"
+                                value="{{ refresh_minutes }}"
+                                min="{{ min_refresh_minutes }}"
+                                max="{{ max_refresh_minutes }}"
+                                step="1"
+                                required
+                            >
+                            <span class="input-group-text">minutes</span>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-outline-primary">Save</button>
+                    </div>
+                </form>
+                <p class="text-body-secondary small mb-0 mt-2">
+                    Between {{ min_refresh_minutes }} minutes and {{ max_refresh_minutes }} (a day).
+                </p>
             </div>
         </div>
     </div>

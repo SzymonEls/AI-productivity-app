@@ -16,9 +16,10 @@ schedule would be a wait on someone else's server.
 
 The rest of the timing follows from that:
 
-* a feed is only re-read once every ``REFRESH_AFTER``, and a feed that failed
-  counts as read for that purpose too, so a dead URL is retried twice an hour
-  rather than on every page;
+* a feed is only re-read once the user's own interval has passed (their
+  ``calendar_refresh_minutes``, set on the Integrations page), and a feed that
+  failed counts as read for that purpose too, so a dead URL is retried on that
+  same interval rather than on every page;
 * every fetch has a short timeout and a size cap, the round has a budget, and a
   failure leaves the last good copy in place, so the sheets keep showing the
   calendar they last knew about;
@@ -37,13 +38,10 @@ from urllib.request import Request, urlopen
 from sqlalchemy import or_
 
 from ..extensions import db
-from ..models import CalendarFeed
+from ..models import MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES, CalendarFeed
 from ..time_tracking.service import app_timezone, utc_now
 from .ical import events_by_day
 
-
-# How stale a copy may get before a page render goes and re-reads it.
-REFRESH_AFTER = timedelta(minutes=30)
 # Per fetch. A calendar that cannot answer in this long must not hold a page up.
 FETCH_TIMEOUT_SECONDS = 6
 # And per render, across all of them: three calendars all timing out would be
@@ -225,13 +223,24 @@ def _reason(error):
     return str(reason)[:160] or error.__class__.__name__
 
 
-def stale_cutoff():
-    """The moment before which a copy counts as stale."""
-    return (utc_now() - REFRESH_AFTER).replace(tzinfo=None)
+def refresh_after(user):
+    """How stale this user lets a calendar get, as a timedelta.
+
+    Their own setting, from the Integrations page, clamped here as well as where
+    it is saved - the column outlives whatever the form looked like when the
+    number was typed into it.
+    """
+    minutes = user.calendar_refresh_minutes or MIN_REFRESH_MINUTES
+    return timedelta(minutes=max(MIN_REFRESH_MINUTES, min(int(minutes), MAX_REFRESH_MINUTES)))
 
 
-def has_stale_feeds(user_id):
-    """Is there anything worth re-reading? One query, no network.
+def stale_cutoff(user):
+    """The moment before which a copy counts as stale for this user."""
+    return (utc_now() - refresh_after(user)).replace(tzinfo=None)
+
+
+def has_stale_feeds(user):
+    """Is there anything worth re-reading? One count, no network.
 
     The schedule renders with this rather than with a refresh: it decides
     whether the page bothers asking at all, so a reader with no calendars - or
@@ -239,14 +248,14 @@ def has_stale_feeds(user_id):
     """
     return bool(
         CalendarFeed.query.filter(
-            CalendarFeed.user_id == user_id,
+            CalendarFeed.user_id == user.id,
             CalendarFeed.is_enabled.is_(True),
-            or_(CalendarFeed.checked_at.is_(None), CalendarFeed.checked_at < stale_cutoff()),
+            or_(CalendarFeed.checked_at.is_(None), CalendarFeed.checked_at < stale_cutoff(user)),
         ).count()
     )
 
 
-def refresh_due(user_id, force=False):
+def refresh_due(user, force=False):
     """Re-read the feeds that have gone stale. Returns how many were read.
 
     Called from a request of its own - the one the schedule page makes once it
@@ -256,10 +265,10 @@ def refresh_due(user_id, force=False):
 
     ``force`` is the button, which means "now" rather than "when it is due".
     """
-    cutoff = stale_cutoff()
+    cutoff = stale_cutoff(user)
     due = [
         feed
-        for feed in user_feeds(user_id)
+        for feed in user_feeds(user.id)
         if feed.is_enabled and (force or feed.checked_at is None or feed.checked_at < cutoff)
     ]
 

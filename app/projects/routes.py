@@ -180,7 +180,7 @@ def schedule():
         week_count=week_count,
         calendar_window=(today, last_day),
         # Nothing to ask for when every calendar is fresh, or there are none.
-        refresh_calendars=has_stale_feeds(current_user.id),
+        refresh_calendars=has_stale_feeds(current_user),
         # Two more weeks per click, up to the point where the page would be all
         # empty sheets.
         more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,
@@ -261,7 +261,7 @@ def schedule_archive():
         ),
         range_label=_date_range_label(first_day, last_day),
         calendar_window=(first_day, last_day),
-        refresh_calendars=has_stale_feeds(current_user.id),
+        refresh_calendars=has_stale_feeds(current_user),
         # No point offering a page older than the first booking there has ever been.
         earlier_until=first_day - timedelta(days=1)
         if earliest is not None and earliest < first_day
