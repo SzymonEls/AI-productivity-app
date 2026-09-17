@@ -93,9 +93,10 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   nothing else. It has no `project_id`, and that absence *is* the state - an item exists precisely
   for as long as no project has been chosen for it. Filing one appends its text to that project's
   `short_goal` and deletes the row in the same transaction, so the inbox is a queue rather than a
-  second copy of anything. Like a DayNote it is the user's, never a project's, so no project
-  deletion cascades one away; unlike a DayNote it belongs to no date either, because when a
-  thought was had says nothing about where it goes. See point 19.
+  second copy of anything; the × is the other way out, and deletes without filing. Like a DayNote
+  it is the user's, never a project's, so no project deletion cascades one away; unlike a DayNote
+  it belongs to no date either, because when a thought was had says nothing about where it goes.
+  See point 19.
 
 - **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
   (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
@@ -387,6 +388,14 @@ The schema in the code matches the latest migration (`20260917_0026`).
     widget is rendered `hidden` rather than omitted when the inbox is empty: the + has to be able
     to fill it without a reload, and the row markup and project list it clones come from the
     `<template>` that section carries.
+
+    **The × deletes without filing, and an item that has already gone counts as deleted.** Both
+    the × and the picker take the row off the page before the request goes out and put it back
+    where it was if the answer says no, so answering a second click with an error would only
+    produce a failure the page then has to undo - and "it is not in the inbox" is what the caller
+    asked for either way. That is the rule `delete_note` follows for a day note, for the same
+    reason. Nothing is confirmed first: an item that should not have been captured is not worth a
+    dialog, and that is the trade for making capture as careless as it is.
 
 ## What not to touch (and why)
 

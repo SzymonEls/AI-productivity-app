@@ -1881,8 +1881,50 @@ button.picker-row:hover {
     background: var(--surface);
 }
 
+/* The text and its × on one line, the picker under them: the × belongs to the
+   thought, and putting it next to the picker would make two controls of very
+   different consequence sit side by side. */
+.inbox-item-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+/* Faint until the row is reached for, like the × on a day note - a list of
+   thoughts should read as text, not as a row of buttons. Touch has no hover to
+   reveal it with, so there it is simply always half-lit. */
+.inbox-item-remove {
+    flex: 0 0 auto;
+    width: 1.4rem;
+    height: 1.4rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0;
+    transition: opacity 0.12s ease-in-out;
+}
+
+.inbox-item:hover .inbox-item-remove,
+.inbox-item-remove:focus-visible {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .inbox-item-remove {
+        opacity: 0.5;
+    }
+}
+
+.inbox-item-remove .app-icon {
+    width: 0.8rem;
+    height: 0.8rem;
+}
+
 .inbox-item-text {
     font-size: 0.875rem;
+    /* The × sits beside it, so the text takes what is left rather than pushing
+       the button off the row when a dictated thought runs long. */
+    min-width: 0;
     /* A dictated thought arrives as one run of text with no spaces to break at
        if it names a URL or a long word; anywhere is better than overflowing the
        sidebar. */

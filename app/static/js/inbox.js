@@ -4,9 +4,10 @@
  *
  * Two halves that only share this script because they share the page. The +
  * beside "Today" puts something in the inbox; the widget in the sidebar takes
- * things out of it, by appending the text to a project's thoughts. Both apply
- * the change to the page before the server has answered and put it back if the
- * answer says no, the way the schedule board does with a move.
+ * things out of it, either by appending the text to a project's thoughts or by
+ * throwing it away with the ×. Everything here applies the change to the page
+ * before the server has answered and puts it back if the answer says no, the
+ * way the schedule board does with a move.
  *
  * The widget is hidden rather than absent while the inbox is empty - an empty
  * inbox is nothing to report - which is why this file shows and hides it rather
@@ -18,6 +19,7 @@
 
     const ADD_ENDPOINT = "/inbox";
     const FILE_ENDPOINT = (itemId) => `/inbox/${itemId}/file`;
+    const DELETE_ENDPOINT = (itemId) => `/inbox/${itemId}/delete`;
 
     const widget = document.querySelector("[data-inbox]");
     const list = widget ? widget.querySelector("[data-inbox-list]") : null;
@@ -74,11 +76,18 @@
         widget.hidden = total === 0;
     }
 
+    /* Worded exactly as the macro words it, because the × on a row the + just
+       added has to read the same to a screen reader as one the page rendered. */
+    function removeLabel(body) {
+        return `Remove the thought \u201c${body}\u201d from the inbox`;
+    }
+
     function buildRow(item) {
         const fragment = template.content.cloneNode(true);
         const row = fragment.querySelector("[data-inbox-item]");
         row.dataset.itemId = String(item.id);
         row.querySelector("[data-inbox-text]").textContent = item.body;
+        row.querySelector("[data-inbox-remove]").setAttribute("aria-label", removeLabel(item.body));
         return row;
     }
 
@@ -121,7 +130,42 @@
             });
     }
 
+    function removeItem(row) {
+        const itemId = row.dataset.itemId;
+        if (!itemId) {
+            return;
+        }
+
+        // Off the page first, like filing: the × is the whole gesture and there
+        // is nothing to confirm - an item that should not have been captured is
+        // not worth a dialog.
+        const anchor = row.nextSibling;
+        row.remove();
+        refreshWidget();
+
+        postJson(DELETE_ENDPOINT(itemId), {}, "The thought was not removed.")
+            .then((payload) => {
+                setStatus(payload.message || "Removed from the inbox.", "success");
+            })
+            .catch((error) => {
+                list.insertBefore(row, anchor);
+                refreshWidget();
+                setStatus(error.message, "danger");
+            });
+    }
+
     if (list) {
+        list.addEventListener("click", (event) => {
+            const remove = event.target.closest("[data-inbox-remove]");
+            if (!remove) {
+                return;
+            }
+            const row = remove.closest("[data-inbox-item]");
+            if (row) {
+                removeItem(row);
+            }
+        });
+
         list.addEventListener("change", (event) => {
             const select = event.target.closest("[data-inbox-project]");
             if (!select) {

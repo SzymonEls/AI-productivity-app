@@ -12,7 +12,20 @@
 #}
 {% macro inbox_row(item=None) %}
 <li class="inbox-item" data-inbox-item{% if item %} data-item-id="{{ item.id }}"{% endif %}>
-    <p class="inbox-item-text mb-0" data-inbox-text>{{ item.body if item else "" }}</p>
+    <div class="inbox-item-head">
+        <p class="inbox-item-text mb-0" data-inbox-text>{{ item.body if item else "" }}</p>
+        {# The way out for a thought that should not be filed anywhere. Capture
+           is deliberately careless - a mis-tapped reply in the notification
+           shade costs nothing to make - so the misfires need somewhere to go
+           that is not a real project. #}
+        <button
+            type="button"
+            class="icon-button inbox-item-remove"
+            data-inbox-remove
+            title="Remove this thought"
+            aria-label="Remove the thought &ldquo;{{ item.body if item else '' }}&rdquo; from the inbox"
+        >{{ icon("x") }}</button>
+    </div>
     <select
         class="form-select form-select-sm inbox-item-project"
         data-inbox-project

@@ -8,6 +8,12 @@ project is chosen for it. Choosing appends the text to that project's thoughts
 and deletes the row, so the inbox is a queue rather than a second copy of
 anything.
 
+The other way out is the ×, which throws the item away without filing it. It is
+not a nicety: capture is deliberately careless - a mis-tapped reply in the
+notification shade costs nothing to make - so there has to be somewhere for the
+misfires to go. Without it a stray item would sit in the widget forever, since
+the only alternative would be filing nonsense into a real project.
+
 capture_page() is the odd one out here: it is not the inbox, it is the page the
 Android launcher opens from the app icon's shortcut menu, whose whole job is to
 raise a notification with a reply field and then get out of the way. The reply
@@ -169,3 +175,28 @@ def file_item(item_id):
             "project": {"id": project.id, "title": project.title},
         }
     )
+
+
+@inbox_bp.route("/<int:item_id>/delete", methods=["POST"])
+@login_required
+def delete_item(item_id):
+    """Throw one item away without filing it anywhere.
+
+    An item that has already gone counts as deleted rather than as an error.
+    The × is applied to the page before the request goes out, the way the day
+    notes' is, so a second click must not produce a failure the page then has to
+    undo - and the outcome the caller asked for is true either way.
+    """
+    item = InboxItem.query.filter_by(id=item_id, user_id=current_user.id).first()
+    if item is None:
+        return jsonify({"ok": True, "message": "That thought is already gone."})
+
+    db.session.delete(item)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to remove the thought."}), 500
+
+    return jsonify({"ok": True, "message": "Removed from the inbox."})
