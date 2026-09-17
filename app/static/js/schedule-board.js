@@ -73,15 +73,75 @@
         return Boolean(contentOf(cell).dataset.projectId);
     }
 
+    // The same arithmetic slots.py does, kept in step here so the optimistic
+    // redraw below shows the colour the move is about to be given. The count
+    // runs on; only the colour stops, at MAX_POSTPONED_LEVEL - which is why a
+    // block put off four times takes four moves back to come off red.
+    const MAX_POSTPONED_LEVEL = 2;
+
+    function postponedOf(content) {
+        return Number(content.dataset.postponed) || 0;
+    }
+
+    function postponedLevel(count) {
+        return Math.min(count, MAX_POSTPONED_LEVEL);
+    }
+
+    function postponementAfter(count, fromDate, toDate) {
+        if (toDate > fromDate) {
+            return count + 1;
+        }
+        if (toDate < fromDate) {
+            return Math.max(count - 1, 0);
+        }
+        return count;
+    }
+
+    // Mirrors the postponed_title() macro, down to the wording: the two read
+    // side by side on a page the board has only partly redrawn.
+    function postponedTitle(count) {
+        const times = count === 1 ? "once" : count === 2 ? "twice" : `${count} times`;
+        return `Put off ${times} — moved to a later day`;
+    }
+
+    /* The ! on a block that has been put off: added, updated or taken away to
+       match the count the block is now carrying. It sits between the content and
+       the block's own buttons, which is where the template renders it. */
+    function setWarn(cell, count, done) {
+        const existing = cell.querySelector("[data-slot-warn]");
+        if (!count || done) {
+            existing?.remove();
+            return;
+        }
+
+        const title = postponedTitle(count);
+        const warn = existing || document.createElement("span");
+        if (!existing) {
+            warn.className = "day-slot-warn";
+            warn.setAttribute("data-slot-warn", "");
+            warn.setAttribute("role", "img");
+            warn.textContent = "!";
+            contentOf(cell).after(warn);
+        }
+        warn.title = title;
+        warn.setAttribute("aria-label", title);
+    }
+
     /* Mirrors the classes the template renders, so a block looks the same
        whether the page drew it or a move put the project there. */
     function refreshCell(cell) {
         const content = contentOf(cell);
         const booked = Boolean(content.dataset.projectId);
+        const done = booked && content.dataset.done === "1";
+        const postponed = booked ? postponedOf(content) : 0;
+        const level = postponedLevel(postponed);
 
         cell.classList.toggle("is-booked", booked);
         cell.classList.toggle("is-free", !booked);
-        cell.classList.toggle("is-done", booked && content.dataset.done === "1");
+        cell.classList.toggle("is-done", done);
+        cell.classList.toggle("is-postponed-1", level === 1);
+        cell.classList.toggle("is-postponed-2", level === 2);
+        setWarn(cell, postponed, done);
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
         content.draggable = booked;
@@ -104,8 +164,11 @@
     }
 
     function moveContentInto(cell, content) {
-        // Always between the letter and the buttons, which belong to the block.
-        cell.insertBefore(content, cell.querySelector("[data-clear-slot]"));
+        // Straight after the letter, which is the first thing in every block.
+        // Anchoring on the letter rather than on the × matters now that the !
+        // sits between the two: inserting before the × would put the content
+        // after a ! the block has not shed yet.
+        cell.querySelector(".day-slot-letter").after(content);
     }
 
     /**
@@ -114,17 +177,27 @@
      * "Done" marks a day's session, so it survives a move inside one sheet and is
      * dropped when the project lands on another date - the same rule the server
      * applies, kept in step here so the page does not lie until the next reload.
+     *
+     * The postponement count follows the same idea and the other half of that
+     * rule: the two blocks pass each other, so in a swap across days one goes a
+     * step later and the other a step earlier. Dates are ISO strings, which sort
+     * as the days they name.
      */
     function applyMove(fromCell, toCell) {
         const fromContent = contentOf(fromCell);
         const toContent = contentOf(toCell);
         const wasDone = [fromContent.dataset.done === "1", toContent.dataset.done === "1"];
-        const sameDay = fromCell.dataset.date === toCell.dataset.date;
+        const wasPostponed = [postponedOf(fromContent), postponedOf(toContent)];
+        const fromDate = fromCell.dataset.date;
+        const toDate = toCell.dataset.date;
+        const sameDay = fromDate === toDate;
 
         moveContentInto(toCell, fromContent);
         moveContentInto(fromCell, toContent);
         setDone(fromContent, wasDone[0] && sameDay);
         setDone(toContent, wasDone[1] && sameDay);
+        fromContent.dataset.postponed = postponementAfter(wasPostponed[0], fromDate, toDate);
+        toContent.dataset.postponed = postponementAfter(wasPostponed[1], toDate, fromDate);
         refreshCell(fromCell);
         refreshCell(toCell);
 
@@ -133,6 +206,8 @@
             moveContentInto(toCell, toContent);
             setDone(fromContent, wasDone[0]);
             setDone(toContent, wasDone[1]);
+            fromContent.dataset.postponed = wasPostponed[0];
+            toContent.dataset.postponed = wasPostponed[1];
             refreshCell(fromCell);
             refreshCell(toCell);
         };
@@ -176,6 +251,7 @@
         const previous = {
             projectId: content.dataset.projectId,
             done: content.dataset.done,
+            postponed: content.dataset.postponed,
             nodes: Array.from(content.childNodes),
         };
 
@@ -186,12 +262,16 @@
 
         content.dataset.projectId = "";
         content.dataset.done = "0";
+        // Freeing the block throws the booking away, and with it the record of
+        // how often it was put off - whatever is booked here next starts clean.
+        content.dataset.postponed = "0";
         content.replaceChildren(free);
         refreshCell(cell);
 
         return function undo() {
             content.dataset.projectId = previous.projectId;
             content.dataset.done = previous.done;
+            content.dataset.postponed = previous.postponed;
             content.replaceChildren(...previous.nodes);
             refreshCell(cell);
         };

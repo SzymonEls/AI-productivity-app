@@ -36,6 +36,14 @@ ARCHIVE_WEEKS = 3
 # empty sheets.
 MAX_CALENDAR_WEEKS = 12
 
+# How far a session's block can be tinted for having been put off: one move onto
+# a later day tints it, a second turns it red, and there is nothing past that.
+# This caps the colour, not the count. The count itself runs on, so a session
+# pushed four times has to be pulled back four times to come off red - anything
+# else would let four postponements be undone by one, and the block would go
+# quiet while the plan was still three days behind.
+MAX_POSTPONED_LEVEL = 2
+
 # The health score on the home page: the last week of finished sessions, and
 # nothing else. It measures the bookings that were actually made - A, B and C
 # alike - so an empty slot is neither a session missed nor one to make up for.
@@ -553,6 +561,34 @@ def slot_candidates(user_id, day, slot):
     return candidates
 
 
+def postponement_after(count, from_day, to_day):
+    """The block's postponement count once it has moved from one day to another.
+
+    Later is one step on, earlier is one step back, and a move inside the same
+    sheet - dragging a session from block A to block B - is not a move in time
+    at all, so it leaves the count alone.
+
+    Nothing caps this on the way up: every postponement is counted, and every one
+    of them has to be pulled back for the block to come off red. The floor at
+    zero is the one bound, since a session can hardly be earlier than never late.
+    """
+    if to_day > from_day:
+        return count + 1
+    if to_day < from_day:
+        return max(count - 1, 0)
+    return count
+
+
+def postponed_level(count):
+    """How far up the colour scale a count puts the block: 0, 1 or 2.
+
+    The count runs past this; the scale does not. Two moves onto a later day is
+    already the red, and a third has nowhere further to go - what it does is make
+    the way back longer.
+    """
+    return min(count, MAX_POSTPONED_LEVEL)
+
+
 def assign_slot(user_id, project_id, day, slot):
     """
     Book a project into a slot.
@@ -634,6 +670,9 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
 
     This is what a drag on the schedule page ends in. Returns ``(ok, message)``;
     the caller commits, and a rejected move leaves the session untouched.
+
+    Both sessions in a swap change date, so both have their postponement count
+    brought up to date - in opposite directions, since they pass each other.
     """
     today = today_local()
 
@@ -666,8 +705,20 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     # Updating both rows in one flush would collide with the unique constraint on
     # (user, date, slot), so the displaced row leaves the table and comes back on
     # the spot the moved one has just vacated.
-    # Read off what the displaced row has to say before deleting it.
-    displaced = (target.project_id, target.is_done, target.project.title) if target is not None else None
+    # Read off what the displaced row has to say before deleting it. Its
+    # postponement count comes back with it: the row is rebuilt only to get round
+    # the constraint, and as far as the plan is concerned that session was moved,
+    # not deleted and booked again.
+    displaced = (
+        (
+            target.project_id,
+            target.is_done,
+            postponement_after(target.postponed_count, to_day, from_day),
+            target.project.title,
+        )
+        if target is not None
+        else None
+    )
     if target is not None:
         db.session.delete(target)
         db.session.flush()
@@ -676,12 +727,13 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     # dropped when the booking lands on another date.
     source.slot_date = to_day
     source.slot = to_slot
+    source.postponed_count = postponement_after(source.postponed_count, from_day, to_day)
     if to_day != from_day:
         source.is_done = False
     db.session.flush()
 
     if displaced is not None:
-        project_id, was_done, displaced_title = displaced
+        project_id, was_done, was_postponed, displaced_title = displaced
         db.session.add(
             ProjectDaySlot(
                 user_id=user_id,
@@ -689,6 +741,7 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
                 slot_date=from_day,
                 slot=from_slot,
                 is_done=was_done if to_day == from_day else False,
+                postponed_count=was_postponed,
             )
         )
         return True, f"Swapped with {displaced_title}."
@@ -716,6 +769,10 @@ def shift_bookings_forward(user_id, from_day, days=1):
     keeps the same collision from happening inside one statement batch. A block
     held back by a finished session in the way is held back for the same reason -
     there is nowhere for it to land - and holds back the one behind it in turn.
+
+    A day off is a postponement like any other, so every session it moves counts
+    one, and the blocks tint on the schedule accordingly. A session held back
+    counts nothing: it did not move.
     """
     if days < 1:
         return False, "A day off is at least one day.", 0
@@ -742,6 +799,9 @@ def shift_bookings_forward(user_id, from_day, days=1):
             staying.add((entry.slot_date, entry.slot))
             continue
 
+        entry.postponed_count = postponement_after(
+            entry.postponed_count, entry.slot_date, target[0]
+        )
         entry.slot_date = target[0]
         db.session.flush()
         moved += 1

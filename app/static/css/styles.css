@@ -2186,8 +2186,36 @@ button.picker-row:hover {
     --slot-card-accent: var(--slot-optional-accent);
 }
 
+/* A session that has been put off walks from the amber towards the red - once
+   for the first move onto a later day, and the rest of the way for the second.
+   These come after the optional rule on purpose: a spare C block that keeps
+   being pushed is exactly as late as an A one, and its quiet grey would hide
+   that. Nothing is added to the block but its colour; the tooltip says why. */
+.day-slot.is-booked.is-postponed-1 {
+    --slot-card-accent: var(--slot-late-accent);
+}
+
+.day-slot.is-booked.is-postponed-2 {
+    --slot-card-accent: var(--slot-latest-accent);
+}
+
+/* Last of the four, so a finished session is green whatever it took to get
+   there. It happened; how often it was moved first is no longer the point. */
 .day-slot.is-booked.is-done {
     --slot-card-accent: var(--success);
+}
+
+/* The ! on a block that has been put off, between the title and the block's own
+   buttons. It takes the accent the block has just been given, so it deepens with
+   the tint rather than repeating it in a third colour - and it is what carries
+   the count, on hover, once the colour has stopped rising. */
+.day-slot-warn {
+    flex: 0 0 auto;
+    color: var(--slot-card-accent);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
 }
 
 .day-slot-letter {
