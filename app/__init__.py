@@ -28,10 +28,11 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import CalendarFeed, DayNote, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import CalendarFeed, DayNote, InboxItem, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
     from .api.routes import api_bp
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
+    from .inbox.routes import inbox_bp
     from .integrations.routes import integrations_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
@@ -43,6 +44,7 @@ def create_app(config_class=Config):
     app.register_blueprint(time_tracking_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(integrations_bp)
+    app.register_blueprint(inbox_bp)
     register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)

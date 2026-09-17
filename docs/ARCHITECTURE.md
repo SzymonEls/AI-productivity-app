@@ -27,9 +27,10 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
+| [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the page behind the PWA shortcut, whose job is to raise the notification the service worker answers - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
-| [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score) + PWA files (manifest, service worker). |
+| [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
@@ -88,12 +89,20 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   and their order is the order they were written in. It belongs to the user and the date, never to
   a project, so no project deletion cascades it away — see point 16.
 
+- **InboxItem** — one thought captured before it was decided where it belongs: a `body` and
+  nothing else. It has no `project_id`, and that absence *is* the state - an item exists precisely
+  for as long as no project has been chosen for it. Filing one appends its text to that project's
+  `short_goal` and deletes the row in the same transaction, so the inbox is a queue rather than a
+  second copy of anything. Like a DayNote it is the user's, never a project's, so no project
+  deletion cascades one away; unlike a DayNote it belongs to no date either, because when a
+  thought was had says nothing about where it goes. See point 19.
+
 - **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
   (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
   the first keeps a dead URL from being retried on every page render, the second is what the page
   means by "last read". Events are not stored — see point 17.
 
-The schema in the code matches the latest migration (`20260915_0023`).
+The schema in the code matches the latest migration (`20260917_0026`).
 
 ## Responsibility boundaries
 
@@ -339,6 +348,45 @@ The schema in the code matches the latest migration (`20260915_0023`).
     part of it, it does **not** travel on a move, so `refreshCell` redraws it and `moveContentInto`
     anchors on the letter instead of on the `×`: inserting before the `×` would drop the content
     behind a `!` the block has not shed yet.
+
+19. **A thought is captured by the service worker, not by a page.** The inbox exists because
+    capturing and filing are two different moments: on a phone you have a sentence and no
+    patience for picking a project, at the desk you have the list in front of you. So an item
+    arrives with nothing but its text and waits on the home page until a project is chosen.
+
+    The capture path is the unusual part. `manifest.webmanifest` declares a `shortcuts` entry,
+    which Android puts in the menu behind a long press on the installed app's icon; it opens
+    `/inbox/capture`, whose only real job is to call `showNotification` with an action of
+    `type: "text"` and then be irrelevant. The reply is delivered to the **`notificationclick`
+    handler in [service-worker.js](../app/static/service-worker.js)**, which posts it to
+    `/inbox` with `credentials: "include"` and re-shows the notification. A service worker is
+    woken for that event whether or not a window is open, so the whole round trip happens with
+    the app never really launching - you stay in whatever you were doing, pull the shade down,
+    tap Add, dictate, send.
+
+    Three consequences worth knowing:
+
+    - **The endpoint is cookie-authenticated, not `/api/v1`.** The service worker already has the
+      session cookie and a token would have to be stored somewhere; it asks with
+      `X-Requested-With`, so an expired session comes back as the JSON 401 from
+      `register_login_handlers` rather than as a login page the worker would read as a success.
+      This is the one write path in the app that runs with no window open, which is exactly why
+      it reuses the browser's own credential rather than inventing a second one.
+    - **A reply field cannot be pre-filled**, so a failed save quotes the text back in the
+      notification body and makes it sticky. That is all that is left of it - there is no retry
+      queue, and adding one would mean a store the worker can reach.
+    - **Notifications do not survive a reboot.** The shortcut re-creates the notification, so the
+      recovery is to use the shortcut again; nothing is lost, but the shade is empty until you do.
+      `inbox-capture.js` also keeps a plain textarea on that page for the devices that refuse
+      notifications outright, which is the same box the + beside "Today" opens.
+
+    Filing is the ordinary half: the picker on the home page posts to `/inbox/<id>/file`, which
+    appends the text to `Project.short_goal` behind a blank line and deletes the row in one
+    transaction. It stays plain text - no date stamp, no bullet - because `short_goal` has no
+    structure to respect and inventing one would only have to be parsed back out later. The
+    widget is rendered `hidden` rather than omitted when the inbox is empty: the + has to be able
+    to fill it without a reload, and the row markup and project list it clones come from the
+    `<template>` that section carries.
 
 ## What not to touch (and why)
 

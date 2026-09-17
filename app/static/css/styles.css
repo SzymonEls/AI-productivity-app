@@ -1858,6 +1858,68 @@ button.picker-row:hover {
     text-decoration: underline;
 }
 
+/* Inbox — thoughts captured before a project was chosen for them.
+   The widget is hidden outright while the list is empty (the template carries
+   the `hidden` attribute), so there is no empty state to style here. A row is
+   the text over its picker rather than beside it: the sidebar is narrow, the
+   text is the part worth reading, and a select squeezed next to it would be too
+   small to hit on a phone. */
+.inbox-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+}
+
+.inbox-item {
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.inbox-item-text {
+    font-size: 0.875rem;
+    /* A dictated thought arrives as one run of text with no spaces to break at
+       if it names a URL or a long word; anywhere is better than overflowing the
+       sidebar. */
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.inbox-status {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    min-height: 1.2em;
+    margin-bottom: 0.5rem;
+}
+
+.inbox-status-success { color: var(--success); }
+.inbox-status-danger { color: var(--danger); }
+
+/* The box the + beside "Today" reveals. It sits under the whole header row
+   rather than inside it, so a long thought is not typed into a sliver of it. */
+.inbox-capture {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.inbox-capture-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.inbox-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
 /* System health — a big ring for the last week of sessions, and a small one
    under it that is only ever ok or not ok, for planning.
    The three bands only change --health-accent; everything below reads it. */
