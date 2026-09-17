@@ -9,6 +9,7 @@ from ..projects.slots import (
     today_local,
     unscheduled_projects,
 )
+from ..inbox.routes import filing_projects, items_for
 from ..time_tracking.service import daily_totals_by_project, project_last_session_labels
 
 
@@ -33,6 +34,11 @@ def home():
     totals = daily_totals_by_project(current_user.id, today)
     unplanned = unscheduled_projects(current_user.id)
     slot_cards = [serialize_slot_card(slot, booked[slot], totals) for slot in SLOTS]
+    # Two more queries on a page that already makes several. The projects are
+    # fetched even with an empty inbox: the + beside "Today" can fill it without
+    # a reload, and the picker it would then need has to already be on the page.
+    inbox_items = items_for(current_user.id)
+    inbox_projects = filing_projects(current_user.id)
 
     return render_template(
         "home.html",
@@ -45,6 +51,8 @@ def home():
         # The list is passed in so the health figure reuses it instead of
         # asking for the unscheduled projects a second time.
         health=system_health(current_user.id, unplanned),
+        inbox_items=inbox_items,
+        inbox_projects=inbox_projects,
     )
 
 

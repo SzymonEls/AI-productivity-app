@@ -84,6 +84,15 @@ class User(UserMixin, db.Model):
         lazy=True,
         order_by=lambda: (DayNote.note_date, DayNote.created_at, DayNote.id),
     )
+    inbox_items = db.relationship(
+        "InboxItem",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        # Newest first: the inbox is a queue you empty from the top, and the
+        # thought you just dictated is the one you are still thinking about.
+        order_by=lambda: (InboxItem.created_at.desc(), InboxItem.id.desc()),
+    )
     calendar_feeds = db.relationship(
         "CalendarFeed",
         back_populates="owner",
@@ -337,6 +346,48 @@ class DayNote(db.Model):
 
     __table_args__ = (
         db.Index("ix_day_notes_user_date", "user_id", "note_date"),
+    )
+
+
+# A captured thought is a sentence or two dictated on the way somewhere, not an
+# essay: long enough for a paragraph, short enough that the widget stays a list.
+# Checked on the column and again where an item is saved.
+INBOX_ITEM_MAX_LENGTH = 2000
+
+
+class InboxItem(db.Model):
+    """One thought captured before it was decided which project it belongs to.
+
+    The whole point is that capturing and filing are separate moments. Phone in
+    hand you have a sentence and no patience for picking a project; at the desk
+    you have the list in front of you and the choice is obvious. So an item
+    holds nothing but the text and waits on the home page until a project is
+    chosen for it.
+
+    Deliberately not a project's field and not a DayNote: it belongs to no
+    project yet - that is its defining state - and to no day either, since when
+    a thought was had says nothing about where it goes. Filing one appends the
+    text to ``Project.short_goal`` and deletes the row, so the inbox is only
+    ever a queue: nothing that has been filed is kept here as well.
+    """
+
+    __tablename__ = "inbox_items"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    body = db.Column(db.String(INBOX_ITEM_MAX_LENGTH), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="inbox_items")
+
+    __table_args__ = (
+        db.Index("ix_inbox_items_user", "user_id"),
     )
 
 

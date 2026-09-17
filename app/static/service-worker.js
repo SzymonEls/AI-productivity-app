@@ -1,4 +1,4 @@
-const VERSION = "pwa-network-first-v2";
+const VERSION = "pwa-network-first-v3";
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 const START_URL = "/";
@@ -171,4 +171,111 @@ async function networkFirstAsset(request) {
     }
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Quick capture from the notification shade.
+//
+// The "Add to inbox" shortcut in the app icon's menu opens /inbox/capture,
+// whose only job is to raise the notification below and get out of the way. The
+// reply is handled here rather than in that page, and that is the whole point:
+// a service worker is woken for notificationclick whether or not a window is
+// open, so dictating a thought never actually launches the app - you stay in
+// whatever you were doing, pull down the shade, tap Add, talk, send.
+//
+// The session cookie rides along on credentials: "include", so this needs no
+// token of its own. A signed-out phone gets a JSON 401 back (the endpoint is
+// asked with X-Requested-With, so Flask-Login answers rather than redirecting)
+// and the message is put back in the shade.
+// ---------------------------------------------------------------------------
+
+const INBOX_ENDPOINT = "/inbox";
+const INBOX_TAG = "inbox-capture";
+const INBOX_TITLE = "Add to inbox";
+
+// One shape for every state of the notification, so the reply field survives
+// whatever the last attempt did. renotify stays off and the sound is silenced:
+// this is a box you reach for, not something that should interrupt anyone.
+function inboxNotification(body, sticky) {
+  return {
+    body,
+    tag: INBOX_TAG,
+    silent: true,
+    requireInteraction: Boolean(sticky),
+    icon: "/static/icons/pwa-icon-192.png",
+    badge: "/static/icons/pwa-icon-192.png",
+    data: { kind: INBOX_TAG },
+    actions: [
+      {
+        action: "inbox",
+        type: "text",
+        title: "Add",
+        placeholder: "A thought to file later…",
+      },
+    ],
+  };
+}
+
+self.addEventListener("notificationclick", (event) => {
+  const notification = event.notification;
+  const isInbox = notification.data && notification.data.kind === INBOX_TAG;
+
+  if (isInbox && event.action === "inbox") {
+    notification.close();
+    event.waitUntil(saveThought((event.reply || "").trim()));
+    return;
+  }
+
+  // The body of the notification, or a device with no inline reply: open the
+  // app instead, where the same thing can be typed beside "Today".
+  notification.close();
+  event.waitUntil(focusApp());
+});
+
+async function saveThought(text) {
+  if (!text) {
+    return self.registration.showNotification(
+      INBOX_TITLE,
+      inboxNotification("Nothing was written. Reply to add a thought.")
+    );
+  }
+
+  try {
+    const response = await fetch(INBOX_ENDPOINT, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      body: JSON.stringify({ body: text }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      throw new Error(payload.message || "The thought was not saved.");
+    }
+
+    return self.registration.showNotification(
+      INBOX_TITLE,
+      inboxNotification("Added. Reply again to add another.")
+    );
+  } catch (error) {
+    // The text is quoted back rather than dropped, because the reply field
+    // cannot be pre-filled and this is all that is left of it. Sticky, so it
+    // survives until it has been dealt with.
+    const reason = error && error.message ? error.message : "The thought was not saved.";
+    return self.registration.showNotification(
+      "Not added to the inbox",
+      inboxNotification(`${reason}\n\nStill unsaved: “${text}”`, true)
+    );
+  }
+}
+
+async function focusApp() {
+  const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  const own = windows.find((client) => client.url && client.url.startsWith(self.location.origin));
+  if (own) {
+    return own.focus();
+  }
+  return self.clients.openWindow(START_URL);
 }

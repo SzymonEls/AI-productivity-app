@@ -21,5 +21,20 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add to inbox",
+      "short_name": "Add to inbox",
+      "description": "Dictate a thought into the inbox without opening the app",
+      "url": "/inbox/capture",
+      "icons": [
+        {
+          "src": "/static/icons/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
