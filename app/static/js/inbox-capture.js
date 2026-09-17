@@ -1,17 +1,13 @@
 /**
  * The page behind the "Add to inbox" shortcut in the app icon's menu.
  *
- * Its whole job is to put a notification with a reply field in the shade and
- * then be irrelevant: the reply is handled by the service worker
- * (see service-worker.js), so a thought can be dictated without this window, or
- * any window, being looked at. Getting here at all is the cost of the shortcut
- * having to open something.
+ * One box and one button, because the shortcut exists to skip everything else:
+ * it opens straight onto the field rather than onto the home page, so the thing
+ * you had in your head goes down before you have to look at today's plan. The
+ * mic is the keyboard's own, which is what makes this worth having on a phone.
  *
- * Everything below is about the cases where that does not work. Permission is
- * asked for behind a button because Chrome refuses a request that no gesture
- * led to, and the textarea underneath is a real fallback rather than a
- * courtesy - a phone that has notifications switched off for this app would
- * otherwise have a shortcut that does nothing and says nothing.
+ * The field keeps the focus after a save rather than the page going anywhere,
+ * so a second thought needs no second trip through the launcher.
  */
 (function () {
     "use strict";
@@ -23,131 +19,67 @@
 
     const ENDPOINT = "/inbox";
     const status = page.querySelector("[data-capture-status]");
-    const enableButton = page.querySelector("[data-capture-enable]");
     const form = page.querySelector("[data-capture-form]");
     const field = page.querySelector("[data-capture-field]");
+    const submit = form ? form.querySelector("button[type='submit']") : null;
 
-    function setStatus(message) {
-        if (status) {
-            status.textContent = message;
+    function setStatus(message, tone) {
+        if (!status) {
+            return;
         }
+        status.textContent = message || "";
+        status.className = `capture-status${tone ? ` capture-status-${tone}` : ""}`;
     }
 
-    function supported() {
-        return "serviceWorker" in navigator && "Notification" in window && window.isSecureContext;
-    }
-
-    /* The same notification the service worker re-shows after each reply, so the
-       one in the shade looks the same however it got there. */
-    function notificationOptions(body) {
-        return {
-            body,
-            tag: "inbox-capture",
-            silent: true,
-            icon: "/static/icons/pwa-icon-192.png",
-            badge: "/static/icons/pwa-icon-192.png",
-            data: { kind: "inbox-capture" },
-            actions: [
-                {
-                    action: "inbox",
-                    type: "text",
-                    title: "Add",
-                    placeholder: "A thought to file later…",
-                },
-            ],
-        };
-    }
-
-    async function showCaptureNotification() {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification("Add to inbox", notificationOptions("Reply here to drop a thought in the inbox."));
-        setStatus("Pull down your notifications and reply — the mic is on the keyboard. You can close this page.");
-    }
-
-    async function start() {
-        if (!supported()) {
-            setStatus("This browser has no notifications to reply to. Write it here instead.");
+    async function save() {
+        const body = field.value.trim();
+        if (!body) {
+            field.focus();
             return;
         }
 
-        if (Notification.permission === "denied") {
-            setStatus("Notifications are switched off for this app, so there is nothing to reply to. Write it here, or turn them back on in the system settings.");
-            return;
-        }
-
-        if (Notification.permission !== "granted") {
-            setStatus("Allow notifications once and this shortcut will drop a reply box into your notification shade.");
-            if (enableButton) {
-                enableButton.hidden = false;
-            }
-            return;
+        if (submit) {
+            submit.disabled = true;
         }
 
         try {
-            await showCaptureNotification();
+            const response = await fetch(ENDPOINT, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Requested-With": "XMLHttpRequest",
+                },
+                body: JSON.stringify({ body }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || "The thought was not saved.");
+            }
+            field.value = "";
+            setStatus("Added. It is waiting on the home page.", "success");
         } catch (error) {
-            setStatus("The notification could not be shown. Write it here instead.");
+            // The text is left in the box on purpose: it is the only copy, and
+            // this is the one moment where losing it would be unforgivable.
+            setStatus(error.message || "The thought was not saved.", "danger");
+        } finally {
+            if (submit) {
+                submit.disabled = false;
+            }
+            field.focus();
         }
     }
 
-    if (enableButton) {
-        enableButton.addEventListener("click", async () => {
-            enableButton.disabled = true;
-            try {
-                // Asked from inside the click: Chrome ignores a request that no
-                // gesture led to, and silently treats it as a refusal.
-                const permission = await Notification.requestPermission();
-                if (permission !== "granted") {
-                    setStatus("Notifications were not allowed. Write it here instead.");
-                    return;
-                }
-                enableButton.hidden = true;
-                await showCaptureNotification();
-            } catch (error) {
-                setStatus("The notification could not be shown. Write it here instead.");
-            } finally {
-                enableButton.disabled = false;
-            }
-        });
-    }
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        save();
+    });
 
-    if (form && field) {
-        form.addEventListener("submit", async (event) => {
+    field.addEventListener("keydown", (event) => {
+        // Enter sends, Shift+Enter breaks the line - the same keys the box
+        // beside "Today" answers to.
+        if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
-            const body = field.value.trim();
-            if (!body) {
-                return;
-            }
-
-            const submit = form.querySelector("button[type='submit']");
-            if (submit) {
-                submit.disabled = true;
-            }
-
-            try {
-                const response = await fetch(ENDPOINT, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-Requested-With": "XMLHttpRequest",
-                    },
-                    body: JSON.stringify({ body }),
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || !payload.ok) {
-                    throw new Error(payload.message || "The thought was not saved.");
-                }
-                field.value = "";
-                setStatus("Added to the inbox. It is waiting on the home page.");
-            } catch (error) {
-                setStatus(error.message || "The thought was not saved.");
-            } finally {
-                if (submit) {
-                    submit.disabled = false;
-                }
-            }
-        });
-    }
-
-    start();
+            save();
+        }
+    });
 })();

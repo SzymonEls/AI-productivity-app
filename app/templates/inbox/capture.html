@@ -4,35 +4,33 @@
 
 {% block content %}
 {#
-  The target of the "Add to inbox" shortcut in the app icon's menu. It is not a
-  page you read - on a phone that has already granted notifications it raises
-  the reply notification and is done before you have looked at it, and the
-  typing happens in the shade with this window behind everything.
+  The target of the "Add to inbox" shortcut in the app icon's menu: one box, one
+  button, and nothing else on the page. The point of the shortcut is to land on
+  the field rather than on the home page, so a thought goes down before today's
+  plan is in front of you and starts arguing with it.
 
-  The box below is the fallback, and it is not a footnote: notifications can be
-  refused, switched off per app, or unsupported by the browser, and without
-  somewhere to type the shortcut would be a dead end on exactly the devices
-  least able to explain themselves. It is also what this page is on a desktop.
+  `autofocus` puts the caret in the box on arrival. Whether the soft keyboard
+  comes up with it is the browser's decision - Chrome on Android usually waits
+  for a tap - so this is a head start, not a guarantee, and the box is sized to
+  be an easy target either way.
 #}
 <div class="dashboard-page inbox-capture-page" data-inbox-capture-page>
     <section class="dashboard-section">
         <h1 class="h5 mb-1">Add to inbox</h1>
-        <p class="text-muted small mb-3" data-capture-status role="status">Setting up&hellip;</p>
-
-        <button type="button" class="btn btn-primary btn-sm mb-3" data-capture-enable hidden>
-            Allow notifications
-        </button>
+        <p class="text-muted small mb-3">Whatever this is, it can be put against a project later.</p>
 
         <form data-capture-form>
-            <label class="form-label small text-muted" for="captureBody">Or write it here</label>
             <textarea
                 id="captureBody"
-                class="form-control mb-2"
+                class="form-control mb-2 capture-field"
                 data-capture-field
                 rows="4"
                 maxlength="2000"
+                autofocus
                 placeholder="A thought to file later&hellip;"
+                aria-label="A thought to put in the inbox"
             ></textarea>
+            <p class="capture-status" data-capture-status role="status"></p>
             <div class="d-flex gap-2">
                 <button type="submit" class="btn btn-primary btn-sm">Add to inbox</button>
                 <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('main.home') }}">Home</a>

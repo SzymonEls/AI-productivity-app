@@ -54,14 +54,14 @@ container, no external services.
   ring like any other. The note list is live there too: a day is usually only described once it
   has been.
 - **Inbox** — somewhere to put a thought before deciding which project it belongs to. Long-press
-  the installed app's icon on Android and the menu offers **Add to inbox**: that drops a
-  notification with a reply field into the shade, and whatever you type — or dictate, the mic is
-  on the keyboard — is saved without the app really opening. There is a + beside "Today" for the
-  same thing at a desk. What is waiting shows up in a list on the home page, each line with a
-  project picker; choosing one appends the text to that project's thoughts, a blank line below
-  whatever was already there, and takes the line off the list. A × throws one away instead —
-  a reply tapped by accident should not have to be filed somewhere real to be got rid of. An
-  empty inbox shows nothing at all.
+  the installed app's icon on Android and the menu offers **Add to inbox**, which opens straight
+  onto a box: type it, or dictate it with the mic on the keyboard, and it is saved without today's
+  plan ever coming up to argue with it. There is a + beside "Today" for the same thing at a desk.
+  What is waiting shows up in a list on the home page, each line with a project picker; choosing
+  one appends the text to that project's thoughts, a blank line below whatever was already there,
+  and takes the line off the list. A × throws one away instead — something captured by accident
+  should not have to be filed somewhere real to be got rid of. An empty inbox shows nothing at
+  all.
 - **Calendars** — paste a calendar's address in iCal format on the **Integrations** page (under
   your name in the top right) and its events show up under the blocks of every day sheet, in the
   past as well as ahead. The public and the private ("secret") address both work; nothing is ever
