@@ -8,9 +8,13 @@ container, no external services.
 
 ## What it does
 
-- **Projects** — each one has a short goal, a cadence and a long plan written in Markdown.
+- **Projects** — each one has a short goal and a long plan written in Markdown.
   Headings become steps, checkboxes stay checkable in the rendered view, and a finished
-  section can be archived out of the plan without leaving the page. Archiving the whole project
+  section can be archived out of the plan without leaving the page. Beside the plan sits
+  **Statistics**, which holds nothing until it is asked: press Show and it works out, from the
+  last three weeks, how many sessions a week the project came round and how long a session ran.
+  Nothing is stored — the figures are counted from the bookings and the clock when you ask for
+  them, so they cannot go stale. Archiving the whole project
   takes it out of the planning — off the home page, out of the block picker on the schedule, out of
   ⌘K — while the sessions already booked for it stay in the schedule and still count; the project
   page says so, and one still due today keeps its place in ⌘K. A project marked private
@@ -24,7 +28,7 @@ container, no external services.
 - **Timeline** — projects and free-form notes arranged in columns you drag between; a backlog
   column holds whatever is off the timeline.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
-  shows what is in them, the first heading of each plan and today's tracked time against a target.
+  shows what is in them, the first heading of each plan and today's tracked time.
   Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
   were ticked off. Only finished work moves it — beside it, a second and smaller ring says whether
   every project has a next session planned: green with a ✓ when they all do, amber with a ✗ when

@@ -239,61 +239,38 @@
                         </div>
                     </div>
                 </section>
-                <section class="card shadow-sm inline-edit-card">
+                {# Nothing is stored here and nothing is worked out until it is
+                   asked for: the figures mean reading three weeks of bookings and
+                   timer entries, which is not a price the page should pay every
+                   time it opens. So the card arrives empty with a button on it. #}
+                <section
+                    class="card shadow-sm project-statistics"
+                    data-project-statistics
+                    data-statistics-url="{{ url_for('projects.project_statistics_data', project_id=project.id) }}"
+                >
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                            <h2 class="h5 mb-0">Frequency</h2>
-                            <div class="inline-section-controls">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="frequency">Edit</button>
-                                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="frequency">Save</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="frequency">Cancel</button>
+                            <h2 class="h5 mb-0">Statistics</h2>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-statistics-load>Show</button>
+                        </div>
+                        <p class="statistics-hint mb-0" data-statistics-hint>
+                            The last three weeks: how often this project came round, and how long a session ran.
+                        </p>
+                        <div class="statistics-loading d-none" data-statistics-loading>
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Working it out&hellip;</span>
+                        </div>
+                        <dl class="statistics-figures d-none" data-statistics-figures>
+                            <div class="statistics-figure">
+                                <dt>Sessions a week</dt>
+                                <dd data-statistics-per-week>&mdash;</dd>
                             </div>
-                        </div>
-                        <div data-edit-display="frequency">
-                            <p class="mb-0 preserve-lines" data-display-value="frequency">{{ project.frequency }}</p>
-                        </div>
-                        <div class="d-none" data-edit-form="frequency">
-                            <input
-                                type="text"
-                                id="frequency"
-                                name="frequency"
-                                class="form-control"
-                                value="{{ project.frequency }}"
-                                required
-                            >
-                        </div>
-                    </div>
-                </section>
-                <section class="card shadow-sm inline-edit-card">
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                            <h2 class="h5 mb-0">Daily target</h2>
-                            <div class="inline-section-controls">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="daily-target">Edit</button>
-                                <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="daily-target">Save</button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm d-none" data-edit-cancel="daily-target">Cancel</button>
+                            <div class="statistics-figure">
+                                <dt>Time per session</dt>
+                                <dd data-statistics-average>&mdash;</dd>
                             </div>
-                        </div>
-                        <div data-edit-display="daily-target">
-                            <p class="mb-0" data-display-value="daily_target_minutes">
-                                {{ daily_target_label or "No target" }}
-                            </p>
-                        </div>
-                        <div class="d-none" data-edit-form="daily-target">
-                            <input
-                                type="number"
-                                id="daily_target_minutes"
-                                name="daily_target_minutes"
-                                class="form-control"
-                                min="0"
-                                step="5"
-                                placeholder="e.g. 120"
-                                value="{{ project.daily_target_minutes if project.daily_target_minutes else '' }}"
-                            >
-                            <p class="form-text mb-0">
-                                Minutes to aim for on a day this project is in slot A or B. Leave empty for no target.
-                            </p>
-                        </div>
+                        </dl>
+                        <p class="statistics-note mb-0 d-none" data-statistics-note></p>
                     </div>
                 </section>
         </div>
@@ -386,7 +363,6 @@
                 <div class="modal-body">
                     <input type="hidden" name="title" value="{{ project.title }}" data-settings-title>
                     <input type="hidden" name="short_goal" value="{{ project.short_goal }}" data-settings-short-goal>
-                    <input type="hidden" name="frequency" value="{{ project.frequency }}" data-settings-frequency>
                     <input type="hidden" name="long_goal" value="{{ project.long_goal }}" data-settings-long-goal>
                     <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-settings-private-input>
                     <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-settings-starred-input>
@@ -429,6 +405,7 @@
 <script src="{{ url_for('static', filename='js/private-reveal.js') }}"></script>
 <script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
+<script src="{{ url_for('static', filename='js/project-statistics.js') }}"></script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");
@@ -439,9 +416,7 @@
         const fieldNames = {
             "title": "title",
             "short-goal": "short_goal",
-            "frequency": "frequency",
             "long-goal": "long_goal",
-            "daily-target": "daily_target_minutes",
         };
 
         const longGoalTextarea = form.querySelector("#long_goal");
@@ -895,16 +870,11 @@
         const buildProjectMarkdown = () => {
             const title = getSectionCurrentValue("title").trim() || "Project";
             const shortGoal = getSectionCurrentValue("short-goal").trim();
-            const frequency = getSectionCurrentValue("frequency").trim();
             const longGoal = getSectionCurrentValue("long-goal").trim();
             const sections = [`# ${title}`];
 
             if (shortGoal) {
                 sections.push(`## Thoughts\n\n${shortGoal}`);
-            }
-
-            if (frequency) {
-                sections.push(`## Frequency\n\n${frequency}`);
             }
 
             if (longGoal) {
@@ -1058,12 +1028,6 @@
             }
             document.title = project.title;
             form.querySelector("[data-display-value='short_goal']").textContent = project.short_goal;
-            form.querySelector("[data-display-value='frequency']").textContent = project.frequency;
-            const dailyTargetDisplay = form.querySelector("[data-display-value='daily_target_minutes']");
-            if (dailyTargetDisplay) {
-                // The server formats it ("2h 30m"); the raw minutes stay in the input.
-                dailyTargetDisplay.textContent = project.daily_target_label || "No target";
-            }
             if (longGoalPreview) {
                 longGoalPreview.innerHTML = project.long_goal_html;
                 enablePreviewTaskCheckboxes();
@@ -1077,7 +1041,6 @@
             }
 
             form.querySelector("[name='short_goal']").value = project.short_goal;
-            form.querySelector("[name='frequency']").value = project.frequency;
             if (longGoalEditor) {
                 longGoalEditor.value(project.long_goal);
             } else {
@@ -1105,7 +1068,6 @@
             if (settingsForm) {
                 settingsForm.querySelector("[data-settings-title]").value = project.title;
                 settingsForm.querySelector("[data-settings-short-goal]").value = project.short_goal;
-                settingsForm.querySelector("[data-settings-frequency]").value = project.frequency;
                 settingsForm.querySelector("[data-settings-long-goal]").value = project.long_goal;
                 const settingsPrivateInput = settingsForm.querySelector("[data-settings-private-input]");
                 const settingsPrivateToggle = settingsForm.querySelector("[data-settings-private-toggle]");
@@ -1658,15 +1620,6 @@
             if (activeSaveButton) {
                 saveSection(activeSaveButton.dataset.saveSection, activeSaveButton);
             }
-        });
-
-        form.querySelectorAll("input[name='frequency']").forEach((input) => {
-            input.addEventListener("keydown", (event) => {
-                if (event.key === "Enter") {
-                    event.preventDefault();
-                    form.requestSubmit();
-                }
-            });
         });
 
         if (titleInput) {

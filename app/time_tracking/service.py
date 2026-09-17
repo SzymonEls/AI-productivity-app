@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from flask import current_app
@@ -141,6 +141,34 @@ def daily_totals_by_project(user_id, day):
     now = utc_now()
     for entry in entries:
         totals[entry.project_id] += entry_overlap_seconds(entry, range_start, range_end, now)
+    return totals
+
+
+def tracked_seconds_by_day(user_id, project_id, first_day, last_day):
+    """One project's tracked seconds per local day, over an inclusive range.
+
+    Like daily_totals_by_project() but the other way round - one project across
+    many days rather than one day across many projects - and it reads the range
+    once instead of a query per day. Days with nothing tracked are left out, so
+    the keys are exactly the days the project was worked on.
+
+    The split is by local day rather than by which day an entry started on: a
+    session running past midnight belongs to both days, in the share that fell
+    on each.
+    """
+    range_start, _ = day_bounds_utc(first_day)
+    _, range_end = day_bounds_utc(last_day)
+    entries = entries_for_range(user_id, range_start, range_end, project_id=project_id)
+
+    now = utc_now()
+    totals = {}
+    day = first_day
+    while day <= last_day:
+        day_start, day_end = day_bounds_utc(day)
+        seconds = sum(entry_overlap_seconds(entry, day_start, day_end, now) for entry in entries)
+        if seconds:
+            totals[day] = seconds
+        day += timedelta(days=1)
     return totals
 
 

@@ -178,7 +178,6 @@ def _seed_projects(user):
         {
             "title": "Portfolio website",
             "short_goal": "Ship a personal site that gets me interviews.",
-            "frequency": "Twice a week",
             "is_starred": True,
             "long_goal": (
                 "# Content\n"
@@ -204,7 +203,6 @@ def _seed_projects(user):
         {
             "title": "This productivity app",
             "short_goal": "Keep the tool I actually use every day in good shape.",
-            "frequency": "Every day",
             "is_starred": True,
             "long_goal": (
                 "# Now\n"
@@ -224,7 +222,6 @@ def _seed_projects(user):
         {
             "title": "Learning Rust",
             "short_goal": "Get comfortable enough to write a small CLI tool.",
-            "frequency": "Three times a week",
             "long_goal": (
                 "# Fundamentals\n"
                 "- [x] Ownership and borrowing\n"
@@ -239,7 +236,6 @@ def _seed_projects(user):
         {
             "title": "Home server",
             "short_goal": "Self-host the services I would otherwise rent.",
-            "frequency": "Once a week",
             "long_goal": (
                 "# Infrastructure\n"
                 "- [x] Docker Compose for every service\n"
@@ -254,7 +250,6 @@ def _seed_projects(user):
         {
             "title": "Health",
             "short_goal": "Move more, sleep at a sane hour.",
-            "frequency": "Every day",
             "is_private": True,
             "long_goal": (
                 "# Routine\n"
@@ -268,7 +263,6 @@ def _seed_projects(user):
         {
             "title": "Conference talk",
             "short_goal": "Give the SQLite talk at the local meetup.",
-            "frequency": "Once a month",
             "long_goal": (
                 "# Talk\n"
                 "- [x] Outline\n"
@@ -287,7 +281,6 @@ def _seed_projects(user):
             owner=user,
             title=definition["title"],
             short_goal=definition["short_goal"],
-            frequency=definition["frequency"],
             long_goal=definition["long_goal"],
             archived_long_goal=definition.get("archived_long_goal", ""),
             is_starred=definition.get("is_starred", False),
@@ -383,10 +376,6 @@ def _seed_day_slots(user, projects):
                 is_done=(day == today and slot == "B"),
             )
         )
-
-    # A target so the dashboard shows "45m / 2h" rather than just the elapsed time.
-    active[0].daily_target_minutes = 120
-    active[1].daily_target_minutes = 45
 
     db.session.flush()
 

@@ -139,11 +139,8 @@ class Project(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(150), nullable=False)
     short_goal = db.Column(db.Text, nullable=False)
-    frequency = db.Column(db.String(255), nullable=False)
     long_goal = db.Column(db.Text, nullable=False)
     archived_long_goal = db.Column(db.Text, nullable=False, default="")
-    # Minutes to aim for on a day this project sits in slot A or B. None = no target.
-    daily_target_minutes = db.Column(db.Integer, nullable=True)
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
