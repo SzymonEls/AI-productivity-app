@@ -73,24 +73,23 @@
         return Boolean(contentOf(cell).dataset.projectId);
     }
 
-    // The same scale the server clamps to: one move onto a later day tints the
-    // block, a second turns it red, and a move back the other way takes a step
-    // off again. Kept in step with slots.py so the optimistic redraw below shows
-    // the colour the move is about to be given.
-    const MAX_POSTPONEMENTS = 2;
-    const POSTPONED_TITLES = [
-        "",
-        "Put off once — moved to a later day",
-        "Put off twice — moved to a later day again",
-    ];
+    // The same arithmetic slots.py does, kept in step here so the optimistic
+    // redraw below shows the colour the move is about to be given. The count
+    // runs on; only the colour stops, at MAX_POSTPONED_LEVEL - which is why a
+    // block put off four times takes four moves back to come off red.
+    const MAX_POSTPONED_LEVEL = 2;
 
     function postponedOf(content) {
         return Number(content.dataset.postponed) || 0;
     }
 
+    function postponedLevel(count) {
+        return Math.min(count, MAX_POSTPONED_LEVEL);
+    }
+
     function postponementAfter(count, fromDate, toDate) {
         if (toDate > fromDate) {
-            return Math.min(count + 1, MAX_POSTPONEMENTS);
+            return count + 1;
         }
         if (toDate < fromDate) {
             return Math.max(count - 1, 0);
@@ -98,25 +97,51 @@
         return count;
     }
 
+    // Mirrors the postponed_title() macro, down to the wording: the two read
+    // side by side on a page the board has only partly redrawn.
+    function postponedTitle(count) {
+        const times = count === 1 ? "once" : count === 2 ? "twice" : `${count} times`;
+        return `Put off ${times} — moved to a later day`;
+    }
+
+    /* The ! on a block that has been put off: added, updated or taken away to
+       match the count the block is now carrying. It sits between the content and
+       the block's own buttons, which is where the template renders it. */
+    function setWarn(cell, count, done) {
+        const existing = cell.querySelector("[data-slot-warn]");
+        if (!count || done) {
+            existing?.remove();
+            return;
+        }
+
+        const title = postponedTitle(count);
+        const warn = existing || document.createElement("span");
+        if (!existing) {
+            warn.className = "day-slot-warn";
+            warn.setAttribute("data-slot-warn", "");
+            warn.setAttribute("role", "img");
+            warn.textContent = "!";
+            contentOf(cell).after(warn);
+        }
+        warn.title = title;
+        warn.setAttribute("aria-label", title);
+    }
+
     /* Mirrors the classes the template renders, so a block looks the same
        whether the page drew it or a move put the project there. */
     function refreshCell(cell) {
         const content = contentOf(cell);
         const booked = Boolean(content.dataset.projectId);
+        const done = booked && content.dataset.done === "1";
         const postponed = booked ? postponedOf(content) : 0;
+        const level = postponedLevel(postponed);
 
         cell.classList.toggle("is-booked", booked);
         cell.classList.toggle("is-free", !booked);
-        cell.classList.toggle("is-done", booked && content.dataset.done === "1");
-        cell.classList.toggle("is-postponed-1", postponed === 1);
-        cell.classList.toggle("is-postponed-2", postponed >= 2);
-        // The tooltip is the only thing that says why the block changed colour,
-        // so it travels with the count rather than with the position.
-        if (postponed) {
-            cell.title = POSTPONED_TITLES[Math.min(postponed, MAX_POSTPONEMENTS)];
-        } else {
-            cell.removeAttribute("title");
-        }
+        cell.classList.toggle("is-done", done);
+        cell.classList.toggle("is-postponed-1", level === 1);
+        cell.classList.toggle("is-postponed-2", level === 2);
+        setWarn(cell, postponed, done);
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
         content.draggable = booked;
@@ -139,8 +164,11 @@
     }
 
     function moveContentInto(cell, content) {
-        // Always between the letter and the buttons, which belong to the block.
-        cell.insertBefore(content, cell.querySelector("[data-clear-slot]"));
+        // Straight after the letter, which is the first thing in every block.
+        // Anchoring on the letter rather than on the × matters now that the !
+        // sits between the two: inserting before the × would put the content
+        // after a ! the block has not shed yet.
+        cell.querySelector(".day-slot-letter").after(content);
     }
 
     /**

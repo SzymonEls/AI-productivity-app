@@ -38,11 +38,11 @@ MAX_CALENDAR_WEEKS = 12
 
 # How far a session's block can be tinted for having been put off: one move onto
 # a later day tints it, a second turns it red, and there is nothing past that.
-# The count is clamped to this rather than kept running, so that moving the
-# session back one day always takes exactly one step of colour off again - a
-# block pushed five times and pulled back once would otherwise still be red,
-# which says nothing about the plan as it now stands.
-MAX_POSTPONEMENTS = 2
+# This caps the colour, not the count. The count itself runs on, so a session
+# pushed four times has to be pulled back four times to come off red - anything
+# else would let four postponements be undone by one, and the block would go
+# quiet while the plan was still three days behind.
+MAX_POSTPONED_LEVEL = 2
 
 # The health score on the home page: the last week of finished sessions, and
 # nothing else. It measures the bookings that were actually made - A, B and C
@@ -567,12 +567,26 @@ def postponement_after(count, from_day, to_day):
     Later is one step on, earlier is one step back, and a move inside the same
     sheet - dragging a session from block A to block B - is not a move in time
     at all, so it leaves the count alone.
+
+    Nothing caps this on the way up: every postponement is counted, and every one
+    of them has to be pulled back for the block to come off red. The floor at
+    zero is the one bound, since a session can hardly be earlier than never late.
     """
     if to_day > from_day:
-        return min(count + 1, MAX_POSTPONEMENTS)
+        return count + 1
     if to_day < from_day:
         return max(count - 1, 0)
     return count
+
+
+def postponed_level(count):
+    """How far up the colour scale a count puts the block: 0, 1 or 2.
+
+    The count runs past this; the scale does not. Two moves onto a later day is
+    already the red, and a third has nowhere further to go - what it does is make
+    the way back longer.
+    """
+    return min(count, MAX_POSTPONED_LEVEL)
 
 
 def assign_slot(user_id, project_id, day, slot):

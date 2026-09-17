@@ -2205,6 +2205,19 @@ button.picker-row:hover {
     --slot-card-accent: var(--success);
 }
 
+/* The ! on a block that has been put off, between the title and the block's own
+   buttons. It takes the accent the block has just been given, so it deepens with
+   the tint rather than repeating it in a third colour - and it is what carries
+   the count, on hover, once the colour has stopped rising. */
+.day-slot-warn {
+    flex: 0 0 auto;
+    color: var(--slot-card-accent);
+    font-size: 0.9rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: help;
+}
+
 .day-slot-letter {
     flex: 0 0 auto;
     width: 1.1rem;

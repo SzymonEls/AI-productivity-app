@@ -307,11 +307,20 @@ The schema in the code matches the latest migration (`20260915_0023`).
 
     `postponement_after` is the whole rule. Landing on a later day is one step on, an earlier day
     one step back, and a move inside one sheet — A to B on the same date — is not a move in time
-    and counts nothing. The tally is **clamped to `MAX_POSTPONEMENTS` (2)** rather than left to run
-    up, and that clamp is the point: the colour has two steps, so a block pushed five times and
-    pulled back once has to lose a step of colour, which an uncapped count would not do. A swap
-    moves both bookings, in opposite directions, and the displaced row is rebuilt only to get past
-    the unique constraint, so its count is carried across by hand — it was moved, not rebooked.
+    and counts nothing. **Nothing caps it on the way up**, and that is deliberate: a session pushed
+    four times has to be pulled back four times to come off red, because anything else would let
+    four postponements be undone by one and the block would go quiet while the plan was still three
+    days behind. The floor at zero is the one bound.
+
+    **`MAX_POSTPONED_LEVEL` (2) caps the colour, not the count.** `postponed_level()` is the whole
+    of that: 0, 1 or 2, and the class rendered is the level, so the stylesheet always has a colour
+    for it however high the count has run. Past two the extra moves are invisible on the block and
+    readable in the tooltip, which says the number — that is where "four times" and "twice", which
+    look identical, differ.
+
+    A swap moves both bookings, in opposite directions, and the displaced row is rebuilt only to
+    get past the unique constraint, so its count is carried across by hand — it was moved, not
+    rebooked.
 
     A day off counts for every booking it moves, and nothing for one it holds back (see point 10).
     Freeing the block throws the tally away with the row: booking the project again is a new plan,
@@ -322,6 +331,14 @@ The schema in the code matches the latest migration (`20260915_0023`).
     [app/static/js/schedule-board.js](../app/static/js/schedule-board.js) keeps its own copy of the
     same arithmetic, and the count rides on `[data-slot-content]` — the element that travels — the
     way `data-done` does, even though it is the block around it that gets tinted.
+
+    The tint is backed by a **`!`** between the title and the block's buttons, because a colour on
+    its own is not something every reader can tell apart; it takes the block's own accent rather
+    than a third colour, and it carries the tooltip. It is not rendered on a finished session — the
+    block is green by then and nothing about it is late. Being a sibling of the content rather than
+    part of it, it does **not** travel on a move, so `refreshCell` redraws it and `moveContentInto`
+    anchors on the letter instead of on the `×`: inserting before the `×` would drop the content
+    behind a `!` the block has not shed yet.
 
 ## What not to touch (and why)
 
