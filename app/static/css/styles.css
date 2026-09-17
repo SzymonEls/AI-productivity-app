@@ -353,6 +353,51 @@
     margin-top: 1rem;
 }
 
+/* The Statistics card on a project page. It has three states in the same box -
+ * the line explaining what it will show, the spinner, and the figures - so they
+ * are sized alike and nothing jumps as one replaces another. */
+.project-statistics {
+    border-radius: var(--radius-lg);
+}
+
+.statistics-hint,
+.statistics-note {
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
+.statistics-note-bad {
+    color: var(--danger);
+}
+
+.statistics-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+
+.statistics-figures {
+    display: grid;
+    gap: 0.9rem;
+    margin: 0 0 0.75rem;
+}
+
+.statistics-figure dt {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.statistics-figure dd {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
 .project-view-toolbar {
     display: flex;
     align-items: center;
@@ -1686,30 +1731,6 @@ button.picker-row:hover {
     white-space: nowrap;
 }
 
-/* Today's tracked time against the targets set on the A and B projects. */
-.day-progress {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-}
-
-.day-progress-percent {
-    font-size: 1.35rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-}
-
-.day-progress-percent.is-complete {
-    color: var(--success);
-}
-
-.day-progress-detail {
-    color: var(--muted-foreground);
-    font-size: 0.85rem;
-    font-variant-numeric: tabular-nums;
-}
-
 /* Empty is empty, whichever letter it is: grey and dashed, waiting to be filled. */
 .slot-card-empty {
     background: var(--surface-2);
@@ -1816,11 +1837,6 @@ button.picker-row:hover {
 .slot-card-time {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-}
-
-.slot-card-target {
-    color: var(--muted-foreground);
-    font-weight: 400;
 }
 
 .unplanned-list {

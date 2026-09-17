@@ -26,7 +26,7 @@ def home():
     if not current_user.is_authenticated:
         return redirect(url_for("auth.login"))
 
-    from ..projects.routes import day_progress, serialize_slot_card
+    from ..projects.routes import serialize_slot_card
 
     today = today_local()
     booked = slots_for_date(current_user.id, today)
@@ -44,7 +44,6 @@ def home():
         "home.html",
         today=today,
         slot_cards=slot_cards,
-        day_progress=day_progress(slot_cards),
         timed_slots=TIMED_SLOTS,
         unplanned_projects=unplanned,
         project_last_session_labels=project_last_session_labels(current_user.id, unplanned),

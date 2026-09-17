@@ -35,6 +35,7 @@ from .slots import (
     planned_session_labels,
     planned_session_labels_by_project,
     postponed_level,
+    project_statistics,
     schedule_window,
     set_block_done,
     set_session_done,
@@ -80,7 +81,6 @@ def serialize_slot_card(slot, booking, totals):
 
     shows_time = slot in TIMED_SLOTS
     tracked_seconds = totals.get(project.id, 0) if shows_time else 0
-    target_minutes = project.daily_target_minutes if shows_time else None
 
     return {
         "slot": slot,
@@ -88,37 +88,9 @@ def serialize_slot_card(slot, booking, totals):
         "is_done": is_done,
         "plan_heading": first_plan_section_title(project.long_goal),
         "shows_time": shows_time,
-        # Same compact format on both sides of the slash: "45m / 2h", not
-        # "00:45:00 / 2h". format_duration() stays for the time-tracking pages,
-        # where seconds matter.
+        # The compact format, not "00:45:00": format_duration() stays for the
+        # time-tracking pages, where seconds matter.
         "tracked_label": _minutes_label(tracked_seconds // 60, zero="0m") if shows_time else "",
-        "target_label": _minutes_label(target_minutes),
-        # Raw numbers so the day total can be summed without parsing labels.
-        "tracked_minutes": tracked_seconds // 60 if shows_time else 0,
-        "target_minutes": target_minutes or 0,
-    }
-
-
-def day_progress(slot_cards):
-    """
-    How much of today's planned time is done, as a percentage.
-
-    Only slots with a target count, on both sides of the ratio: time spent on a
-    project you never set a target for is not progress against a plan, and
-    counting it would push the figure past 100% for no clear reason. Returns
-    None when nothing is targeted, so the caller can leave the spot empty.
-    """
-    targeted = [card for card in slot_cards if card.get("target_minutes")]
-    if not targeted:
-        return None
-
-    tracked = sum(card["tracked_minutes"] for card in targeted)
-    target = sum(card["target_minutes"] for card in targeted)
-
-    return {
-        "percent": round(tracked / target * 100),
-        "tracked_label": _minutes_label(tracked, zero="0m"),
-        "target_label": _minutes_label(target),
     }
 
 
@@ -758,17 +730,15 @@ def create_project():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         short_goal = request.form.get("short_goal", "").strip()
-        frequency = request.form.get("frequency", "").strip()
         long_goal = request.form.get("long_goal", "").strip()
         is_private = _form_bool("is_private", default=False)
 
-        if not title or not short_goal or not frequency or not long_goal:
+        if not title or not short_goal or not long_goal:
             flash("Please complete all project fields.", "danger")
         else:
             project = Project(
                 title=title,
                 short_goal=short_goal,
-                frequency=frequency,
                 long_goal=long_goal,
                 is_private=is_private,
                 owner=current_user,
@@ -817,7 +787,6 @@ def project_detail(project_id):
         "projects/project_detail.html",
         project=project,
         timer_summary=today_project_summary(current_user.id, project.id),
-        daily_target_label=_minutes_label(project.daily_target_minutes),
         today_slot=today_booking.slot if today_booking else "",
         today_session_done=bool(today_booking and today_booking.is_done),
         # What archiving left standing, for the banner to name. Only asked for
@@ -825,6 +794,36 @@ def project_detail(project_id):
         planned_sessions=planned_session_labels(current_user.id, project.id)
         if project.is_archived
         else [],
+    )
+
+
+@projects_bp.route("/<int:project_id>/statistics")
+@login_required
+def project_statistics_data(project_id):
+    """The Statistics widget's figures, fetched when the widget is asked for.
+
+    Not part of project_detail(): working these out means reading every booking
+    and every timer entry of the last three weeks, and the project page is
+    opened far more often than the figures are wanted. The widget arrives empty
+    and calls this, so the page costs nothing until someone asks.
+    """
+    project = _get_user_project_or_404(project_id)
+    figures = project_statistics(current_user.id, project.id)
+
+    return jsonify(
+        {
+            "ok": True,
+            "statistics": {
+                "weeks": figures["weeks"],
+                "sessions": figures["sessions"],
+                # One decimal: "1.3 a week" says something "1 a week" does not.
+                "sessions_per_week_label": f"{figures['sessions_per_week']:.1f}",
+                "average_label": _minutes_label(figures["average_seconds"] // 60, zero="0m"),
+                "tracked_label": _minutes_label(figures["tracked_seconds"] // 60, zero="0m"),
+                "first_day": figures["first_day"].isoformat(),
+                "last_day": figures["last_day"].isoformat(),
+            },
+        }
     )
 
 
@@ -838,24 +837,10 @@ def edit_project(project_id):
 
     title = request.form.get("title", "").strip()
     short_goal = request.form.get("short_goal", "").strip()
-    frequency = request.form.get("frequency", "").strip()
     long_goal = request.form.get("long_goal", "").strip()
     starred_value = request.form.get("is_starred")
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
-    # Absent field: leave the target alone (the beacon save posts a subset).
-    # Present but empty: the user cleared it, so drop the target.
-    if "daily_target_minutes" in request.form:
-        raw_target = request.form.get("daily_target_minutes", "").strip()
-        daily_target_minutes = _coerce_int(raw_target) if raw_target else None
-        if raw_target and (daily_target_minutes is None or daily_target_minutes < 0):
-            error_message = "The daily target must be a number of minutes."
-            if _wants_json_response():
-                return jsonify({"ok": False, "message": error_message}), 400
-            flash(error_message, "danger")
-            return redirect(url_for("projects.project_detail", project_id=project.id))
-    else:
-        daily_target_minutes = project.daily_target_minutes
 
     # A navigator.sendBeacon() save fired while the page is being closed: it can't
     # set request headers, so we detect it by a form flag and answer quietly (no
@@ -863,7 +848,7 @@ def edit_project(project_id):
     wants_json = _wants_json_response()
     is_beacon = request.form.get("_beacon") == "1"
 
-    if not title or not short_goal or not frequency:
+    if not title or not short_goal:
         error_message = "Please complete all project fields."
         if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
@@ -873,11 +858,9 @@ def edit_project(project_id):
     else:
         project.title = title
         project.short_goal = short_goal
-        project.frequency = frequency
         project.long_goal = long_goal
         project.is_starred = is_starred
         project.is_private = is_private
-        project.daily_target_minutes = daily_target_minutes
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -901,7 +884,6 @@ def edit_project(project_id):
                     "project": {
                         "title": project.title,
                         "short_goal": project.short_goal,
-                        "frequency": project.frequency,
                         "long_goal": project.long_goal,
                         "long_goal_html": str(render_project_markdown(project.long_goal)),
                         "archived_long_goal": project.archived_long_goal or "",
@@ -909,8 +891,6 @@ def edit_project(project_id):
                         "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
-                        "daily_target_minutes": project.daily_target_minutes,
-                        "daily_target_label": _minutes_label(project.daily_target_minutes),
                         "updated_label": "just now",
                     },
                 }
@@ -949,7 +929,6 @@ def archive_project_section(project_id):
             "project": {
                 "title": project.title,
                 "short_goal": project.short_goal,
-                "frequency": project.frequency,
                 "long_goal": project.long_goal,
                 "long_goal_html": str(render_project_markdown(project.long_goal)),
                 "archived_long_goal": project.archived_long_goal or "",
@@ -996,7 +975,6 @@ def restore_project_section(project_id):
             "project": {
                 "title": project.title,
                 "short_goal": project.short_goal,
-                "frequency": project.frequency,
                 "long_goal": project.long_goal,
                 "long_goal_html": str(render_project_markdown(project.long_goal)),
                 "archived_long_goal": project.archived_long_goal or "",
@@ -1102,7 +1080,6 @@ def save_timeline():
                         owner=current_user,
                         title=title,
                         short_goal=body or "-",
-                        frequency="-",
                         long_goal=body or "-",
                         is_private=bool(item_payload.get("is_private")),
                     )
@@ -1286,7 +1263,6 @@ def _serialize_timeline_item(item, last_session_labels=None):
             "title": item.project.title if item.project else "Project",
             "url": url_for("projects.project_detail", project_id=item.project_id) if item.project_id else "#",
             "is_private": bool(item.project.is_private) if item.project else False,
-            "frequency": item.project.frequency if item.project else "",
             "last_session_label": last_session_labels.get(item.project_id, "Last session: none"),
         }
 

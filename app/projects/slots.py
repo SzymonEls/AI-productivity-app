@@ -14,7 +14,7 @@ from sqlalchemy.orm import joinedload
 
 from ..extensions import db
 from ..models import Project, ProjectDaySlot
-from ..time_tracking.service import app_timezone, utc_now
+from ..time_tracking.service import app_timezone, tracked_seconds_by_day, utc_now
 
 
 SLOTS = ("A", "B", "C")
@@ -58,6 +58,11 @@ HEALTH_WINDOW_DAYS = 7
 # Below these the ring turns amber and then red.
 HEALTH_GOOD_PERCENT = 75
 HEALTH_WARN_PERCENT = 50
+
+# How far back the Statistics widget on a project page looks. Three weeks is long
+# enough that one skipped week does not halve the average and short enough that
+# it still describes how the project is going now rather than how it went.
+STATISTICS_WEEKS = 3
 
 
 def today_local():
@@ -333,6 +338,58 @@ def system_health(user_id, unplanned=None):
         "planned_projects": planned_count,
         "active_projects": active_count,
         "unplanned_projects": unplanned_count,
+    }
+
+
+def project_statistics(user_id, project_id, weeks=STATISTICS_WEEKS):
+    """How one project has actually been going over the last few weeks.
+
+    A session here is a *day the project was worked on*: a booking ticked off,
+    or time on the clock, or both. Counting only the ticked bookings would score
+    a zero for someone who works from the timer and never marks the block done,
+    and counting only the tracked time would lose the sessions that were done
+    away from the keyboard - so a day counts once if either says so.
+
+    Time comes from the timer alone, since a booking says nothing about how long
+    it took. A session with nothing tracked therefore averages in as zero, which
+    is what "average time spent on a session" has to mean when some of them were
+    never timed.
+
+    The window ends today rather than yesterday - unlike system_health(), which
+    would open every morning with a drop. Nothing here is a score to fall, and
+    the session you just finished belongs in it.
+    """
+    today = today_local()
+    days = weeks * DAYS_PER_WEEK
+    first_day = today - timedelta(days=days - 1)
+
+    done_days = {
+        slot_date
+        for (slot_date,) in db.session.query(ProjectDaySlot.slot_date)
+        .filter(
+            ProjectDaySlot.user_id == user_id,
+            ProjectDaySlot.project_id == project_id,
+            ProjectDaySlot.is_done.is_(True),
+            ProjectDaySlot.slot_date >= first_day,
+            ProjectDaySlot.slot_date <= today,
+        )
+        .distinct()
+    }
+    tracked_days = tracked_seconds_by_day(user_id, project_id, first_day, today)
+
+    session_days = done_days | set(tracked_days)
+    session_count = len(session_days)
+    tracked_seconds = sum(tracked_days.get(day, 0) for day in session_days)
+
+    return {
+        "weeks": weeks,
+        "window_days": days,
+        "first_day": first_day,
+        "last_day": today,
+        "sessions": session_count,
+        "sessions_per_week": session_count / weeks,
+        "tracked_seconds": tracked_seconds,
+        "average_seconds": tracked_seconds // session_count if session_count else 0,
     }
 
 

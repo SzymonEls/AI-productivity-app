@@ -395,15 +395,6 @@ def initialize_database(app):
                     text("UPDATE projects SET updated_at = created_at WHERE updated_at IS NULL")
                 )
                 db.session.commit()
-            if "frequency" not in project_columns:
-                # Keep existing local databases usable when new project fields are added.
-                db.session.execute(
-                    text(
-                        "ALTER TABLE projects ADD COLUMN frequency VARCHAR(255) "
-                        "DEFAULT 'Once a week' NOT NULL"
-                    )
-                )
-                db.session.commit()
             if "is_starred" not in project_columns:
                 db.session.execute(
                     text(

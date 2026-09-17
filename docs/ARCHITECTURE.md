@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
@@ -59,7 +59,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   `calendar_refresh_minutes` is how stale a subscribed calendar may get before the schedule
   re-reads it — a taste rather than a deployment setting, so it lives here and is set on the
   Integrations page, clamped to 5…1440 both where it is saved and where it is read.
-- **Project** — `title`, `short_goal`, `frequency`, `long_goal` (Markdown), `archived_long_goal`,
+- **Project** — `title`, `short_goal`, `long_goal` (Markdown), `archived_long_goal`,
   the flags `is_starred`/`is_private`/`is_archived`. `is_archived` takes a project out of the
   planning without touching its bookings — see point 15. `is_private` is a curtain, not a permission:
   the project page always renders the plan and the thoughts wrapped in a veil, but the veil is
@@ -387,6 +387,39 @@ The schema in the code matches the latest migration (`20260917_0026`).
     asked for either way. That is the rule `delete_note` follows for a day note, for the same
     reason. Nothing is confirmed first: an item that should not have been captured is not worth a
     dialog, and that is the trade for making capture as careless as it is.
+
+20. **The Statistics card counts on request, and a "session" there is a day, not a booking.**
+    A project page carries no figures of its own until somebody presses Show. Working them out
+    means reading every booking and every timer entry of the last three weeks
+    (`project_statistics` in [app/projects/slots.py](../app/projects/slots.py), through
+    `tracked_seconds_by_day` in [app/time_tracking/service.py](../app/time_tracking/service.py)),
+    and a project page is opened far more often than the numbers are wanted - so the card arrives
+    empty, [app/static/js/project-statistics.js](../app/static/js/project-statistics.js) asks
+    `GET /projects/<id>/statistics` for them, and the page costs nothing until it is asked.
+    Pressing it again re-reads rather than showing what came back before: a session ticked off in
+    another tab, or the clock stopped a minute ago, belongs in the answer.
+
+    Nothing is stored. There is no statistics table and no column anywhere - the figures are
+    counted from the bookings and the entries every time, which is the same bargain the tag page
+    makes (point 11) and for the same reason: a number kept in step with two other tables is a
+    number that will eventually disagree with them.
+
+    A **session** is a *day this project was worked on* - a booking ticked done, or time on the
+    clock, or both, counted once. Neither half is enough on its own: counting only the ticked
+    bookings scores a zero for someone who works from the timer and never marks the block done,
+    and counting only the tracked time loses the sessions done away from the keyboard. The time
+    per session comes from the timer alone, since a booking says nothing about how long it took,
+    so a session that was never timed averages in as zero - which is what "average time spent on
+    a session" has to mean when some of them were not timed at all.
+
+    The window is three weeks **ending today**, unlike the health score (point 12), which ends
+    yesterday. Nothing here is a score that can fall, so there is no morning drop to avoid, and
+    the session just finished belongs in the figures.
+
+    This replaced two fields in 1.8.0: a project's `frequency` (a sentence about how often to
+    come back to it) and `daily_target_minutes` (minutes to aim for, which the home page read as
+    a percentage). Both were intentions typed once and never checked against anything; both
+    columns were dropped in migration `20260917_0027`.
 
 ## What not to touch (and why)
 

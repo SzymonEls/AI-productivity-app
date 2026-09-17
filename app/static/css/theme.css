@@ -700,7 +700,7 @@ hr, .dropdown-divider { border-color: var(--border); }
     min-width: 0;
 }
 
-/* Sidebar layout (default): the plan is wide on the left, Thoughts & Frequency
+/* Sidebar layout (default): the plan is wide on the left, Thoughts & Statistics
  * sit in a sticky column beside it. */
 @media (min-width: 992px) {
     [data-project-layout="sidebar"] .project-detail-body {
@@ -712,7 +712,7 @@ hr, .dropdown-divider { border-color: var(--border); }
     }
 }
 
-/* Stacked layout (the earlier look): Thoughts & Frequency sit above the plan,
+/* Stacked layout (the earlier look): Thoughts & Statistics sit above the plan,
  * side by side on wider screens. */
 [data-project-layout="stacked"] .project-meta-col { order: -1; }
 
