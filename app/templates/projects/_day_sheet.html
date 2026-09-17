@@ -14,17 +14,24 @@
 #}
 {% from "icons.html" import icon %}
 
+{# Why the block is tinted, spelled out on hover. The scale stops at two, so
+   there are only ever these two lines to say. #}
+{% macro postponed_title(postponed) %}{{ "Put off once — moved to a later day" if postponed == 1 else "Put off twice — moved to a later day again" }}{% endmacro %}
+
 {% macro slot_cell(day, entry, readonly=False) %}
     {# The letter and the two buttons belong to the position and stay put; only
-       [data-slot-content] travels when a project is dragged. #}
+       [data-slot-content] travels when a project is dragged - which is why how
+       often the session has been put off is carried on the content rather than
+       on the block, even though it is the block that gets tinted. #}
     <li
-        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}"
+        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}{% if entry.project and entry.postponed %} is-postponed-{{ entry.postponed }}{% endif %}"
+        {% if entry.project and entry.postponed %}title="{{ postponed_title(entry.postponed) }}"{% endif %}
         {% if not readonly %}data-slot-cell data-date="{{ day.date.isoformat() }}" data-slot="{{ entry.slot }}"{% endif %}
     >
         <span class="day-slot-letter" aria-hidden="true">{{ entry.slot }}</span>
         <div
             class="day-slot-content"
-            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}"{% endif %}
+            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-postponed="{{ entry.postponed }}"{% endif %}
         >
             {% if entry.project %}
                 <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>

@@ -22,6 +22,7 @@ from .slots import (
     ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
     MAX_CALENDAR_WEEKS,
+    MAX_POSTPONEMENTS,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
@@ -322,6 +323,14 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=()):
                 first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
             ),
             "is_done": bool(booked[slot].is_done) if booked[slot] else False,
+            # How often the session has been put off, which tints the block.
+            # Clamped here rather than in the template, so the class it renders
+            # is always one the stylesheet has a colour for - the scale is what
+            # the page can show, and the stored count is only kept in step with
+            # it by the service layer.
+            "postponed": (
+                min(booked[slot].postponed_count, MAX_POSTPONEMENTS) if booked[slot] else 0
+            ),
             # C is the spare slot; it stays visibly secondary once it is filled.
             "is_optional": slot not in TIMED_SLOTS,
         }

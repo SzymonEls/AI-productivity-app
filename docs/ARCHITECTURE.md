@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
@@ -76,6 +76,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **ProjectTimelineItem** — a tile: a project or a note (`item_type` = `"project"`/`"note"`).
 - **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
   `is_done` marks that day's session finished - it lives on the slot, so it clears itself tomorrow.
+  `postponed_count` is how often the session has been pushed onto a later day, which is what
+  colours its block on the schedule - see point 18.
   Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
   `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
@@ -296,6 +298,30 @@ The schema in the code matches the latest migration (`20260915_0023`).
     The URL is fetched by the server, so `add_feed` refuses one whose host resolves to a private
     or loopback address: registration can be open, and without that check the app would be an
     open proxy into whatever network it is deployed in.
+
+18. **A session's colour is counted, not worked out.** `postponed_count` on `ProjectDaySlot` is a
+    running tally kept by `move_booking` and `shift_bookings_forward`
+    ([app/projects/slots.py](../app/projects/slots.py)), not something derived from the dates: a
+    booking's history is a single row that gets updated, so by the time it sits on a later day
+    there is nothing left to compare it with.
+
+    `postponement_after` is the whole rule. Landing on a later day is one step on, an earlier day
+    one step back, and a move inside one sheet — A to B on the same date — is not a move in time
+    and counts nothing. The tally is **clamped to `MAX_POSTPONEMENTS` (2)** rather than left to run
+    up, and that clamp is the point: the colour has two steps, so a block pushed five times and
+    pulled back once has to lose a step of colour, which an uncapped count would not do. A swap
+    moves both bookings, in opposite directions, and the displaced row is rebuilt only to get past
+    the unique constraint, so its count is carried across by hand — it was moved, not rebooked.
+
+    A day off counts for every booking it moves, and nothing for one it holds back (see point 10).
+    Freeing the block throws the tally away with the row: booking the project again is a new plan,
+    and a new plan starts from nothing being late. This is the reason the count lives on the
+    booking rather than on the project.
+
+    The board applies a move to the page before the server has answered, so `refreshCell` in
+    [app/static/js/schedule-board.js](../app/static/js/schedule-board.js) keeps its own copy of the
+    same arithmetic, and the count rides on `[data-slot-content]` — the element that travels — the
+    way `data-done` does, even though it is the block around it that gets tinted.
 
 ## What not to touch (and why)
 

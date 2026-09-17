@@ -40,9 +40,13 @@
     --success: #16a34a;
     --danger: #dc2626;
     --warning: #d97706;
-    /* Accents on a booked day slot: amber for A and B, grey for the optional C. */
+    /* Accents on a booked day slot: amber for A and B, grey for the optional C.
+       A session that has been put off walks from the amber towards the red: one
+       step is the halfway colour, two is the red itself. */
     --slot-accent: #d97706;
     --slot-optional-accent: #9ca3af;
+    --slot-late-accent: #ea580c;
+    --slot-latest-accent: #dc2626;
 
     --radius: 0.7rem;
     --radius-sm: 0.5rem;
@@ -84,6 +88,8 @@
     --warning: #fbbf24;
     --slot-accent: #fbbf24;
     --slot-optional-accent: #71717a;
+    --slot-late-accent: #fb923c;
+    --slot-latest-accent: #f87171;
 
     --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);

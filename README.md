@@ -33,6 +33,11 @@ container, no external services.
   the home page: dashed grey while free, amber once booked, green when the session is done. The
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
+  A session that keeps getting put off says so: moving one onto a later day reddens its block —
+  once for the first move, the rest of the way for the second — and pulling it back to an earlier
+  day takes the colour off again. The count belongs to the booking, so freeing the block and
+  booking the project again starts it clean, and a finished session is green whatever it took to
+  get there.
   Under the blocks, behind the same dashed line the date sits behind, is that day's note list:
   a + adds a line, a click on one rewrites it where it stands, a × takes it away, and a day takes
   as many as get written. Above them sit that day's events from any calendar you have

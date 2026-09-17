@@ -73,15 +73,50 @@
         return Boolean(contentOf(cell).dataset.projectId);
     }
 
+    // The same scale the server clamps to: one move onto a later day tints the
+    // block, a second turns it red, and a move back the other way takes a step
+    // off again. Kept in step with slots.py so the optimistic redraw below shows
+    // the colour the move is about to be given.
+    const MAX_POSTPONEMENTS = 2;
+    const POSTPONED_TITLES = [
+        "",
+        "Put off once — moved to a later day",
+        "Put off twice — moved to a later day again",
+    ];
+
+    function postponedOf(content) {
+        return Number(content.dataset.postponed) || 0;
+    }
+
+    function postponementAfter(count, fromDate, toDate) {
+        if (toDate > fromDate) {
+            return Math.min(count + 1, MAX_POSTPONEMENTS);
+        }
+        if (toDate < fromDate) {
+            return Math.max(count - 1, 0);
+        }
+        return count;
+    }
+
     /* Mirrors the classes the template renders, so a block looks the same
        whether the page drew it or a move put the project there. */
     function refreshCell(cell) {
         const content = contentOf(cell);
         const booked = Boolean(content.dataset.projectId);
+        const postponed = booked ? postponedOf(content) : 0;
 
         cell.classList.toggle("is-booked", booked);
         cell.classList.toggle("is-free", !booked);
         cell.classList.toggle("is-done", booked && content.dataset.done === "1");
+        cell.classList.toggle("is-postponed-1", postponed === 1);
+        cell.classList.toggle("is-postponed-2", postponed >= 2);
+        // The tooltip is the only thing that says why the block changed colour,
+        // so it travels with the count rather than with the position.
+        if (postponed) {
+            cell.title = POSTPONED_TITLES[Math.min(postponed, MAX_POSTPONEMENTS)];
+        } else {
+            cell.removeAttribute("title");
+        }
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
         content.draggable = booked;
@@ -114,17 +149,27 @@
      * "Done" marks a day's session, so it survives a move inside one sheet and is
      * dropped when the project lands on another date - the same rule the server
      * applies, kept in step here so the page does not lie until the next reload.
+     *
+     * The postponement count follows the same idea and the other half of that
+     * rule: the two blocks pass each other, so in a swap across days one goes a
+     * step later and the other a step earlier. Dates are ISO strings, which sort
+     * as the days they name.
      */
     function applyMove(fromCell, toCell) {
         const fromContent = contentOf(fromCell);
         const toContent = contentOf(toCell);
         const wasDone = [fromContent.dataset.done === "1", toContent.dataset.done === "1"];
-        const sameDay = fromCell.dataset.date === toCell.dataset.date;
+        const wasPostponed = [postponedOf(fromContent), postponedOf(toContent)];
+        const fromDate = fromCell.dataset.date;
+        const toDate = toCell.dataset.date;
+        const sameDay = fromDate === toDate;
 
         moveContentInto(toCell, fromContent);
         moveContentInto(fromCell, toContent);
         setDone(fromContent, wasDone[0] && sameDay);
         setDone(toContent, wasDone[1] && sameDay);
+        fromContent.dataset.postponed = postponementAfter(wasPostponed[0], fromDate, toDate);
+        toContent.dataset.postponed = postponementAfter(wasPostponed[1], toDate, fromDate);
         refreshCell(fromCell);
         refreshCell(toCell);
 
@@ -133,6 +178,8 @@
             moveContentInto(toCell, toContent);
             setDone(fromContent, wasDone[0]);
             setDone(toContent, wasDone[1]);
+            fromContent.dataset.postponed = wasPostponed[0];
+            toContent.dataset.postponed = wasPostponed[1];
             refreshCell(fromCell);
             refreshCell(toCell);
         };
@@ -176,6 +223,7 @@
         const previous = {
             projectId: content.dataset.projectId,
             done: content.dataset.done,
+            postponed: content.dataset.postponed,
             nodes: Array.from(content.childNodes),
         };
 
@@ -186,12 +234,16 @@
 
         content.dataset.projectId = "";
         content.dataset.done = "0";
+        // Freeing the block throws the booking away, and with it the record of
+        // how often it was put off - whatever is booked here next starts clean.
+        content.dataset.postponed = "0";
         content.replaceChildren(free);
         refreshCell(cell);
 
         return function undo() {
             content.dataset.projectId = previous.projectId;
             content.dataset.done = previous.done;
+            content.dataset.postponed = previous.postponed;
             content.replaceChildren(...previous.nodes);
             refreshCell(cell);
         };

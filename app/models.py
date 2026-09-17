@@ -278,6 +278,11 @@ class ProjectDaySlot(db.Model):
     # Marks that day's session as finished. It lives on the slot, not the
     # project, so it resets by itself tomorrow - that is a different row.
     is_done = db.Column(db.Boolean, default=False, nullable=False)
+    # How often this session has been pushed onto a later day, which is what
+    # colours the block on the schedule. It belongs to the booking rather than
+    # to the project on purpose: freeing the block and booking the project again
+    # is a new plan, and a new plan starts from nothing being late.
+    postponed_count = db.Column(db.Integer, default=0, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
