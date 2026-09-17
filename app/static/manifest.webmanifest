@@ -26,7 +26,7 @@
     {
       "name": "Add to inbox",
       "short_name": "Add to inbox",
-      "description": "Dictate a thought into the inbox without opening the app",
+      "description": "Write or dictate a thought straight into the inbox",
       "url": "/inbox/capture",
       "icons": [
         {

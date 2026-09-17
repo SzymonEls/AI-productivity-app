@@ -27,7 +27,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off) and the home page's health score. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
-| [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the page behind the PWA shortcut, whose job is to raise the notification the service worker answers - see point 19. |
+| [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
@@ -350,36 +350,27 @@ The schema in the code matches the latest migration (`20260917_0026`).
     anchors on the letter instead of on the `×`: inserting before the `×` would drop the content
     behind a `!` the block has not shed yet.
 
-19. **A thought is captured by the service worker, not by a page.** The inbox exists because
-    capturing and filing are two different moments: on a phone you have a sentence and no
-    patience for picking a project, at the desk you have the list in front of you. So an item
-    arrives with nothing but its text and waits on the home page until a project is chosen.
+19. **The inbox is a queue between two moments, not a list of anything.** Capturing and filing
+    are different jobs done in different states of mind: on a phone you have a sentence and no
+    patience for picking a project, at the desk you have the list in front of you and the choice
+    is obvious. So an item arrives with nothing but its text and waits on the home page until a
+    project is chosen. Nothing about it is stored anywhere else, and it stops existing the moment
+    it is filed or thrown away.
 
-    The capture path is the unusual part. `manifest.webmanifest` declares a `shortcuts` entry,
-    which Android puts in the menu behind a long press on the installed app's icon; it opens
-    `/inbox/capture`, whose only real job is to call `showNotification` with an action of
-    `type: "text"` and then be irrelevant. The reply is delivered to the **`notificationclick`
-    handler in [service-worker.js](../app/static/service-worker.js)**, which posts it to
-    `/inbox` with `credentials: "include"` and re-shows the notification. A service worker is
-    woken for that event whether or not a window is open, so the whole round trip happens with
-    the app never really launching - you stay in whatever you were doing, pull the shade down,
-    tap Add, dictate, send.
+    **Capture is two doors into one endpoint.** `manifest.webmanifest` declares a `shortcuts`
+    entry, which Android puts in the menu behind a long press on the installed app's icon; it
+    opens `/inbox/capture`, a page holding a textarea and a button and nothing else. The + beside
+    "Today" opens the same box in place on the home page, and both post to `POST /inbox`, which
+    also takes a form body so a shortcut app or curl can reach it. The shortcut earns its keep by
+    landing on the field instead of on the home page: the thought goes down before today's plan
+    is on screen to argue with it, and the keyboard that comes up has a mic on it.
 
-    Three consequences worth knowing:
-
-    - **The endpoint is cookie-authenticated, not `/api/v1`.** The service worker already has the
-      session cookie and a token would have to be stored somewhere; it asks with
-      `X-Requested-With`, so an expired session comes back as the JSON 401 from
-      `register_login_handlers` rather than as a login page the worker would read as a success.
-      This is the one write path in the app that runs with no window open, which is exactly why
-      it reuses the browser's own credential rather than inventing a second one.
-    - **A reply field cannot be pre-filled**, so a failed save quotes the text back in the
-      notification body and makes it sticky. That is all that is left of it - there is no retry
-      queue, and adding one would mean a store the worker can reach.
-    - **Notifications do not survive a reboot.** The shortcut re-creates the notification, so the
-      recovery is to use the shortcut again; nothing is lost, but the shade is empty until you do.
-      `inbox-capture.js` also keeps a plain textarea on that page for the devices that refuse
-      notifications outright, which is the same box the + beside "Today" opens.
+    The capture page focuses its box with `autofocus`, but **whether the soft keyboard opens is
+    the browser's decision** - Chrome on Android usually waits for a tap - so that is a head
+    start rather than a guarantee, and the box is sized to be an easy target either way. A save
+    leaves the text in the field if it failed and the focus in the field if it worked, because
+    the field holds the only copy and a second thought should not need a second trip through the
+    launcher.
 
     Filing is the ordinary half: the picker on the home page posts to `/inbox/<id>/file`, which
     appends the text to `Project.short_goal` behind a blank line and deletes the row in one

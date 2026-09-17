@@ -2,24 +2,23 @@
 The inbox: thoughts captured before it was decided where they belong.
 
 Capturing and filing are two moments, and the app now keeps them apart. An item
-arrives with nothing but its text - from the notification the PWA shortcut puts
-in the shade, or from the + beside "Today" - and waits on the home page until a
-project is chosen for it. Choosing appends the text to that project's thoughts
+arrives with nothing but its text - from the box the PWA shortcut opens, or from
+the + beside "Today" - and waits on the home page until a project is chosen for
+it. Choosing appends the text to that project's thoughts
 and deletes the row, so the inbox is a queue rather than a second copy of
 anything.
 
 The other way out is the ×, which throws the item away without filing it. It is
-not a nicety: capture is deliberately careless - a mis-tapped reply in the
-notification shade costs nothing to make - so there has to be somewhere for the
+not a nicety: capture is deliberately careless - one tap and a sentence, with
+nothing asked and nothing checked - so there has to be somewhere for the
 misfires to go. Without it a stray item would sit in the widget forever, since
 the only alternative would be filing nonsense into a real project.
 
 capture_page() is the odd one out here: it is not the inbox, it is the page the
-Android launcher opens from the app icon's shortcut menu, whose whole job is to
-raise a notification with a reply field and then get out of the way. The reply
-never comes back to it - it is handed to the service worker, which posts it to
-add_item() with the session cookie, so nothing about capturing needs a window to
-be open. See point 19 in ARCHITECTURE.md.
+Android launcher opens from the app icon's shortcut menu. All it holds is the
+box and the button, because the shortcut exists to skip the rest - landing on
+the field rather than on the home page is the whole of what it buys. See point
+19 in ARCHITECTURE.md.
 """
 
 from flask import Blueprint, jsonify, render_template, request
@@ -42,9 +41,9 @@ def _get_user_item_or_404(item_id):
 def _payload():
     """Read the body whether it arrives as JSON or as a form.
 
-    The service worker posts JSON; a form is what a page without JavaScript
-    would send. Both are cheap to accept and it keeps the endpoint usable from
-    curl while setting the phone up.
+    The pages post JSON; a form is what one without JavaScript would send. Both
+    are cheap to accept, and it keeps the endpoint usable from curl or from a
+    shortcut app on the phone.
     """
     return request.get_json(silent=True) or request.form
 
@@ -87,11 +86,9 @@ def filing_projects(user_id):
 def capture_page():
     """The target of the "Add to inbox" shortcut in the app icon's menu.
 
-    Deliberately almost empty. On a phone that has already been asked once, it
-    shows the notification and says so; the typing happens in the reply field in
-    the notification shade, with the app never really opening. The textarea on
-    it is the fallback for a browser that refuses notifications - without it the
-    shortcut would be a dead end on exactly the devices least able to say why.
+    Deliberately almost empty: a box, a button, and no plan to read first. The
+    shortcut is worth having because it opens here rather than on the home page,
+    and because the keyboard it raises has a mic on it.
     """
     return render_template("inbox/capture.html")
 
@@ -101,9 +98,8 @@ def capture_page():
 def add_item():
     """Put one captured thought in the inbox.
 
-    Answers the notification reply (posted by the service worker, which is why
-    this has to work with nothing but the session cookie), the + on the home
-    page, and the fallback box on the capture page.
+    Answers the box on the capture page and the + on the home page alike; they
+    differ only in how you got to them.
     """
     body = (_payload().get("body") or "").strip()
     if not body:

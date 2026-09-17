@@ -1942,6 +1942,23 @@ button.picker-row:hover {
 .inbox-status-success { color: var(--success); }
 .inbox-status-danger { color: var(--danger); }
 
+/* The capture page the app-icon shortcut opens: one box, one button. The field
+   is given room because it is the only thing on the page, and because a thumb
+   reaching for it straight out of the launcher deserves a large target. */
+.capture-field {
+    min-height: 7rem;
+}
+
+.capture-status {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    min-height: 1.2em;
+    margin-bottom: 0.5rem;
+}
+
+.capture-status-success { color: var(--success); }
+.capture-status-danger { color: var(--danger); }
+
 /* The box the + beside "Today" reveals. It sits under the whole header row
    rather than inside it, so a long thought is not typed into a sliver of it. */
 .inbox-capture {
