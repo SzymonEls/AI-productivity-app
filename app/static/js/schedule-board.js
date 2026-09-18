@@ -74,9 +74,9 @@
     }
 
     // The same arithmetic slots.py does, kept in step here so the optimistic
-    // redraw below shows the colour the move is about to be given. The count
-    // runs on; only the colour stops, at MAX_POSTPONED_LEVEL - which is why a
-    // block put off four times takes four moves back to come off red.
+    // redraw below shows the colour and the marks the move is about to be given.
+    // The count runs on; only the level stops, at MAX_POSTPONED_LEVEL - which is
+    // why a block put off four times takes four moves back to come off red.
     const MAX_POSTPONED_LEVEL = 2;
 
     function postponedOf(content) {
@@ -105,8 +105,10 @@
     }
 
     /* The ! on a block that has been put off: added, updated or taken away to
-       match the count the block is now carrying. It sits between the content and
-       the block's own buttons, which is where the template renders it. */
+       match the count the block is now carrying. One mark or two, following the
+       tint stage for stage, so the marks are rewritten on every redraw and not
+       only when the ! first appears. It sits between the content and the block's
+       own buttons, which is where the template renders it. */
     function setWarn(cell, count, done) {
         const existing = cell.querySelector("[data-slot-warn]");
         if (!count || done) {
@@ -120,9 +122,9 @@
             warn.className = "day-slot-warn";
             warn.setAttribute("data-slot-warn", "");
             warn.setAttribute("role", "img");
-            warn.textContent = "!";
             contentOf(cell).after(warn);
         }
+        warn.textContent = "!".repeat(postponedLevel(count));
         warn.title = title;
         warn.setAttribute("aria-label", title);
     }
