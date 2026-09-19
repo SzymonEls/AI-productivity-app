@@ -1,11 +1,12 @@
 /**
  * The notes at the foot of a calendar sheet, on the schedule board and in the
- * archive alike.
+ * archive alike, and under today's date on the home page.
  *
- * One script for both pages because the list behaves the same on either: a note
- * is written about a day rather than planned for it, so a past sheet takes one
- * as readily as a future one - the same reason the archive keeps its ✓ while
- * refusing every booking change.
+ * One script for all three because the list behaves the same on each: a note is
+ * written about a day rather than planned for it, so a past sheet takes one as
+ * readily as a future one - the same reason the archive keeps its ✓ while
+ * refusing every booking change - and the home page's one day is the day most
+ * likely to be written about at all.
  *
  * The + reveals an input in place rather than opening a dialog: a note is a
  * line, and a sheet is a few centimetres wide. Clicking a line that is already
@@ -17,7 +18,7 @@
 (function () {
     "use strict";
 
-    const root = document.querySelector("[data-schedule], [data-schedule-archive]");
+    const root = document.querySelector("[data-schedule], [data-schedule-archive], [data-day-lines]");
     if (!root) {
         return;
     }
@@ -25,7 +26,7 @@
     const ADD_ENDPOINT = "/projects/schedule/notes";
     const UPDATE_ENDPOINT = "/projects/schedule/notes/update";
     const DELETE_ENDPOINT = "/projects/schedule/notes/delete";
-    // Whichever of the two pages this is, its one status line.
+    // Whichever of the three pages this is, its one status line.
     const statusOutput = root.querySelector("[data-schedule-status], [data-archive-status]");
     let statusTimer = null;
 

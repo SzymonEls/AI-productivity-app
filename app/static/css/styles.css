@@ -2496,6 +2496,24 @@ button.picker-row:hover {
     background: var(--primary-soft);
 }
 
+/* The same lines under today's date on the home page, where there is no sheet
+   for them to be the foot of: the sheet's tinted strip and its side padding
+   would draw a second card inside the one they already sit in, so both go and
+   the dashed rule alone separates them from the heading above. They are read on
+   their own here rather than at a glance across a month of sheets, so they are
+   a shade larger than on a sheet. */
+.day-lines {
+    gap: 0.3rem;
+    margin-top: 0.85rem;
+    padding: 0.6rem 0 0;
+    background: transparent;
+}
+
+.day-lines .day-event,
+.day-lines .day-note {
+    font-size: 0.875rem;
+}
+
 .day-note-list,
 .day-event-list {
     list-style: none;

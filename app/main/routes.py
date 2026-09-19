@@ -1,6 +1,8 @@
 from flask import Blueprint, current_app, redirect, render_template, send_from_directory, url_for
 from flask_login import current_user
 
+from ..integrations.feeds import events_by_date, has_stale_feeds
+from ..projects.day_notes import notes_from
 from ..projects.slots import (
     SLOTS,
     TIMED_SLOTS,
@@ -19,6 +21,11 @@ main_bp = Blueprint("main", __name__)
 @main_bp.route("/")
 def home():
     """Today's A/B/C slots, plus the projects with no next session planned.
+
+    The lines under the three cards are today's sheet on the schedule board, on
+    the page you actually start the day on: the events off the subscribed
+    calendars and the notes written by hand. Both come from the same two calls
+    the board makes, asked for one day instead of a month.
 
     There is nothing to show a signed-out visitor, so send them to the login
     page rather than a page of empty placeholders.
@@ -39,10 +46,24 @@ def home():
     # a reload, and the picker it would then need has to already be on the page.
     inbox_items = items_for(current_user.id)
     inbox_projects = filing_projects(current_user.id)
+    # Shaped like one of the schedule's days, because it is rendered by the same
+    # macro. Only the three keys that macro reads are here: the slots above it
+    # are today's cards, which the page already has.
+    day_lines = {
+        "date": today,
+        "notes": notes_from(current_user.id, today, today).get(today, []),
+        # Off the cached copy of each calendar, with no network in the render -
+        # see the note above [data-calendar-refresh] in the template.
+        "events": events_by_date(current_user.id, today, today).get(today, []),
+    }
 
     return render_template(
         "home.html",
         today=today,
+        day_lines=day_lines,
+        calendar_window=(today, today),
+        # Nothing to ask for when every calendar is fresh, or there are none.
+        refresh_calendars=has_stale_feeds(current_user),
         slot_cards=slot_cards,
         timed_slots=TIMED_SLOTS,
         unplanned_projects=unplanned,
