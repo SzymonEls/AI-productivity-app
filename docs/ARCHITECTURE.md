@@ -30,7 +30,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
-| [app/main/](../app/main/) | Home page (today's A/B/C slots, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
+| [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
@@ -242,6 +242,15 @@ The schema in the code matches the latest migration (`20260917_0026`).
     A note is also the one thing on a sheet that outlives the project it was written about: it has
     no `project_id`, so deleting a project takes its bookings and leaves the notes.
 
+    **The home page is the third place that list appears.** Today's lines — the events off the
+    subscribed calendars, then the notes written by hand — are rendered under today's date by the
+    same `day_notes` macro, off the same two calls the board makes, asked for one day instead of a
+    month. It is markup parity rather than a second implementation: the home page carries
+    `[data-day-lines]`, which day-notes.js takes as a root alongside the board and the archive, and
+    `[data-day-notes]`, which the calendar refresh below already patches by date. Only the spacing
+    differs, through the macro's `extra_class` — there is no sheet there for the list to be the
+    foot of. The + comes with it, so today can be noted from the page the day is read on.
+
     The line itself is the control that rewrites it — a `<button>` styled back down to plain text,
     swapped for an input in place. Enter and clicking away keep what was typed; **Escape puts the
     line back, and an emptied line is left as it was**, because clearing the text by accident is
@@ -281,8 +290,9 @@ The schema in the code matches the latest migration (`20260917_0026`).
     is a real bug this code has already had: a daily meeting standing since 2019 is 2,800 rounds
     from this week, the walk stopped at 2,000, and the event silently vanished from every sheet.
 
-    **Nothing is fetched while a page renders.** There is no scheduler in this app, so the
-    schedule page is still what drives the reading — but it does it *after* it is on the screen,
+    **Nothing is fetched while a page renders.** There is no scheduler in this app, so a page
+    being looked at is still what drives the reading — the schedule, and now the home page, which
+    shows the same lines for the one day it is about — but it does it *after* it is on the screen,
     not in the render someone is waiting on. The render asks `has_stale_feeds` (one count, no
     network) and, if anything is due, carries `[data-calendar-refresh]` with the days it is
     showing; [calendar-feeds.js](../app/static/js/calendar-feeds.js) then posts to

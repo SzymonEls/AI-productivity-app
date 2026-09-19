@@ -119,13 +119,19 @@
     </article>
 {% endmacro %}
 
-{% macro day_notes(day) %}
+{% macro day_notes(day, extra_class="") %}
     {# The foot of the sheet, behind the same perforation the header has: what
        the day is about, next to what is booked on it. Empty most of the time,
        so it is the + alone until something is written - a list of notes would
-       otherwise cost every sheet a heading it has nothing to put under. #}
+       otherwise cost every sheet a heading it has nothing to put under.
+
+       extra_class is what the home page hangs its own spacing off: the same
+       lines belong under today's three cards, where there is no sheet for them
+       to be the foot of. The markup stays identical to the sheet's so that one
+       script - and the calendar refresh that repaints [data-event-list] - keeps
+       working on both pages without knowing which it is on. #}
     <footer
-        class="day-sheet-notes"
+        class="day-sheet-notes{% if extra_class %} {{ extra_class }}{% endif %}"
         data-day-notes
         data-date="{{ day.date.isoformat() }}"
         {# The date as every label on the sheet already spells it, so a note the

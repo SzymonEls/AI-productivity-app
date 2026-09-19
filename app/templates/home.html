@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
+{% from "projects/_day_sheet.html" import day_notes %}
 
 {% block title %}Home{% endblock %}
 
@@ -41,7 +42,20 @@
 {% endmacro %}
 
 {% block content %}
-<div class="dashboard-page day-slots-page">
+<div
+    class="dashboard-page day-slots-page"
+    {# What day-notes.js binds to. The home page is the third place today's
+       lines can be written, after the board and the archive. #}
+    data-day-lines
+    {% if refresh_calendars %}
+    {# Exactly as the schedule does it: the events rendered above are the copy
+       the server already had, and the calendars are re-read once the page is
+       up, for the one day this page shows. See the note in schedule.html. #}
+    data-calendar-refresh
+    data-calendar-from="{{ calendar_window[0].isoformat() }}"
+    data-calendar-to="{{ calendar_window[1].isoformat() }}"
+    {% endif %}
+>
     <section class="dashboard-section dashboard-header-section">
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-2">
@@ -49,6 +63,18 @@
                 <span class="text-muted small">{{ today.strftime("%A, %d %B") }}</span>
             </div>
             <div class="d-flex align-items-center gap-3">
+                {# Spinning while the calendars are being re-read, in the corner
+                   the schedule keeps it in, and beside the one line this page
+                   answers a saved or refused note with. #}
+                <span
+                    class="calendar-spinner"
+                    data-calendar-spinner
+                    role="status"
+                    title="Reading the calendars…"
+                    aria-label="Reading the calendars"
+                    hidden
+                ></span>
+                <span class="schedule-status" data-schedule-status role="status"></span>
                 {# Here rather than on the inbox widget itself: the widget is gone
                    whenever the inbox is empty, which is exactly when you are most
                    likely to want to put something in it. #}
@@ -73,6 +99,12 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-inbox-capture-cancel>Cancel</button>
             </div>
         </form>
+        {# Today's lines, the same ones today's sheet carries on the schedule:
+           what the calendars say is on, and what was written about the day by
+           hand. Under the date rather than beside the three cards, because they
+           are about the day and not about any one block of it - and the + comes
+           with them, so a note can be written where the day is being read. #}
+        {{ day_notes(day_lines, "day-lines") }}
     </section>
 
     <div class="day-slots-layout">
@@ -240,4 +272,6 @@
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inbox.js') }}"></script>
+<script src="{{ url_for('static', filename='js/day-notes.js') }}"></script>
+<script src="{{ url_for('static', filename='js/calendar-feeds.js') }}"></script>
 {% endblock %}
