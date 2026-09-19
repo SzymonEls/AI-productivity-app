@@ -14,10 +14,11 @@
 #}
 {% from "icons.html" import icon %}
 
-{# Why the block is tinted and carries a !, spelled out on hover. The colour
-   stops at two moves, the count does not, so this says the number: a block put
-   off four times looks the same as one put off twice, and this is where the
-   difference - three more moves back to clear it - can be read. #}
+{# Why the block is tinted and carries its !, spelled out on hover. Both the
+   colour and the number of marks stop at two moves, the count does not, so this
+   says the number: a block put off four times looks the same as one put off
+   twice, and this is where the difference - three more moves back to clear it -
+   can be read. #}
 {% macro postponed_title(postponed) %}Put off {{ "once" if postponed == 1 else ("twice" if postponed == 2 else "%d times" % postponed) }} — moved to a later day{% endmacro %}
 
 {% macro slot_cell(day, entry, readonly=False) %}
@@ -43,11 +44,14 @@
             {% endif %}
         </div>
         {# The tint on its own is a colour, and a colour is not something every
-           reader can tell apart. The ! says the same thing in a shape, and its
-           tooltip spells out the number the colour has stopped counting. It goes
-           with the session rather than with the position, so the board's script
-           redraws it after a move; it is not rendered at all once the session is
-           done, when the block is green and nothing about it is late any more. #}
+           reader can tell apart. The ! says the same thing in a shape, and it
+           climbs with the tint: one mark for the first move onto a later day,
+           two for the second and every one after it, so the two stages can be
+           told apart without the colour. Its tooltip spells out the number the
+           two have stopped counting. It goes with the session rather than with
+           the position, so the board's script redraws it after a move; it is not
+           rendered at all once the session is done, when the block is green and
+           nothing about it is late any more. #}
         {% if entry.project and entry.postponed_level and not entry.is_done %}
             <span
                 class="day-slot-warn"
@@ -55,7 +59,7 @@
                 role="img"
                 title="{{ postponed_title(entry.postponed) }}"
                 aria-label="{{ postponed_title(entry.postponed) }}"
-            >!</span>
+            >{{ "!" * entry.postponed_level }}</span>
         {% endif %}
         {% if readonly and entry.project %}
             {# The one thing a past block can still be told: that the session did
