@@ -19,7 +19,7 @@ It is a convenience copy, not the source of truth: it was produced by
 Drop it in and start the app with demo mode on:
 
 ```bash
-cp demo/example/app.db instance/app.db
+cp docs/demo/app.db instance/app.db
 ```
 
 ```bash
@@ -29,7 +29,7 @@ DEMO_MODE=1 DEFAULT_LOGIN_EMAIL=demo@example.com DEFAULT_LOGIN_PASSWORD=demo REG
 ## Rebuilding it
 
 ```bash
-rm -f demo/example/app.db && DEMO_MODE=1 DEFAULT_LOGIN_EMAIL=demo@example.com DEFAULT_LOGIN_PASSWORD=demo DATABASE_URL=sqlite:///demo/example/app.db flask --app run.py seed-demo
+rm -f docs/demo/app.db && DEMO_MODE=1 DEFAULT_LOGIN_EMAIL=demo@example.com DEFAULT_LOGIN_PASSWORD=demo DATABASE_URL=sqlite:///docs/demo/app.db flask --app run.py seed-demo
 ```
 
 ## This file goes stale, and the day slots make that obvious

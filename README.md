@@ -93,7 +93,7 @@ compose file serves the private instance and the public demo, which differ only 
 Nothing is published on the host — the container has a pinned name and a reverse proxy reaches
 it by that name on port 8000, so several instances can share one server. On first boot the
 entrypoint generates a `SECRET_KEY`, runs the migrations and, in demo mode, seeds sample
-content; all three are idempotent, so redeploys leave the data alone. There is more info about demo in demo/example.
+content; all three are idempotent, so redeploys leave the data alone. There is more info about the demo in [docs/demo](docs/demo/README.md).
 
 ## Docs
 

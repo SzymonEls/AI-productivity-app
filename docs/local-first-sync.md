@@ -235,7 +235,7 @@ To compare against the old interface, a worktree of `main` on another port is
 the way it was done here:
 
 ```bash
-git worktree add /tmp/main-app main && cp demo/example/app.db /tmp/main.db
+git worktree add /tmp/main-app main && cp docs/demo/app.db /tmp/main.db
 ```
 
 ---
