@@ -65,24 +65,6 @@ def register_json_error_handlers(app):
             return jsonify({"ok": False, "message": "A server error occurred while saving."}), 500
         return error
 
-    @app.errorhandler(429)
-    def too_many_requests(error):
-        from flask import g
-
-        return (
-            jsonify(
-                {
-                    "ok": False,
-                    "reason": "locked",
-                    "message": (
-                        "Too many failed sign-in attempts. Try again in "
-                        f"{describe_wait(getattr(g, 'login_lock_seconds', 0))}."
-                    ),
-                }
-            ),
-            429,
-        )
-
 
 def register_login_handlers(manager):
     @manager.unauthorized_handler
@@ -95,21 +77,9 @@ def register_login_handlers(manager):
         return jsonify({"ok": False, "message": "Session expired. Please sign in again."}), 401
 
 
-def describe_wait(seconds):
-    """Round the remaining lock up to whole minutes, which is all it promises."""
-    if seconds <= 60:
-        return "a minute"
-
-    minutes = -(-seconds // 60)
-    return f"{minutes} minutes"
-
-
-
 def wants_json_response():
-    return (
-        request.headers.get("X-Requested-With") in {"XMLHttpRequest", "fetch"}
-        or request.accept_mimetypes.best == "application/json"
-    )
+    """Everything the client fetches lives under /api; the rest is the shell."""
+    return request.path.startswith("/api/")
 
 
 def should_initialize_database(app):

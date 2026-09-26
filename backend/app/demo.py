@@ -14,7 +14,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 import click
-from flask import flash, jsonify, redirect, request, url_for
+from flask import jsonify, request
 from markupsafe import Markup
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -103,8 +103,6 @@ def _absolutize_links(html, base_url):
 def _register_write_guard(app):
     """Reject every state-changing request with the app's usual error shape."""
 
-    from . import wants_json_response
-
     message = app.config.get("DEMO_BLOCK_MESSAGE", "Demo mode - changes are disabled.")
 
     @app.before_request
@@ -114,11 +112,8 @@ def _register_write_guard(app):
         if request.endpoint in DEMO_ALLOWED_ENDPOINTS:
             return None
 
-        if wants_json_response():
-            return jsonify({"ok": False, "message": message}), 403
-
-        flash(message, "warning")
-        return redirect(request.referrer or url_for("main.home"))
+        # Every write goes to /api, so there is no form left to redirect back to.
+        return jsonify({"ok": False, "message": message}), 403
 
 
 def _register_seed_command(app):

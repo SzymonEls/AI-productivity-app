@@ -7,7 +7,7 @@ one file that loads it.
 
 import os
 
-from flask import Blueprint, current_app, send_from_directory
+from flask import Blueprint, abort, current_app, send_from_directory
 
 main_bp = Blueprint("main", __name__)
 
@@ -28,7 +28,14 @@ def client(_client_route=None):
     or a shared link lands where it says rather than bouncing to the top. An
     unknown address gets the shell too, and the client shows its own "not here"
     - the server has no idea which addresses the client knows.
+
+    Except under the reserved prefixes: an unknown /api address is a missing
+    endpoint, and answering it with the shell would hand fetch a 200 full of
+    HTML where it expects JSON.
     """
+    if _client_route and _client_route.startswith(RESERVED_PREFIXES):
+        abort(404)
+
     index = os.path.join(_client_directory(), "index.html")
     if not os.path.exists(index):
         return (
