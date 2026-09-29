@@ -35,7 +35,8 @@ def create_app(config_class=Config):
     from .shell import main_bp
 
     app.register_blueprint(api_bp)
-    # Last, because it answers every address the others did not claim.
+    # Answers every address the others did not claim. Order does not matter:
+    # Werkzeug tries more specific rules first, so the catch-all always loses.
     app.register_blueprint(main_bp)
     register_json_error_handlers(app)
     register_login_handlers(login_manager)

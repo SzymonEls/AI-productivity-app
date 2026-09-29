@@ -11,8 +11,9 @@ from flask import Blueprint, abort, current_app, send_from_directory
 
 main_bp = Blueprint("main", __name__)
 
-# Served by Flask's static handler, not by these routes.
-RESERVED_PREFIXES = ("api/", "static/")
+# Not client addresses: an unknown /api path is a missing endpoint and must
+# 404 as JSON, not come back as the shell.
+RESERVED_PREFIXES = ("api/",)
 
 
 def _client_directory():
