@@ -2496,16 +2496,21 @@ button.picker-row:hover {
     background: var(--primary-soft);
 }
 
-/* The same lines under today's date on the home page, where there is no sheet
-   for them to be the foot of: the sheet's tinted strip and its side padding
-   would draw a second card inside the one they already sit in, so both go and
-   the dashed rule alone separates them from the heading above. They are read on
-   their own here rather than at a glance across a month of sheets, so they are
-   a shade larger than on a sheet. */
+/* The same lines in a box of their own under today's three cards on the home
+   page, where there is no sheet for them to be the foot of: the sheet's tinted
+   strip, its side padding and its dashed rule would draw a second card inside
+   the box, so all three go and the box's heading does the separating. They are
+   read on their own here rather than at a glance across a month of sheets, so
+   they are a shade larger than on a sheet. */
+.day-lines-box {
+    padding: 1rem 1.25rem;
+}
+
 .day-lines {
     gap: 0.3rem;
-    margin-top: 0.85rem;
-    padding: 0.6rem 0 0;
+    margin-top: 0.5rem;
+    padding: 0;
+    border-top: 0;
     background: transparent;
 }
 
