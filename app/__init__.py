@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
     migrate.init_app(app, db)
 
-    from .models import CalendarFeed, DayNote, InboxItem, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, User  # noqa: F401
+    from .models import CalendarFeed, DayNote, InboxItem, LoginAttempt, Project, ProjectDaySlot, ProjectTimeEntry, ProjectTimelineGroup, ProjectTimelineItem, Task, User  # noqa: F401
     from .api.routes import api_bp
     from .auth.routes import auth_bp
     from .demo import register_demo_mode
@@ -36,6 +36,7 @@ def create_app(config_class=Config):
     from .integrations.routes import integrations_bp
     from .main.routes import main_bp
     from .projects.routes import projects_bp
+    from .tasks.routes import tasks_bp
     from .time_tracking.routes import time_tracking_bp
 
     app.register_blueprint(main_bp)
@@ -45,6 +46,7 @@ def create_app(config_class=Config):
     app.register_blueprint(api_bp)
     app.register_blueprint(integrations_bp)
     app.register_blueprint(inbox_bp)
+    app.register_blueprint(tasks_bp)
     register_template_context(app)
     register_template_filters(app)
     register_json_error_handlers(app)
@@ -61,12 +63,16 @@ def create_app(config_class=Config):
 def register_template_context(app):
     """Expose shared feature flags to templates."""
 
-    from .models import DAY_NOTE_MAX_LENGTH
+    from .models import DAY_NOTE_MAX_LENGTH, TASK_TITLE_MAX_LENGTH
 
     # A global rather than a context value: the day sheet is an imported macro,
     # and an import without context sees the globals alone. The note input caps
     # at exactly the number the server enforces.
     app.jinja_env.globals["day_note_max_length"] = DAY_NOTE_MAX_LENGTH
+    app.jinja_env.globals["task_title_max_length"] = TASK_TITLE_MAX_LENGTH
+    from .tasks.routes import REPEAT_RULES
+
+    app.jinja_env.globals["task_repeat_rules"] = REPEAT_RULES
 
     @app.context_processor
     def inject_feature_flags():

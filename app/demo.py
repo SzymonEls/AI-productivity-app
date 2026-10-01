@@ -29,6 +29,7 @@ from .models import (
     ProjectTimeEntry,
     ProjectTimelineGroup,
     ProjectTimelineItem,
+    Task,
     User,
 )
 
@@ -160,6 +161,7 @@ def seed_demo_data(app, reset=False):
         _seed_timeline(user, projects)
         _seed_day_slots(user, projects)
         _seed_day_notes(user)
+        _seed_tasks(user)
         _seed_time_entries(user, projects)
 
         db.session.commit()
@@ -400,6 +402,34 @@ def _seed_day_notes(user):
 
     for day, body in notes:
         db.session.add(DayNote(owner=user, note_date=day, body=body))
+
+    db.session.flush()
+
+
+def _seed_tasks(user):
+    """A handful of tasks: one left over from a day gone, a few today and ahead,
+    one with no date and one already done, so every group on the Tasks page and
+    the home page's box have something in them.
+    """
+    from .projects.slots import today_local
+    from .time_tracking.service import utc_now
+
+    today = today_local()
+    tasks = [
+        ("Send the invoice for September", today - timedelta(days=2), False),
+        ("Reply to the landlord", today, False),
+        ("Book the dentist", today, True),
+        ("Renew the domain", today + timedelta(days=1), False),
+        ("Water the plants", today + timedelta(days=3), False),
+        ("Read chapter 4 of the course book", None, False),
+    ]
+
+    for title, day, done in tasks:
+        db.session.add(
+            Task(owner=user, title=title, due_date=day, is_done=done, done_at=utc_now() if done else None)
+        )
+    # One that comes back, so the ↻ and "Next: …" have something to show.
+    db.session.add(Task(owner=user, title="Take out the recycling", due_date=today, repeat_rule="weekly"))
 
     db.session.flush()
 

@@ -13,6 +13,7 @@
   answers, and readonly leaves them alone.
 #}
 {% from "icons.html" import icon %}
+{% from "tasks/_tasks.html" import day_tasks %}
 
 {# Why the block is tinted and carries its !, spelled out on hover. Both the
    colour and the number of marks stop at two moves, the count does not, so this
@@ -115,6 +116,11 @@
                 {{ slot_cell(day, entry, readonly) }}
             {% endfor %}
         </ul>
+        {# Between the blocks and the lines: a task is something to do on the
+           day, like a session, but it is not one, so it gets its own list
+           rather than a fourth block. Live in the archive too - a task finished
+           late is ticked off on the day it was meant for. #}
+        {{ day_tasks(day.date, day.tasks, day.today) }}
         {{ day_notes(day) }}
     </article>
 {% endmacro %}

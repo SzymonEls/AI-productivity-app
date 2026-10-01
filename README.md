@@ -57,6 +57,20 @@ container, no external services.
   so a session finished on Tuesday can be ticked off on Thursday and counts towards the health
   ring like any other. The note list is live there too: a day is usually only described once it
   has been.
+- **Tasks** — things to do, each on a day or on none. The **Tasks** tab lists all of them by
+  date: whatever is overdue, today, tomorrow, every later day with something on it, the ones
+  with no date, and the finished ones folded away under Completed. The same tasks show up on
+  the schedule, on the sheet of their own day between the blocks and the notes, and in a box
+  on the home page under today's calendar — today's tasks, with anything left undone on a day
+  already gone above them. They are edited the same way everywhere, in place: the circle ticks
+  one off, clicking the text rewrites it, "+ Task" adds one to that day, and the ⋯ (or a right
+  click, or a long press on a phone) moves it to today, tomorrow, the day after, the weekend,
+  next week or any day you pick, takes its date away, sets it repeating, or deletes it. "Day
+  off" moves the open tasks along with the bookings; a finished one stays on the day it was done.
+  A task can **repeat** every day, every weekday, every week, every two weeks, every month or
+  every year. Only the next occurrence exists: ticking it off keeps it as done and writes the
+  one after it on its date, so the schedule is never filled with copies; taking the tick back
+  takes that new one away again. A ↻ beside the text marks a repeating task.
 - **Inbox** — somewhere to put a thought before deciding which project it belongs to. Long-press
   the installed app's icon on Android and the menu offers **Add to inbox**, which opens straight
   onto a box: type it, or dictate it with the mic on the keyboard, and it is saved without today's

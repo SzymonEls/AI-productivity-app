@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+
+{% block title %}Tasks{% endblock %}
+
+{% block content %}
+<div
+    class="dashboard-page tasks-page"
+    data-tasks-page
+    {# The day the quick moves in the menu count from. The server's, not the
+       browser's: a task's day is a day in CALENDAR_TIMEZONE, like a booking's. #}
+    data-tasks-today="{{ today.isoformat() }}"
+>
+    <section class="dashboard-section dashboard-header-section">
+        <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div class="d-flex align-items-center gap-2">
+                <h1 class="h5 mb-0">Tasks</h1>
+                <span class="text-muted small">Everything to do, by the day it is on.</span>
+            </div>
+            <span class="schedule-status" data-task-status role="status"></span>
+        </div>
+        {# One line and a day. Enter adds and keeps the box open, because a list
+           is usually written several items at a time. #}
+        <form class="task-quick-add" data-task-quick-add>
+            <input
+                type="text"
+                class="form-control"
+                data-task-quick-title
+                maxlength="{{ task_title_max_length }}"
+                placeholder="Add a task&hellip;"
+                aria-label="New task"
+                autocomplete="off"
+            >
+            <input
+                type="date"
+                class="form-control task-quick-date"
+                data-task-quick-date
+                aria-label="Day for the new task (leave empty for no day)"
+            >
+            <select class="form-select task-quick-repeat" data-task-quick-repeat aria-label="Repeat">
+                <option value="">Doesn't repeat</option>
+                {% for rule, label in repeat_rules.items() %}
+                    <option value="{{ rule }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary">{{ icon("plus", 14) }}Add</button>
+        </form>
+        <div class="task-quick-chips" data-task-quick-chips>
+            {# Filled in by tasks.js with the same choices the row menu offers. #}
+        </div>
+    </section>
+
+    <section class="dashboard-section tasks-board" data-task-groups aria-live="polite">
+        <noscript><p class="text-muted mb-0">The task list needs JavaScript.</p></noscript>
+    </section>
+
+    <script type="application/json" data-tasks-json>{{ tasks|tojson }}</script>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
+{% endblock %}

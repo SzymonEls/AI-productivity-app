@@ -12,6 +12,7 @@ from ..projects.slots import (
     unscheduled_projects,
 )
 from ..inbox.routes import filing_projects, items_for
+from ..tasks.routes import overdue_tasks, tasks_from
 from ..time_tracking.service import daily_totals_by_project, project_last_session_labels
 
 
@@ -57,9 +58,16 @@ def home():
         "events": events_by_date(current_user.id, today, today).get(today, []),
     }
 
+    # Today's tasks, with whatever was left open on a day already gone above
+    # them: this is the one page that would otherwise never show those again.
+    task_lines = overdue_tasks(current_user.id, today) + tasks_from(
+        current_user.id, today, today
+    ).get(today, [])
+
     return render_template(
         "home.html",
         today=today,
+        task_lines=task_lines,
         day_lines=day_lines,
         calendar_window=(today, today),
         # Nothing to ask for when every calendar is fresh, or there are none.

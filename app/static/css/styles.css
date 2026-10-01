@@ -2725,6 +2725,415 @@ button.picker-row:hover {
     opacity: 0.55;
 }
 
+/* Tasks -------------------------------------------------------------- *
+   One row everywhere a task appears - on a sheet, in today's box on the home
+   page and on the Tasks page: a circle to tick it off, the text, the day when
+   it is not the list's own, and a ⋯ that moves it. The row is a line like a
+   day note, not a card like a block. */
+.day-tasks {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    padding: 0 0.5rem 0.45rem;
+}
+
+/* On the home page the box does the framing; the list just sits in it. */
+.day-tasks-home {
+    margin-top: 0.5rem;
+    padding: 0;
+}
+
+.task-list {
+    list-style: none;
+    display: grid;
+    gap: 0.1rem;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.task-list:empty {
+    display: none;
+}
+
+.task {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    min-width: 0;
+    padding: 0.15rem 0.2rem;
+    border-radius: var(--radius-sm);
+    color: var(--foreground);
+    font-size: 0.8rem;
+    line-height: 1.35;
+    transition: background 0.12s ease;
+}
+
+.task:hover,
+.task.is-menu-open {
+    background: var(--surface-hover);
+}
+
+.day-tasks-home .task,
+.tasks-page .task {
+    font-size: 0.9rem;
+    padding: 0.3rem 0.35rem;
+}
+
+/* The circle: empty while the task is open, filled with the success colour
+   and a tick once it is done. Sized to the text, so a sheet stays narrow. */
+.task-check {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    width: 1rem;
+    height: 1rem;
+    margin-top: 0.08em;
+    padding: 0;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    background: var(--surface);
+    color: transparent;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.tasks-page .task-check,
+.day-tasks-home .task-check {
+    width: 1.15rem;
+    height: 1.15rem;
+}
+
+.task-check .app-icon {
+    width: 0.65rem;
+    height: 0.65rem;
+    stroke-width: 3;
+}
+
+.task-check:hover,
+.task-check:focus-visible {
+    border-color: var(--success);
+    color: var(--success);
+}
+
+.task.is-done .task-check {
+    border-color: var(--success);
+    background: var(--success);
+    color: #fff;
+}
+
+/* Styled back down to text, like a day note's line: the text is the control
+   that rewrites it. */
+.task-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    overflow-wrap: anywhere;
+    cursor: text;
+}
+
+.task-title[hidden] {
+    display: none;
+}
+
+.task.is-done .task-title {
+    color: var(--muted-foreground);
+    text-decoration: line-through;
+}
+
+.task-title-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* A repeating task's mark: small, beside the text, in the muted colour - it
+   says another occurrence will follow, which matters less than the task. */
+.task-repeat {
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    margin-top: 0.15em;
+    color: var(--muted-foreground);
+}
+
+.task-repeat .app-icon {
+    width: 0.75rem;
+    height: 0.75rem;
+}
+
+.task-due {
+    flex: 0 0 auto;
+    margin-top: 0.1em;
+    color: var(--muted-foreground);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.task-due.is-overdue {
+    color: var(--danger);
+    font-weight: 600;
+}
+
+/* Out of the way until the row is hovered, as a note's × is; always there on
+   a touch screen, which has no hover to reveal it. */
+.task-menu-button {
+    flex: 0 0 auto;
+    width: 1.3rem;
+    height: 1.3rem;
+    border-color: transparent;
+    background: transparent;
+    opacity: 0;
+    transition: opacity 0.12s ease-in-out;
+}
+
+.task:hover .task-menu-button,
+.task.is-menu-open .task-menu-button,
+.task-menu-button:focus-visible {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .task-menu-button {
+        opacity: 0.55;
+    }
+}
+
+.task-menu-button .app-icon {
+    width: 0.9rem;
+    height: 0.9rem;
+}
+
+.task.is-pending {
+    opacity: 0.55;
+}
+
+/* A moved or added task lights up where it landed, so the eye can follow it. */
+.task.is-arrived {
+    animation: task-arrived 1.4s ease-out;
+}
+
+@keyframes task-arrived {
+    from { background: var(--primary-soft); box-shadow: 0 0 0 2px var(--ring); }
+    to { background: transparent; box-shadow: 0 0 0 0 transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .task.is-arrived { animation: none; }
+}
+
+.task-add[hidden],
+.task-editor[hidden] {
+    display: none;
+}
+
+.task-editor {
+    width: 100%;
+}
+
+/* The menu behind the ⋯: the day moves first, since that is what most tasks
+   need, each with the date it means on the right; Delete last and in red. */
+.task-menu {
+    position: fixed;
+    z-index: 1080;
+    min-width: 14rem;
+    max-width: calc(100vw - 16px);
+    padding: 0.3rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+
+.task-menu[hidden] {
+    display: none;
+}
+
+.task-menu-heading {
+    margin: 0.15rem 0.55rem 0.2rem;
+    color: var(--muted-foreground);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.task-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    width: 100%;
+    padding: 0.4rem 0.55rem;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.task-menu-item:hover,
+.task-menu-item:focus-visible {
+    outline: none;
+    background: var(--surface-hover);
+}
+
+.task-menu-hint {
+    color: var(--muted-foreground);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.task-menu-item.is-current {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.task-menu-item.is-current .task-menu-hint {
+    color: var(--primary);
+}
+
+.task-menu-item.is-back {
+    color: var(--muted-foreground);
+}
+
+.task-menu-item.is-danger {
+    color: var(--danger);
+}
+
+.task-menu-rule {
+    margin: 0.3rem 0;
+    border-color: var(--border);
+    opacity: 1;
+}
+
+.task-menu-date {
+    width: calc(100% - 0.6rem);
+    margin: 0.15rem 0.3rem 0.3rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--foreground);
+    font-size: 0.85rem;
+}
+
+.task-menu-date[hidden] {
+    display: none;
+}
+
+/* The Tasks page */
+.task-quick-add {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.85rem;
+}
+
+.task-quick-add [data-task-quick-title] {
+    flex: 1 1 16rem;
+    min-width: 0;
+}
+
+.task-quick-date,
+.task-quick-repeat {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.task-quick-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-top: 0.5rem;
+}
+
+.task-chip {
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+}
+
+.task-chip:hover,
+.task-chip:focus-visible {
+    border-color: var(--border-strong);
+    color: var(--foreground);
+}
+
+.task-chip.is-active {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.tasks-board {
+    display: grid;
+    gap: 1.1rem;
+}
+
+.task-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+}
+
+.task-group-header {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    width: 100%;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.task-group-title {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.task-group-subtitle {
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+}
+
+.task-group-count {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.task-group-overdue .task-group-title {
+    color: var(--danger);
+}
+
+.task-done-group > summary {
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+/* The summary already says "Completed"; the group's own header would repeat it. */
+.task-done-group .task-group-header {
+    display: none;
+}
+
+.task-done-group .task-group {
+    margin-top: 0.5rem;
+}
+
 /* The integrations page ---------------------------------------------- *
    A plain settings page; only the address needs help, because a secret iCal
    URL is longer than any column and must not push the page sideways. */
