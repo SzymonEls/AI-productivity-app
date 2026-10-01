@@ -120,7 +120,7 @@ def _refuse_private_host(url):
     return ""
 
 
-def add_feed(user_id, name, url):
+def add_feed(user_id, name, url, grouped=False):
     """Subscribe to one calendar. Returns ``(feed, message)``; the caller commits."""
     name = (name or "").strip()[:120]
     url, problem = normalise_url(url)
@@ -136,7 +136,9 @@ def add_feed(user_id, name, url):
     if problem:
         return None, problem
 
-    feed = CalendarFeed(user_id=user_id, name=name or _name_from_url(url), url=url)
+    feed = CalendarFeed(
+        user_id=user_id, name=name or _name_from_url(url), url=url, is_grouped=bool(grouped)
+    )
     db.session.add(feed)
     # Read straight away rather than at the next page render: pasting an address
     # and being told there and then whether it answers is the whole of setting
@@ -168,6 +170,18 @@ def set_feed_enabled(user_id, feed_id, enabled):
 
     feed.is_enabled = bool(enabled)
     return True, f"{feed.name} is {'on' if feed.is_enabled else 'off'} the sheets."
+
+
+def set_feed_grouped(user_id, feed_id, grouped):
+    """Show a calendar as one line a day, or as one line per event again."""
+    feed = CalendarFeed.query.filter_by(id=feed_id, user_id=user_id).first()
+    if feed is None:
+        return False, "That calendar is not on the list."
+
+    feed.is_grouped = bool(grouped)
+    if feed.is_grouped:
+        return True, f"{feed.name} shows as one line a day."
+    return True, f"{feed.name} shows every event."
 
 
 def fetch_feed(feed):
@@ -321,6 +335,37 @@ def _expanded(feed, first_day, last_day, zone):
     return days
 
 
+def _grouped(entries, name):
+    """One day of a grouped calendar: its timed events as a single line.
+
+    The line is the calendar's name over the span from the earliest start to
+    the latest end - a day of classes reads "Classes 08:00–16:00", gaps and
+    all, because what the day sheet needs is when that part of the day is
+    taken, not the timetable. All-day entries have no clock to fold into the
+    span, so they stay lines of their own.
+    """
+    all_day = [entry for entry in entries if entry["span"] is None]
+    timed = [entry for entry in entries if entry["span"] is not None]
+    if not timed:
+        return all_day
+
+    first = min(entry["span"][0] for entry in timed)
+    ends = [entry["span"][1] for entry in timed]
+    # None is "runs past midnight", which is later than any clock time.
+    last = None if None in ends else max(ends)
+    label = f"{first:%H:%M}–{'24:00' if last is None else format(last, '%H:%M')}"
+
+    return all_day + [
+        {
+            "summary": name,
+            "all_day": False,
+            "time_label": label,
+            "sort_key": (1, first),
+            "span": (first, last),
+        }
+    ]
+
+
 def events_by_date(user_id, first_day, last_day, feeds=None):
     """``{date: [event, ...]}`` over a range, from every switched-on calendar.
 
@@ -335,6 +380,8 @@ def events_by_date(user_id, first_day, last_day, feeds=None):
             continue
 
         for day, entries in _expanded(feed, first_day, last_day, zone).items():
+            if feed.is_grouped:
+                entries = _grouped(entries, feed.name)
             for entry in entries:
                 # A copy per line, which is also what keeps the cache read-only.
                 by_date.setdefault(day, []).append({**entry, "calendar": feed.name})
