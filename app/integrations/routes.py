@@ -18,7 +18,8 @@ from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
-from ..projects.slots import parse_slot_date
+from ..projects.slots import parse_slot_date, today_local
+from ..tasks.routes import CSV_MAX_BYTES, CSV_MAX_ROWS, import_tasks, parse_tasks_csv
 from ..models import MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES
 from .feeds import (
     MAX_FEEDS_PER_USER,
@@ -47,7 +48,56 @@ def integrations_page():
         refresh_minutes=current_user.calendar_refresh_minutes,
         min_refresh_minutes=MIN_REFRESH_MINUTES,
         max_refresh_minutes=MAX_REFRESH_MINUTES,
+        csv_max_rows=CSV_MAX_ROWS,
     )
+
+
+@integrations_bp.route("/tasks/import", methods=["POST"])
+@login_required
+def import_tasks_csv():
+    """Add tasks from a CSV file or pasted CSV text - all of them, or none.
+
+    A row that cannot be read stops the whole import and is named in the flash,
+    so fixing the file and sending it again cannot leave the good half in twice.
+    """
+
+    upload = request.files.get("file")
+    if upload and upload.filename:
+        raw = upload.read(CSV_MAX_BYTES + 1)
+        if len(raw) > CSV_MAX_BYTES:
+            flash("That file is too large for a list of tasks.", "danger")
+            return redirect(url_for("integrations.integrations_page"))
+        text = raw.decode("utf-8-sig", errors="replace")
+    else:
+        text = request.form.get("csv", "")
+        if len(text) > CSV_MAX_BYTES:
+            flash("That is too much text for a list of tasks.", "danger")
+            return redirect(url_for("integrations.integrations_page"))
+
+    if not text.strip():
+        flash("Choose a CSV file or paste the rows first.", "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    tasks, errors = parse_tasks_csv(text, today_local())
+    if errors:
+        shown = errors[:5]
+        more = f" (and {len(errors) - 5} more)" if len(errors) > 5 else ""
+        flash("Nothing was imported. " + " ".join(shown) + more, "danger")
+        return redirect(url_for("integrations.integrations_page"))
+    if not tasks:
+        flash("No tasks found in that CSV.", "warning")
+        return redirect(url_for("integrations.integrations_page"))
+
+    import_tasks(current_user.id, tasks)
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to save the tasks.", "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    flash(f"Imported {len(tasks)} task{'s' if len(tasks) != 1 else ''}.", "success")
+    return redirect(url_for("integrations.integrations_page"))
 
 
 @integrations_bp.route("/calendars", methods=["POST"])

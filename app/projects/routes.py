@@ -23,6 +23,7 @@ from .slots import (
     ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
     MAX_CALENDAR_WEEKS,
+    MAX_SCROLL_WEEKS,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
@@ -127,27 +128,7 @@ def schedule():
 
     calendar = calendar_weeks(current_user.id, weeks=week_count, start_day=today)
     last_day = calendar[-1][-1][0]
-    # One query for the notes of every sheet on the page, the way the bookings
-    # already come in one.
-    notes = notes_from(current_user.id, today, last_day)
-    # Off the cached copy of each calendar, with no network in sight: re-reading
-    # one is the page's job but not the render's, so it happens once the page is
-    # up. See the note above [data-calendar-refresh] in the template.
-    events = events_by_date(current_user.id, today, last_day)
-    tasks = tasks_from(current_user.id, today, last_day)
-    weeks = [
-        {
-            "label": _week_label(index),
-            "range_label": _date_range_label(days[0][0], days[-1][0]),
-            "days": [
-                _serialize_schedule_day(
-                    day, booked, today, notes.get(day, ()), events.get(day, ()), tasks.get(day, ())
-                )
-                for day, booked in days
-            ],
-        }
-        for index, days in enumerate(calendar)
-    ]
+    weeks = _schedule_weeks(calendar, today)
     return render_template(
         "projects/schedule.html",
         weeks=weeks,
@@ -159,7 +140,83 @@ def schedule():
         # Two more weeks per click, up to the point where the page would be all
         # empty sheets.
         more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,
+        # Where the calendar view's scroll picks up: the Monday after the page.
+        next_from=_next_scroll_from(last_day, today),
     )
+
+
+@projects_bp.route("/schedule/weeks")
+@login_required
+def schedule_weeks():
+    """More weeks for the calendar view, as it is scrolled towards their edge.
+
+    ``from`` is the Monday the new weeks start on - the page hands it out, one
+    past its last day - and the answer is the same week sections the page itself
+    renders, so every script bound to the board works on them unchanged.
+    """
+
+    today = today_local()
+    start = parse_slot_date(request.args.get("from"))
+    if start is None or start <= today or start.weekday() != 0:
+        return jsonify({"ok": False, "message": "Pick a Monday after today."}), 400
+    if _weeks_ahead(start, today) >= MAX_SCROLL_WEEKS:
+        return jsonify({"ok": True, "html": "", "next_from": None})
+
+    count = _coerce_int(request.args.get("weeks")) or 2
+    count = max(1, min(count, 4, MAX_SCROLL_WEEKS - _weeks_ahead(start, today)))
+    calendar = calendar_weeks(current_user.id, weeks=count, start_day=start)
+    last_day = calendar[-1][-1][0]
+    return jsonify(
+        {
+            "ok": True,
+            "html": render_template(
+                "projects/_schedule_weeks.html", weeks=_schedule_weeks(calendar, today)
+            ),
+            "next_from": _next_scroll_from(last_day, today),
+        }
+    )
+
+
+def _weeks_ahead(monday, today):
+    """Which week ``monday`` starts, counted from this one (0)."""
+    return (monday - (today - timedelta(days=today.weekday()))).days // DAYS_PER_WEEK
+
+
+def _next_scroll_from(last_day, today):
+    """The Monday after ``last_day``, or None once the scroll has reached its end."""
+    monday = last_day + timedelta(days=1)
+    return monday.isoformat() if _weeks_ahead(monday, today) < MAX_SCROLL_WEEKS else None
+
+
+def _schedule_weeks(calendar, today):
+    """The schedule page's weeks, ready for the template - its own and the scroll's.
+
+    One query each for the notes, events and tasks of the whole range, the way
+    the bookings already come in one.
+    """
+    first_day, last_day = calendar[0][0][0], calendar[-1][-1][0]
+    notes = notes_from(current_user.id, first_day, last_day)
+    # Off the cached copy of each calendar, with no network in sight: re-reading
+    # one is the page's job but not the render's, so it happens once the page is
+    # up. See the note above [data-calendar-refresh] in the template.
+    events = events_by_date(current_user.id, first_day, last_day)
+    tasks = tasks_from(current_user.id, first_day, last_day)
+    return [
+        {
+            "label": _week_label(_weeks_ahead(days[0][0] - timedelta(days=days[0][0].weekday()), today)),
+            "range_label": _date_range_label(days[0][0], days[-1][0]),
+            # The days of this week already behind us: the calendar view keeps
+            # their places in the row empty so every column stays one weekday.
+            "lead_days": days[0][0].weekday(),
+            "days": [
+                _serialize_schedule_day(
+                    day, booked, today, notes.get(day, ()), events.get(day, ()), tasks.get(day, ())
+                )
+                for day, booked in days
+            ],
+        }
+        for days in calendar
+    ]
 
 
 @projects_bp.route("/schedule/day-off", methods=["POST"])

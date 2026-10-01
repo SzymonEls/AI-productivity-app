@@ -22,7 +22,9 @@ it is. See point 21 in ARCHITECTURE.md.
 """
 
 import calendar
-from datetime import timedelta
+import csv
+import io
+from datetime import datetime, timedelta
 
 from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
@@ -214,6 +216,117 @@ def shift_tasks_forward(user_id, from_day, days=1):
     for entry in entries:
         entry.due_date = entry.due_date + timedelta(days=days)
     return len(entries)
+
+
+# A CSV import is a list typed up somewhere else, not a backup to restore, so it
+# is capped at what a person would write out by hand.
+CSV_MAX_ROWS = 500
+CSV_MAX_BYTES = 256 * 1024
+# The names a column may go by in a header row, lower-cased; a file without a
+# header is read positionally in this order.
+CSV_COLUMNS = {
+    "title": {"title", "task", "name", "zadanie", "tytuł", "tytul"},
+    "due_date": {"due_date", "due", "date", "day", "data", "termin"},
+    "done": {"done", "is_done", "completed", "zrobione"},
+    "repeat": {"repeat", "repeat_rule", "powtarzanie"},
+}
+_CSV_DATE_FORMATS = ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y")
+
+
+def _csv_date(raw):
+    """A CSV cell as a date, in any of the few spellings a list is typed in."""
+    for fmt in _CSV_DATE_FORMATS:
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_tasks_csv(text, today):
+    """Read tasks out of CSV text: ``(tasks, errors)``.
+
+    ``tasks`` is a list of dicts with ``title``, ``due_date``, ``is_done`` and
+    ``repeat``; ``errors`` names each row that could not be read. The caller
+    imports nothing unless ``errors`` is empty - half a list imported is a list
+    that has to be cleaned up by hand afterwards.
+
+    The delimiter is sniffed (a comma or a semicolon, which is what a
+    spreadsheet in a Polish locale writes), and the first row is a header only
+    if its first cell names a column; otherwise the columns are title, date,
+    done and repeat, in that order, and everything after the title may be left
+    out.
+    """
+    text = text.lstrip("\ufeff")
+    try:
+        dialect = csv.Sniffer().sniff(text[:2048], delimiters=",;\t")
+    except csv.Error:
+        dialect = csv.excel
+    rows = [row for row in csv.reader(io.StringIO(text), dialect) if any(cell.strip() for cell in row)]
+
+    order = list(CSV_COLUMNS)
+    if rows and rows[0] and rows[0][0].strip().lower() in CSV_COLUMNS["title"]:
+        header = [cell.strip().lower() for cell in rows.pop(0)]
+        order = [
+            next((name for name, aliases in CSV_COLUMNS.items() if cell in aliases), None)
+            for cell in header
+        ]
+        line_offset = 2
+    else:
+        line_offset = 1
+
+    if len(rows) > CSV_MAX_ROWS:
+        return [], [f"At most {CSV_MAX_ROWS} tasks at a time; this has {len(rows)}."]
+
+    tasks, errors = [], []
+    for index, row in enumerate(rows):
+        line = index + line_offset
+        cells = {
+            name: cell.strip() for name, cell in zip(order, row) if name is not None
+        }
+        title, message = _clean_title(cells.get("title"))
+        if title is None:
+            errors.append(f"Line {line}: {message}")
+            continue
+
+        raw_date = cells.get("due_date", "")
+        due_date = _csv_date(raw_date) if raw_date else None
+        if raw_date and due_date is None:
+            errors.append(f"Line {line}: “{raw_date}” is not a date (use 2026-10-01 or 01.10.2026).")
+            continue
+
+        rule = cells.get("repeat", "").lower() or None
+        if rule is not None and rule not in REPEAT_RULES:
+            errors.append(f"Line {line}: unknown repeat “{rule}” (one of {', '.join(REPEAT_RULES)}).")
+            continue
+        if rule and due_date is None:
+            due_date = today
+
+        tasks.append(
+            {
+                "title": title,
+                "due_date": due_date,
+                "is_done": _form_bool(cells.get("done", "")),
+                "repeat": rule,
+            }
+        )
+    return tasks, errors
+
+
+def import_tasks(user_id, tasks):
+    """Add parsed tasks for ``user_id``. The caller commits."""
+    now = utc_now()
+    for item in tasks:
+        db.session.add(
+            Task(
+                user_id=user_id,
+                title=item["title"],
+                due_date=item["due_date"],
+                is_done=item["is_done"],
+                done_at=now if item["is_done"] else None,
+                repeat_rule=item["repeat"],
+            )
+        )
 
 
 @tasks_bp.route("")

@@ -26,7 +26,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
-| [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
+| [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
@@ -494,6 +494,34 @@ The schema in the code matches the latest migration (`20261001_0030`).
 
     The rule labels exist twice — `REPEAT_RULES` on the server, `REPEAT_LABELS` in
     [tasks.js](../app/static/js/tasks.js) — change both together.
+
+    **Tasks can also arrive in bulk, from CSV**, on the Integrations page
+    (`POST /integrations/tasks/import`, a file or pasted text). Columns are `title`, `due_date`,
+    `done`, `repeat` — by header name if the first row names them (Polish names too), otherwise in
+    that order; commas, semicolons and tabs are sniffed, and dates may be ISO or `dd.mm.yyyy`.
+    It is **all or nothing**: `parse_tasks_csv` reads every row first and a single unreadable one
+    imports none of them, so sending a corrected file again cannot leave the good half in twice.
+    Capped at `CSV_MAX_ROWS` rows and `CSV_MAX_BYTES`.
+
+22. **The schedule has two views, and the server renders neither of them.** "Calendar" (the
+    default) and "Sheets" are the same markup — the week sections in
+    [_schedule_weeks.html](../app/templates/projects/_schedule_weeks.html), each day the
+    `day_sheet` macro — laid out two ways by the stylesheet, keyed on `data-schedule-view` on
+    `<html>`. The choice lives in localStorage (`app-schedule-view`) and is applied before first
+    paint, like the theme, and switched from App settings without a reload. Because the markup is
+    one, every script on the board works in both without knowing which is on.
+
+    The calendar view is a row of seven columns per week (Monday first, this week's past days
+    left as hatched placeholders), each day split into sessions, events & notes, and tasks — the
+    part heads are CSS `::before` content, so the sheets view and the archive never see them.
+    Under 1200px it becomes an agenda, one row per day. It opens on the same number of weeks as
+    the sheets view; its "Show more weeks" adds two more in place instead of reloading the page
+    ([schedule-calendar.js](../app/static/js/schedule-calendar.js) →
+    `GET /projects/schedule/weeks?from=<Monday>`, which answers the same week sections as HTML in
+    JSON), up to `MAX_SCROLL_WEEKS` ahead. The scripts bind to the page rather than to a sheet,
+    which is what lets the appended weeks work as they arrive. The calendar refresh
+    (point 17) still covers only the weeks the page opened with; a week loaded later shows the
+    cached copy.
 
 ## What not to touch (and why)
 

@@ -102,7 +102,7 @@
 
 {% macro day_sheet(day, readonly=False) %}
     <article
-        class="day-sheet{% if day.is_today %} day-sheet-today{% endif %}{% if day.is_weekend %} day-sheet-weekend{% endif %}{% if not day.booked_count %} day-sheet-quiet{% endif %}"
+        class="day-sheet{% if day.is_today %} day-sheet-today{% endif %}{% if day.is_weekend %} day-sheet-weekend{% endif %}{% if not day.booked_count %} day-sheet-quiet{% endif %}{% if day.date.day == 1 %} day-sheet-month-start{% endif %}"
         data-schedule-day="{{ day.date.isoformat() }}"
     >
         <header class="day-sheet-header">
