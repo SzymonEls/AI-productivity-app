@@ -10,8 +10,9 @@
             <div>
                 <h1 class="h2 mb-1">Integrations</h1>
                 <p class="text-muted mb-0">
-                    Calendars read into the schedule. Their events show under the blocks of each
-                    day sheet, beside the notes you write there yourself.
+                    Calendars read into the schedule - their events show under the blocks of each
+                    day sheet, beside the notes you write there yourself - and tasks brought in
+                    from a CSV file.
                 </p>
             </div>
             <a href="{{ url_for('projects.schedule') }}" class="btn btn-outline-secondary">{{ icon("calendar") }}Schedule</a>
@@ -135,6 +136,41 @@
                         sheets — on the days that have been as well as the ones to come.
                     </p>
                 {% endif %}
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-1">Import tasks from CSV</h2>
+                {# A list typed up somewhere else - a spreadsheet, a notes app -
+                   brought in in one go. All or nothing: a row that cannot be read
+                   stops the import and is named, so a corrected file can simply be
+                   sent again. #}
+                <p class="text-body-secondary small mb-2">
+                    One task per row: <code>title</code>, then optionally <code>due_date</code>
+                    (<code>2026-10-01</code> or <code>01.10.2026</code>, empty for no day),
+                    <code>done</code> (<code>yes</code>/<code>1</code>) and <code>repeat</code>
+                    ({{ task_repeat_rules | join(", ") }}). A header row naming the columns is
+                    optional; commas and semicolons both work. Up to {{ csv_max_rows }} rows, and
+                    if any row cannot be read nothing is imported.
+                </p>
+                <pre class="small bg-body-tertiary rounded p-2 mb-3">title,due_date,done,repeat
+Pay rent,2026-10-10,,monthly
+Call the printer,02.10.2026,,
+Read the contract,,,</pre>
+                <form method="post" action="{{ url_for('integrations.import_tasks_csv') }}" enctype="multipart/form-data" class="row g-2">
+                    <div class="col-12">
+                        <label class="form-label" for="tasks-csv-file">CSV file</label>
+                        <input type="file" class="form-control" id="tasks-csv-file" name="file" accept=".csv,text/csv,text/plain">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="tasks-csv-text">…or paste the rows</label>
+                        <textarea class="form-control font-monospace" id="tasks-csv-text" name="csv" rows="5" placeholder="title,due_date&#10;Buy coffee,2026-10-02"></textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">{{ icon("download") }}Import tasks</button>
+                    </div>
+                </form>
             </div>
         </div>
 
