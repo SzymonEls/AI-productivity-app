@@ -45,6 +45,17 @@
                             <button type="submit" class="btn btn-primary">{{ icon("plus") }}Add</button>
                         </div>
                     </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="calendar-grouped" name="grouped" value="1">
+                            <label class="form-check-label" for="calendar-grouped">Group each day's events</label>
+                        </div>
+                        <p class="text-body-secondary small mb-0">
+                            One line a day instead of one per event — the calendar's name and the
+                            time from its first start to its last end, like
+                            <em>Classes 08:00–16:00</em>. Handy for a timetable.
+                        </p>
+                    </div>
                 </form>
             </div>
         </div>
@@ -74,6 +85,9 @@
                                 <div class="calendar-feed-main">
                                     <div class="d-flex align-items-center gap-2">
                                         <span class="fw-semibold">{{ feed.name }}</span>
+                                        {% if feed.is_grouped %}
+                                            <span class="badge text-bg-primary">Grouped</span>
+                                        {% endif %}
                                         {% if not feed.is_enabled %}
                                             <span class="badge text-bg-secondary">Off</span>
                                         {% elif feed.last_error %}
@@ -96,6 +110,12 @@
                                     </p>
                                 </div>
                                 <div class="d-flex align-items-center gap-2">
+                                    <form method="post" action="{{ url_for('integrations.group_calendar', feed_id=feed.id) }}">
+                                        <input type="hidden" name="grouped" value="{{ 0 if feed.is_grouped else 1 }}">
+                                        <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                            {{ "Show every event" if feed.is_grouped else "Group by day" }}
+                                        </button>
+                                    </form>
                                     <form method="post" action="{{ url_for('integrations.toggle_calendar', feed_id=feed.id) }}">
                                         <input type="hidden" name="enabled" value="{{ 0 if feed.is_enabled else 1 }}">
                                         <button type="submit" class="btn btn-outline-secondary btn-sm">

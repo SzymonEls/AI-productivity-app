@@ -413,6 +413,10 @@ class CalendarFeed(db.Model):
     name = db.Column(db.String(120), nullable=False)
     url = db.Column(db.String(2000), nullable=False)
     is_enabled = db.Column(db.Boolean, default=True, nullable=False)
+    # One line a day instead of one per event: the calendar's name and the span
+    # from its first start to its last end - "Classes 08:00–16:00" rather than
+    # eight lectures the sheet has no room for.
+    is_grouped = db.Column(db.Boolean, default=False, nullable=False)
     cached_ics = db.Column(db.Text, nullable=False, default="")
     checked_at = db.Column(db.DateTime, nullable=True)
     fetched_at = db.Column(db.DateTime, nullable=True)

@@ -27,6 +27,7 @@ from .feeds import (
     events_by_date,
     refresh_due,
     set_feed_enabled,
+    set_feed_grouped,
     user_feeds,
 )
 
@@ -60,7 +61,10 @@ def add_calendar():
     """
 
     feed, message = add_feed(
-        current_user.id, request.form.get("name", ""), request.form.get("url", "")
+        current_user.id,
+        request.form.get("name", ""),
+        request.form.get("url", ""),
+        grouped=request.form.get("grouped", "") in {"1", "true", "yes", "on"},
     )
     if feed is None:
         flash(message, "danger")
@@ -105,6 +109,28 @@ def toggle_calendar(feed_id):
 
     enabled = request.form.get("enabled", "1") not in {"0", "false", "no", "off"}
     ok, message = set_feed_enabled(current_user.id, feed_id, enabled)
+    if not ok:
+        flash(message, "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to update the calendar.", "danger")
+        return redirect(url_for("integrations.integrations_page"))
+
+    flash(message, "success")
+    return redirect(url_for("integrations.integrations_page"))
+
+
+@integrations_bp.route("/calendars/<int:feed_id>/group", methods=["POST"])
+@login_required
+def group_calendar(feed_id):
+    """Show a calendar as one line a day, or one line per event again."""
+
+    grouped = request.form.get("grouped", "1") not in {"0", "false", "no", "off"}
+    ok, message = set_feed_grouped(current_user.id, feed_id, grouped)
     if not ok:
         flash(message, "danger")
         return redirect(url_for("integrations.integrations_page"))

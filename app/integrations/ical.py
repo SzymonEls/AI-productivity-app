@@ -382,7 +382,7 @@ def _add_months(moment, months):
 
 
 def events_by_day(text, first_day, last_day, zone):
-    """``{date: [{"summary", "time_label", "all_day", "sort_key"}, ...]}``.
+    """``{date: [{"summary", "time_label", "all_day", "sort_key", "span"}, ...]}``.
 
     Every occurrence between the two dates, inclusive, bucketed by the day it
     falls on in ``zone``. A meeting that runs past midnight, or an all-day entry
@@ -420,6 +420,7 @@ def events_by_day(text, first_day, last_day, zone):
             if last_covered < first_day or start_day > last_day:
                 continue
 
+            end = (start + length).astimezone(zone) if not event.all_day else None
             day = max(start_day, first_day)
             while day <= min(last_covered, last_day):
                 by_day.setdefault(day, []).append(
@@ -434,6 +435,16 @@ def events_by_day(text, first_day, last_day, zone):
                         "sort_key": (
                             0 if event.all_day else 1,
                             start.astimezone(zone).time() if not event.all_day else time.min,
+                        ),
+                        # The part of the day it takes, for a calendar that is
+                        # shown as one line a day: from its start, or midnight
+                        # on the days after it, to its end, or None for "past
+                        # midnight". None as a whole for an all-day entry.
+                        "span": None
+                        if event.all_day
+                        else (
+                            start.astimezone(zone).time() if day == start_day else time.min,
+                            end.time() if day == end.date() else None,
                         ),
                     }
                 )

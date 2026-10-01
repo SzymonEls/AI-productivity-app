@@ -101,9 +101,11 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
   (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
   the first keeps a dead URL from being retried on every page render, the second is what the page
-  means by "last read". Events are not stored — see point 17.
+  means by "last read". Events are not stored — see point 17. `is_grouped` folds each day's
+  timed events into one line — the calendar's name and the span from the first start to the last
+  end (`_grouped` in `feeds.py`) — for a timetable-like calendar; all-day entries stay separate.
 
-The schema in the code matches the latest migration (`20260917_0026`).
+The schema in the code matches the latest migration (`20261001_0028`).
 
 ## Responsibility boundaries
 
