@@ -26,6 +26,7 @@
                 root.setAttribute("data-bs-theme", theme);
                 root.setAttribute("data-project-layout", localStorage.getItem("app-project-layout") || "sidebar");
                 root.setAttribute("data-plan-editor", localStorage.getItem("app-plan-editor") || "blocks");
+                root.setAttribute("data-schedule-view", localStorage.getItem("app-schedule-view") === "sheets" ? "sheets" : "calendar");
                 // Before first paint, like the theme: a private project's plan must
                 // not be on screen for a frame before safe mode hides it.
                 root.setAttribute("data-safe-mode", localStorage.getItem("app-safe-mode") === "on" ? "on" : "off");
@@ -34,6 +35,7 @@
                 root.setAttribute("data-bs-theme", "light");
                 root.setAttribute("data-project-layout", "sidebar");
                 root.setAttribute("data-plan-editor", "blocks");
+                root.setAttribute("data-schedule-view", "calendar");
                 root.setAttribute("data-safe-mode", "off");
             }
         })();
@@ -287,6 +289,14 @@
                             <button type="button" class="settings-segment" data-value="markdown">Markdown</button>
                         </div>
                     </div>
+                    <div class="settings-group">
+                        <div class="settings-label">{{ icon("calendar") }}Schedule view</div>
+                        <p class="settings-hint">“Calendar” is a week-by-week grid, each day split into sessions, events and notes, and tasks. “Sheets” is the classic tear-off sheets.</p>
+                        <div class="settings-segments" role="group" aria-label="Schedule view" data-setting="schedule-view">
+                            <button type="button" class="settings-segment" data-value="calendar">Calendar</button>
+                            <button type="button" class="settings-segment" data-value="sheets">Sheets</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -356,6 +366,7 @@
             const themeSetting = () => read("app-theme") || "system";
             const layoutSetting = () => (read("app-project-layout") === "stacked" ? "stacked" : "sidebar");
             const planEditorSetting = () => (read("app-plan-editor") === "markdown" ? "markdown" : "blocks");
+            const scheduleViewSetting = () => (read("app-schedule-view") === "sheets" ? "sheets" : "calendar");
             // Off unless asked for: safe mode is the exception you switch on when
             // someone can see the screen, not the way the app normally reads.
             const safeModeSetting = () => (read("app-safe-mode") === "on" ? "on" : "off");
@@ -373,7 +384,7 @@
             };
 
             const refreshSegments = () => {
-                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "plan-editor": planEditorSetting() };
+                const map = { ui: uiSetting(), theme: themeSetting(), "project-layout": layoutSetting(), "plan-editor": planEditorSetting(), "schedule-view": scheduleViewSetting() };
                 Object.entries(map).forEach(([name, value]) => {
                     document.querySelectorAll(`[data-setting="${name}"] .settings-segment`).forEach((btn) => {
                         btn.classList.toggle("is-active", btn.dataset.value === value);
@@ -401,6 +412,7 @@
                 root.setAttribute("data-bs-theme", effectiveTheme());
                 root.setAttribute("data-project-layout", layoutSetting());
                 root.setAttribute("data-plan-editor", planEditorSetting());
+                root.setAttribute("data-schedule-view", scheduleViewSetting());
                 root.setAttribute("data-safe-mode", safeModeSetting());
                 syncThemeColor();
                 syncSafeModeButtons();
@@ -421,6 +433,12 @@
                 store("app-plan-editor", mode === "markdown" ? "markdown" : "blocks");
                 applyAll();
                 document.dispatchEvent(new CustomEvent("plan-editor-change", { detail: { mode: planEditorSetting() } }));
+            };
+
+            const setScheduleView = (mode) => {
+                store("app-schedule-view", mode === "sheets" ? "sheets" : "calendar");
+                applyAll();
+                document.dispatchEvent(new CustomEvent("schedule-view-change", { detail: { mode: scheduleViewSetting() } }));
             };
 
             applyAll();
@@ -447,6 +465,9 @@
             });
             document.querySelectorAll('[data-setting="plan-editor"] .settings-segment').forEach((btn) => {
                 btn.addEventListener("click", () => setPlanEditor(btn.dataset.value));
+            });
+            document.querySelectorAll('[data-setting="schedule-view"] .settings-segment').forEach((btn) => {
+                btn.addEventListener("click", () => setScheduleView(btn.dataset.value));
             });
 
             window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => {

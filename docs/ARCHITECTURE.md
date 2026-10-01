@@ -495,6 +495,26 @@ The schema in the code matches the latest migration (`20261001_0030`).
     The rule labels exist twice — `REPEAT_RULES` on the server, `REPEAT_LABELS` in
     [tasks.js](../app/static/js/tasks.js) — change both together.
 
+22. **The schedule has two views, and the server renders neither of them.** "Calendar" (the
+    default) and "Sheets" are the same markup — the week sections in
+    [_schedule_weeks.html](../app/templates/projects/_schedule_weeks.html), each day the
+    `day_sheet` macro — laid out two ways by the stylesheet, keyed on `data-schedule-view` on
+    `<html>`. The choice lives in localStorage (`app-schedule-view`) and is applied before first
+    paint, like the theme, and switched from App settings without a reload. Because the markup is
+    one, every script on the board works in both without knowing which is on.
+
+    The calendar view is a row of seven columns per week (Monday first, this week's past days
+    left as hatched placeholders), each day split into sessions, events & notes, and tasks — the
+    part heads are CSS `::before` content, so the sheets view and the archive never see them.
+    Under 1200px it becomes an agenda, one row per day. It opens on the same number of weeks as
+    the sheets view; its "Show more weeks" adds two more in place instead of reloading the page
+    ([schedule-calendar.js](../app/static/js/schedule-calendar.js) →
+    `GET /projects/schedule/weeks?from=<Monday>`, which answers the same week sections as HTML in
+    JSON), up to `MAX_SCROLL_WEEKS` ahead. The scripts bind to the page rather than to a sheet,
+    which is what lets the appended weeks work as they arrive. The calendar refresh
+    (point 17) still covers only the weeks the page opened with; a week loaded later shows the
+    cached copy.
+
 ## What not to touch (and why)
 
 - **The raw `ALTER TABLE` in `initialize_database`** ([app/__init__.py:314-484](../app/__init__.py#L314-L484)) —

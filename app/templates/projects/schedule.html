@@ -23,7 +23,8 @@
         <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
             <div class="d-flex align-items-center gap-2">
                 <h1 class="h5 mb-0">Schedule</h1>
-                <span class="text-muted small">The next {{ week_count }} weeks, one sheet per day.</span>
+                <span class="text-muted small schedule-subtitle-sheets">The next {{ week_count }} weeks, one sheet per day.</span>
+                <span class="text-muted small schedule-subtitle-calendar">The next {{ week_count }} weeks, a row per week.</span>
             </div>
             <div class="d-flex align-items-center gap-2">
                 {# Spinning while the calendars are being re-read, which happens
@@ -61,25 +62,34 @@
         </p>
     </section>
 
-    {% for week in weeks %}
-        <section class="schedule-week">
-            <header class="schedule-week-header">
-                <h2 class="schedule-week-title">{{ week.label }}</h2>
-                <span class="schedule-week-range">{{ week.range_label }}</span>
-            </header>
-            <div class="schedule-grid">
-                {% for day in week.days %}
-                    {{ day_sheet(day) }}
-                {% endfor %}
-            </div>
-        </section>
-    {% endfor %}
+    {# The calendar view's column heads, held under the navbar while the weeks
+       scroll past. The sheets view has no columns and never shows them. #}
+    <div class="schedule-weekdays" aria-hidden="true">
+        {% for name in ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun") %}
+            <span class="schedule-weekday{% if loop.index > 5 %} is-weekend{% endif %}">{{ name }}</span>
+        {% endfor %}
+    </div>
+
+    <div class="schedule-weeks" data-schedule-weeks>
+        {% include "projects/_schedule_weeks.html" %}
+    </div>
 
     {% if more_weeks %}
         {# The window already reaches the last booking on its own; this is for
-           looking further ahead than anything booked. #}
-        <div class="schedule-more">
+           looking further ahead than anything booked. The calendar view loads
+           further weeks as it is scrolled instead, so it hides this. #}
+        <div class="schedule-more schedule-more-sheets">
             <a href="{{ url_for('projects.schedule', weeks=more_weeks) }}" class="btn btn-outline-secondary btn-sm">Show more weeks</a>
+        </div>
+    {% endif %}
+
+    {# The calendar view's "Show more weeks": the next two weeks, added under
+       the ones already on the page rather than by reloading it, so the scroll
+       stays where it was. #}
+    {% if next_from %}
+        <div class="schedule-more schedule-autoload" data-schedule-autoload data-next-from="{{ next_from }}">
+            <span class="calendar-spinner" data-schedule-autoload-spinner hidden></span>
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-schedule-autoload-button>Show more weeks</button>
         </div>
     {% endif %}
 
@@ -122,4 +132,5 @@
 <script src="{{ url_for('static', filename='js/day-notes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
 <script src="{{ url_for('static', filename='js/calendar-feeds.js') }}"></script>
+<script src="{{ url_for('static', filename='js/schedule-calendar.js') }}"></script>
 {% endblock %}

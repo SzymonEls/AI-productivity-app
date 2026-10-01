@@ -35,6 +35,10 @@ ARCHIVE_WEEKS = 3
 # day off pushes them - but not without end: past this it is a scroll through
 # empty sheets.
 MAX_CALENDAR_WEEKS = 12
+# The calendar view of the schedule loads further weeks as it is scrolled
+# rather than by link, so it can afford to reach further than the sheets do -
+# but a year ahead is where the scroll stops: nothing is planned that far out.
+MAX_SCROLL_WEEKS = 52
 
 # How far a session's block can be tinted for having been put off: one move onto
 # a later day tints it, a second turns it red, and there is nothing past that.

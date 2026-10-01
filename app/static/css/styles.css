@@ -2516,7 +2516,7 @@ button.picker-row:hover {
 
 .day-lines .day-event,
 .day-lines .day-note {
-    font-size: 0.875rem;
+    font-size: 1.05rem;
 }
 
 .day-note-list,
@@ -2545,7 +2545,7 @@ button.picker-row:hover {
     padding-left: 0.55rem;
     position: relative;
     color: var(--muted-foreground);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     line-height: 1.35;
 }
 
@@ -2591,7 +2591,7 @@ button.picker-row:hover {
     min-width: 0;
     padding-left: 0.55rem;
     color: var(--foreground);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     line-height: 1.35;
 }
 
@@ -2676,7 +2676,7 @@ button.picker-row:hover {
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--muted-foreground);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     line-height: 1.2;
 }
 
@@ -2704,7 +2704,7 @@ button.picker-row:hover {
     border-radius: var(--radius-sm);
     background: var(--surface);
     color: var(--foreground);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
 }
 
 /* Standing in for a line rather than under the list, so it takes the row. */
@@ -2766,7 +2766,7 @@ button.picker-row:hover {
     padding: 0.15rem 0.2rem;
     border-radius: var(--radius-sm);
     color: var(--foreground);
-    font-size: 0.8rem;
+    font-size: 0.95rem;
     line-height: 1.35;
     transition: background 0.12s ease;
 }
@@ -2782,14 +2782,19 @@ button.picker-row:hover {
     padding: 0.3rem 0.35rem;
 }
 
+/* Read on its own under today's cards, like the day's lines above it. */
+.day-tasks-home .task {
+    font-size: 1.05rem;
+}
+
 /* The circle: empty while the task is open, filled with the success colour
    and a tick once it is done. Sized to the text, so a sheet stays narrow. */
 .task-check {
     flex: 0 0 auto;
     display: inline-grid;
     place-items: center;
-    width: 1rem;
-    height: 1rem;
+    width: 1.1rem;
+    height: 1.1rem;
     margin-top: 0.08em;
     padding: 0;
     border: 1.5px solid var(--border-strong);
@@ -2801,8 +2806,8 @@ button.picker-row:hover {
 
 .tasks-page .task-check,
 .day-tasks-home .task-check {
-    width: 1.15rem;
-    height: 1.15rem;
+    width: 1.2rem;
+    height: 1.2rem;
 }
 
 .task-check .app-icon {
@@ -2871,7 +2876,7 @@ button.picker-row:hover {
     flex: 0 0 auto;
     margin-top: 0.1em;
     color: var(--muted-foreground);
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -3484,5 +3489,307 @@ button.picker-row:hover {
 
     .planner-day {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Schedule — the calendar view ----------------------------------------- *
+   The same sheets, laid out as a calendar: a row of seven columns per week
+   under weekday heads that stay put while the weeks scroll past, and each day
+   split into its three parts - the sessions, then what is on (calendar events
+   and notes), then the tasks. Below 1200px seven columns stop fitting, so the
+   days run as an agenda instead: one row per day, the date on the left and the
+   three parts beside it (side by side from 768px, stacked under that).
+
+   Everything is keyed on [data-schedule-view] on <html>, set before first paint
+   from the App settings, so switching views needs no reload and the markup is
+   the sheets view's own. The bits only this view uses - the weekday heads, the
+   empty places of this week's past days, its own "Show more weeks" - are hidden
+   otherwise. */
+
+.schedule-weekdays,
+.day-sheet-placeholder,
+.schedule-autoload,
+.schedule-subtitle-calendar {
+    display: none;
+}
+
+:root[data-schedule-view="calendar"] .schedule-subtitle-sheets,
+:root[data-schedule-view="calendar"] .schedule-more-sheets {
+    display: none;
+}
+
+:root[data-schedule-view="calendar"] .schedule-subtitle-calendar {
+    display: inline;
+}
+
+:root[data-schedule-view="calendar"] .schedule-autoload {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+/* Seven columns want more room than the page's usual container gives. */
+:root[data-schedule-view="calendar"] .app-main:has(> .schedule-page) {
+    max-width: 1680px;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .schedule-week + .schedule-week {
+    margin-top: 1rem;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .schedule-week-header {
+    margin-bottom: 0.35rem;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .schedule-week-title {
+    font-size: 0.95rem;
+}
+
+
+/* One frame per week, the days inside it divided by hairlines rather than
+   standing as separate cards. */
+:root[data-schedule-view="calendar"] .schedule-page .schedule-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+}
+
+/* Agenda by default: the date in a column of its own, the three parts beside
+   it. */
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet {
+    display: grid;
+    grid-template-columns: 3.75rem minmax(0, 1fr);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet + .day-sheet {
+    border-top: 1px solid var(--border);
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-today {
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-weekend {
+    background: color-mix(in srgb, var(--surface-2) 60%, var(--surface));
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-header {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.15rem;
+    padding: 0.6rem 0.25rem;
+    border-bottom: 0;
+    border-right: 1px dashed var(--border-strong);
+    background: transparent;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-today .day-sheet-header {
+    background: var(--primary-soft);
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-tag {
+    margin-left: 0;
+    padding: 0.05rem 0.35rem;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-slots {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes {
+    grid-column: 2;
+    grid-row: 2;
+    margin-top: 0;
+    padding: 0.4rem 0.5rem;
+    background: transparent;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-tasks {
+    grid-column: 2;
+    grid-row: 3;
+    padding: 0.4rem 0.5rem 0.45rem;
+    border-top: 1px dashed var(--border-strong);
+}
+
+/* Each part says what it is in a small head of its own. CSS rather than
+   markup, because the sheets view and the archive render the same macro and
+   have no use for the heads. */
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-slots::before,
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes::before,
+:root[data-schedule-view="calendar"] .schedule-page .day-tasks::before {
+    color: var(--muted-foreground);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-slots::before {
+    content: "Sessions";
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes::before {
+    content: "Events & notes";
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-tasks::before {
+    content: "Tasks";
+}
+
+/* Blocks, lines and dates keep the sheets view's own sizes: the calendar
+   changes where things stand, not how large they are. */
+
+/* Tablets and small laptops: the three parts side by side, one row per day. */
+@media (min-width: 768px) {
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet {
+        grid-template-columns: 4.25rem repeat(3, minmax(0, 1fr));
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-header {
+        grid-row: 1;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-slots,
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes,
+    :root[data-schedule-view="calendar"] .schedule-page .day-tasks {
+        grid-row: 1;
+        align-content: start;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes {
+        grid-column: 3;
+        justify-content: flex-start;
+        border-top: 0;
+        border-left: 1px dashed var(--border-strong);
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-tasks {
+        grid-column: 4;
+        border-top: 0;
+        border-left: 1px dashed var(--border-strong);
+    }
+}
+
+/* Desktop: the calendar proper - seven columns per week, Monday first. */
+@media (min-width: 1200px) {
+    :root[data-schedule-view="calendar"] .schedule-page .schedule-weekdays {
+        position: sticky;
+        top: var(--app-navbar-height, 0px);
+        z-index: 5;
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        margin: 0 0 0.5rem;
+        padding: 0.4rem 1px;
+        border-bottom: 1px solid var(--border);
+        background: var(--background);
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .schedule-weekday {
+        padding: 0 0.6rem;
+        color: var(--muted-foreground);
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .schedule-weekday.is-weekend {
+        color: var(--danger);
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .schedule-grid {
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-placeholder {
+        display: block;
+        min-height: 6rem;
+        background: repeating-linear-gradient(
+            -45deg,
+            transparent 0 6px,
+            color-mix(in srgb, var(--border) 45%, transparent) 6px 7px
+        );
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Hairlines between the columns. Each week is a grid of its own, so the
+       first child - a Monday, or a placeholder standing in for one - is the
+       only one without. */
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet + .day-sheet {
+        border-top: 0;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .schedule-grid > * + * {
+        border-left: 1px solid var(--border);
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-today {
+        box-shadow: inset 0 3px 0 var(--primary);
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-header {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 0.35rem;
+        padding: 0.4rem 0.55rem;
+        border-right: 0;
+        border-bottom: 1px dashed var(--border-strong);
+    }
+
+    /* The column head already names the weekday. */
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-weekday {
+        display: none;
+    }
+
+    /* The month is named where it changes, and on today's sheet where the page
+       starts, rather than on all thirty of them. */
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet:not(.day-sheet-month-start, .day-sheet-today) .day-sheet-month {
+        display: none;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-month-start .day-sheet-month {
+        color: var(--foreground);
+        font-weight: 600;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-tag {
+        margin-left: auto;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-slots {
+        order: 1;
+    }
+
+    :root[data-schedule-view="calendar"] .schedule-page .day-sheet-notes {
+        order: 2;
+        border-left: 0;
+        border-top: 1px dashed var(--border-strong);
+    }
+
+    /* Last, and it takes whatever height the row has left, so the tasks part
+       reaches the bottom of every cell however much the day beside it holds. */
+    :root[data-schedule-view="calendar"] .schedule-page .day-tasks {
+        order: 3;
+        flex: 1 1 auto;
+        border-left: 0;
+        border-top: 1px dashed var(--border-strong);
     }
 }
