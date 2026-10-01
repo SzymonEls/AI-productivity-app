@@ -18,6 +18,7 @@ from ..time_tracking.service import (
 )
 from ..integrations.feeds import events_by_date, has_stale_feeds
 from .day_notes import add_note, delete_note, notes_from, shift_notes_forward, update_note
+from ..tasks.routes import shift_tasks_forward, tasks_from
 from .slots import (
     ARCHIVE_WEEKS,
     DAYS_PER_WEEK,
@@ -133,13 +134,14 @@ def schedule():
     # one is the page's job but not the render's, so it happens once the page is
     # up. See the note above [data-calendar-refresh] in the template.
     events = events_by_date(current_user.id, today, last_day)
+    tasks = tasks_from(current_user.id, today, last_day)
     weeks = [
         {
             "label": _week_label(index),
             "range_label": _date_range_label(days[0][0], days[-1][0]),
             "days": [
                 _serialize_schedule_day(
-                    day, booked, today, notes.get(day, ()), events.get(day, ())
+                    day, booked, today, notes.get(day, ()), events.get(day, ()), tasks.get(day, ())
                 )
                 for day, booked in days
             ],
@@ -178,6 +180,9 @@ def schedule_day_off():
     # the blocks go. Nothing can refuse it: unlike a booking, a note has no
     # finished session to stay put for and no slot to collide over.
     shift_notes_forward(current_user.id, day)
+    # Open tasks go with the day too; a finished one stays where it was done,
+    # the way a finished session does.
+    shift_tasks_forward(current_user.id, day)
 
     try:
         db.session.commit()
@@ -213,16 +218,18 @@ def schedule_archive():
 
     notes = notes_from(current_user.id, first_day, last_day)
     events = events_by_date(current_user.id, first_day, last_day)
+    tasks = tasks_from(current_user.id, first_day, last_day)
 
     return render_template(
         "projects/archive.html",
+        today=today,
         weeks=[
             {
                 "label": _past_week_label(week[0][0], today),
                 "range_label": _date_range_label(week[0][0], week[-1][0]),
                 "days": [
                     _serialize_schedule_day(
-                        day, booked, today, notes.get(day, ()), events.get(day, ())
+                        day, booked, today, notes.get(day, ()), events.get(day, ()), tasks.get(day, ())
                     )
                     for day, booked in week
                 ],
@@ -279,8 +286,8 @@ def _date_range_label(first, last):
     return f"{first.strftime('%d %b')} – {last.strftime('%d %b')}"
 
 
-def _serialize_schedule_day(day, booked, today, notes=(), events=()):
-    """One calendar sheet: its three slots, its lines, and what the header shows.
+def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
+    """One calendar sheet: its three slots, its tasks, its lines, and what the header shows.
 
     "Lines" is the foot of the sheet: the day's events, read off the subscribed
     calendars, and then the notes written here by hand. Two sources, one list -
@@ -312,10 +319,12 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=()):
     return {
         "date": day,
         "is_today": day == today,
+        "today": today,
         "is_weekend": day.weekday() >= 5,
         "slots": slots,
         "notes": list(notes),
         "events": list(events),
+        "tasks": list(tasks),
         "booked_count": sum(1 for entry in slots if entry["project"]),
     }
 

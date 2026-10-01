@@ -112,6 +112,9 @@
                         <a class="nav-link {% if request.endpoint == 'projects.schedule' %}active{% endif %}" href="{{ url_for('projects.schedule') }}">
                             {{ icon("calendar") }}Schedule
                         </a>
+                        <a class="nav-link {% if request.endpoint and request.endpoint.startswith('tasks.') %}active{% endif %}" href="{{ url_for('tasks.tasks_page') }}">
+                            {{ icon("list-checks") }}Tasks
+                        </a>
                         <a class="nav-link {% if request.endpoint == 'projects.timeline_view' %}active{% endif %}" href="{{ url_for('projects.timeline_view') }}">
                             {{ icon("folder") }}Projects
                         </a>

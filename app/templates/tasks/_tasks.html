@@ -1,0 +1,91 @@
+{#
+  A task row and a day's list of them, shared by the schedule's sheets, the
+  archive's, the home page and - through tasks.js, which builds the same markup
+  - the Tasks page.
+
+  buildTask() in app/static/js/tasks.js mirrors task_row() exactly: a task the
+  script adds or moves has to look the same as one the page drew. Change one,
+  change the other.
+#}
+{% from "icons.html" import icon %}
+
+{% macro task_row(task, list_date=None, today=None) %}
+    {# The date is only worth saying when it is not the list's own: a task
+       carried over from Monday onto today's list says "Mon 29 Sep", one that
+       belongs to the list it is on says nothing. #}
+    {% set show_due = task.due_date and task.due_date != list_date %}
+    <li
+        class="task{% if task.is_done %} is-done{% endif %}"
+        data-task
+        data-task-id="{{ task.id }}"
+        data-due="{{ task.due_date.isoformat() if task.due_date else '' }}"
+        data-done="{{ 1 if task.is_done else 0 }}"
+        data-repeat="{{ task.repeat_rule or '' }}"
+    >
+        <button
+            type="button"
+            class="task-check"
+            data-task-toggle
+            role="checkbox"
+            aria-checked="{{ 'true' if task.is_done else 'false' }}"
+            aria-label="Done: {{ task.title }}"
+        >{{ icon("check", 12) }}</button>
+        {# A button rather than a span, as a day note's line is: the text is
+           what you click to rewrite it, so it has to be reachable by keyboard. #}
+        <button type="button" class="task-title" data-task-title title="Click to edit">{{ task.title }}</button>
+        {# Only the open occurrence exists ahead of time; the mark says another
+           one will be written once this is ticked off. #}
+        {% if task.repeat_rule %}
+            <span class="task-repeat" data-task-repeat role="img" title="Repeats: {{ task_repeat_rules.get(task.repeat_rule, task.repeat_rule)|lower }}" aria-label="Repeats: {{ task_repeat_rules.get(task.repeat_rule, task.repeat_rule)|lower }}">{{ icon("repeat", 12) }}</span>
+        {% endif %}
+        {% if show_due %}
+            <span class="task-due{% if today and task.due_date < today and not task.is_done %} is-overdue{% endif %}" data-task-due>{{ task.due_date.strftime("%a %d %b") }}</span>
+        {% endif %}
+        <button
+            type="button"
+            class="icon-button task-menu-button"
+            data-task-menu
+            aria-haspopup="menu"
+            title="Move or delete"
+            aria-label="Options for {{ task.title }}"
+        >{{ icon("more") }}</button>
+    </li>
+{% endmacro %}
+
+{#
+  One day's tasks, with a + that opens an input in place - the gesture the note
+  list under it already uses, so the two read as one kind of thing.
+
+  accepts_overdue is the home page's list: today's tasks and every open one
+  whose day has gone, so a task moved onto an earlier day stays on it there
+  instead of vanishing from the page.
+#}
+{% macro day_tasks(list_date, tasks, today=None, extra_class="", accepts_overdue=False) %}
+    <section
+        class="day-tasks{% if extra_class %} {{ extra_class }}{% endif %}"
+        data-task-list
+        data-date="{{ list_date.isoformat() }}"
+        {% if accepts_overdue %}data-accepts-overdue{% endif %}
+    >
+        {# Tight against its items: an empty list is hidden with :empty. #}
+        <ul class="task-list" data-task-items>
+            {%- for task in tasks %}{{ task_row(task, list_date, today) }}{% endfor -%}
+        </ul>
+        <button
+            type="button"
+            class="day-note-add task-add"
+            data-task-add
+            title="Add a task to {{ list_date.strftime('%d %b') }}"
+        >{{ icon("plus", size=12) }}<span class="day-note-add-label">Task</span></button>
+        <div class="task-editor" data-task-editor hidden>
+            <input
+                type="text"
+                class="day-note-input"
+                data-task-input
+                maxlength="{{ task_title_max_length }}"
+                placeholder="Task for {{ list_date.strftime('%d %b') }}"
+                aria-label="New task for {{ list_date.strftime('%d %b') }}"
+            >
+        </div>
+    </section>
+{% endmacro %}

@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 {% from "projects/_day_sheet.html" import day_notes %}
+{% from "tasks/_tasks.html" import day_tasks %}
 
 {% block title %}Home{% endblock %}
 
@@ -47,6 +48,7 @@
     {# What day-notes.js binds to. The home page is the third place today's
        lines can be written, after the board and the archive. #}
     data-day-lines
+    data-tasks-today="{{ today.isoformat() }}"
     {% if refresh_calendars %}
     {# Exactly as the schedule does it: the events rendered above are the copy
        the server already had, and the calendars are re-read once the page is
@@ -159,6 +161,16 @@
             <div class="dashboard-section day-lines-box">
                 <h2 class="h6 mb-0">Calendar &amp; notes</h2>
                 {{ day_notes(day_lines, "day-lines") }}
+            </div>
+
+            {# Today's tasks, and every open one whose day has already gone, so
+               nothing left undone slips off the page the day is started on. #}
+            <div class="dashboard-section day-lines-box">
+                <div class="d-flex justify-content-between align-items-baseline gap-2">
+                    <h2 class="h6 mb-0">Tasks</h2>
+                    <a class="small text-muted" href="{{ url_for('tasks.tasks_page') }}">All tasks →</a>
+                </div>
+                {{ day_tasks(today, task_lines, today, "day-tasks-home", accepts_overdue=True) }}
             </div>
         </section>
 
@@ -278,5 +290,6 @@
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inbox.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-notes.js') }}"></script>
+<script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
 <script src="{{ url_for('static', filename='js/calendar-feeds.js') }}"></script>
 {% endblock %}

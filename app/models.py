@@ -93,6 +93,13 @@ class User(UserMixin, db.Model):
         # thought you just dictated is the one you are still thinking about.
         order_by=lambda: (InboxItem.created_at.desc(), InboxItem.id.desc()),
     )
+    tasks = db.relationship(
+        "Task",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: (Task.due_date, Task.created_at, Task.id),
+    )
     calendar_feeds = db.relationship(
         "CalendarFeed",
         back_populates="owner",
@@ -385,6 +392,60 @@ class InboxItem(db.Model):
 
     __table_args__ = (
         db.Index("ix_inbox_items_user", "user_id"),
+    )
+
+
+# A task is a line to tick off, not a document: long enough for a sentence with
+# a detail in it, short enough to fit a day sheet. Checked on the column and
+# again where a task is saved.
+TASK_TITLE_MAX_LENGTH = 300
+
+
+class Task(db.Model):
+    """One thing to do, optionally on a day.
+
+    Not a DayNote: a note says something about a day and has no state, while a
+    task is either done or still to do, and the day it sits on is a plan that
+    gets moved - to tomorrow, to the weekend - far more often than a note ever
+    is. Nor a booking: it belongs to no project and no slot, so a day takes as
+    many as get written.
+
+    ``due_date`` is a calendar day in CALENDAR_TIMEZONE, the way a slot's date
+    is, and None means "some day": the task is on the list but on no sheet.
+    ``done_at`` is when it was ticked off, kept so the finished ones can be
+    listed newest first; it goes back to None when a task is reopened.
+    """
+
+    __tablename__ = "tasks"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    title = db.Column(db.String(TASK_TITLE_MAX_LENGTH), nullable=False)
+    due_date = db.Column(db.Date, nullable=True)
+    is_done = db.Column(db.Boolean, default=False, nullable=False)
+    done_at = db.Column(db.DateTime, nullable=True)
+    # How the task comes back once it is ticked off - one of REPEAT_RULES in
+    # app/tasks/routes.py, or None for a task done once. Only ever one row of a
+    # repeating task is open: ticking it off writes the next one, on the next
+    # date, instead of the calendar carrying every occurrence in advance.
+    repeat_rule = db.Column(db.String(20), nullable=True)
+    # The task this one was written by, when it is the next occurrence of a
+    # repeating one. Read when that earlier one is reopened: a tick taken back
+    # takes back the occurrence it wrote. A plain id rather than a foreign key -
+    # the earlier row may be deleted and this one must not care.
+    previous_task_id = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="tasks")
+
+    __table_args__ = (
+        db.Index("ix_tasks_user_due", "user_id", "due_date"),
     )
 
 

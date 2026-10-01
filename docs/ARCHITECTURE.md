@@ -27,6 +27,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. |
+| [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
@@ -98,6 +99,14 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   it belongs to no date either, because when a thought was had says nothing about where it goes.
   See point 19.
 
+- **Task** — one thing to do: a `title` (at most `TASK_TITLE_MAX_LENGTH` characters), an
+  optional `due_date` (a day in `CALENDAR_TIMEZONE`, like a slot's; None means "no date") and
+  `is_done`, with `done_at` kept so the Completed list can run newest first. `repeat_rule`
+  (one of `REPEAT_RULES` in [app/tasks/routes.py](../app/tasks/routes.py), or None) makes it come
+  back when ticked off; `previous_task_id` is set on an occurrence written that way and names
+  the one that wrote it — a plain integer, not a foreign key. It belongs to the user, never to
+  a project or a slot, and a day takes as many as get written. See point 21.
+
 - **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
   (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
   the first keeps a dead URL from being retried on every page render, the second is what the page
@@ -105,7 +114,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   timed events into one line — the calendar's name and the span from the first start to the last
   end (`_grouped` in `feeds.py`) — for a timetable-like calendar; all-day entries stay separate.
 
-The schema in the code matches the latest migration (`20261001_0028`).
+The schema in the code matches the latest migration (`20261001_0030`).
 
 ## Responsibility boundaries
 
@@ -432,6 +441,59 @@ The schema in the code matches the latest migration (`20261001_0028`).
     come back to it) and `daily_target_minutes` (minutes to aim for, which the home page read as
     a percentage). Both were intentions typed once and never checked against anything; both
     columns were dropped in migration `20260917_0027`.
+
+21. **A task is the same row everywhere, and moving it is the edit that matters.** The Tasks
+    page, every sheet on the schedule and in the archive, and the box on the home page render
+    the same markup (`task_row` in [templates/tasks/_tasks.html](../app/templates/tasks/_tasks.html),
+    mirrored by `buildTask` in [tasks.js](../app/static/js/tasks.js) — change both together),
+    and one script drives all of them through three endpoints: `POST /tasks`,
+    `POST /tasks/<id>/update` (any of `title`, `due_date`, `is_done`; an empty `due_date` takes
+    the date away, an empty title is refused rather than read as a delete) and
+    `POST /tasks/<id>/delete` (already gone counts as deleted, as for a day note).
+
+    Every change is applied to the page first and undone if the server says no. Where a moved
+    task lands depends on the page: the Tasks page arrives with its tasks as JSON and redraws its
+    groups from them, while a page of day lists looks for `[data-task-list][data-date=…]` of the
+    new day and drops the row from the old one — so a task moved past the edge of the schedule
+    simply leaves it, and the status line says where it went. The home page's list carries
+    `data-accepts-overdue`, because it shows today's tasks *and* every open one whose day has
+    gone (`overdue_tasks`); the schedule starts at today, so without that box an overdue task
+    would only be on the Tasks page.
+
+    The quick moves in the ⋯ menu are counted in the browser from `data-tasks-today`, which the
+    server renders from `today_local()` — the browser's own clock could be in another timezone
+    from the one a task's day is kept in. "This weekend" is the coming Saturday, or the next one
+    when it already is the weekend; "Next week" is the coming Monday.
+
+    A day off moves the open tasks from that day on, with the bookings and the notes
+    (`shift_tasks_forward`); a finished task stays on its day, for the reason a finished session
+    does (point 10).
+
+    **A repeating task is one open row, not a series.** Nothing about the occurrences ahead is
+    stored: ticking one off (`is_done` → true on a task with a `repeat_rule`) keeps that row as
+    the done record and writes the next one, with the same title and rule, on the date
+    `next_due` gives — and only then. So a daily task shows on one sheet, not on every sheet of
+    the month, and editing or moving the open occurrence never has to ask "this one or all of
+    them". The update answers with the new row as `next`, and the page places it like a moved
+    task.
+
+    `next_due` counts from the occurrence's own date, so a Monday task stays on Mondays however
+    late in the week it is ticked off, but always lands **after today**: a daily task neglected
+    for a week comes back tomorrow, not as seven overdue copies. Months are counted from the
+    occurrence each time (`_add_months(start, n)`), so the 31st skipped past a short month lands
+    on the 31st again; across occurrences a task on the 31st does drift to the 30th after a
+    30-day month, because only the last date is kept — storing an anchor day would fix it if it
+    ever matters.
+
+    **Reopening takes the written occurrence back** (`removed_id` in the answer), unless it has
+    been done itself in the meantime — then it is a record of its own. `previous_task_id` is
+    what links the two, and it guards the other direction too: a task that has already written
+    a finished occurrence writes no new one when re-ticked, so ticking an old record in
+    Completed cannot start a second series. Deleting a task clears `previous_task_id` on the
+    occurrence it wrote, because SQLite may give the deleted id to the next task added.
+
+    The rule labels exist twice — `REPEAT_RULES` on the server, `REPEAT_LABELS` in
+    [tasks.js](../app/static/js/tasks.js) — change both together.
 
 ## What not to touch (and why)
 
