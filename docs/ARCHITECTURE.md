@@ -243,9 +243,9 @@ The schema in the code matches the latest migration (`20260917_0026`).
     no `project_id`, so deleting a project takes its bookings and leaves the notes.
 
     **The home page is the third place that list appears.** Today's lines — the events off the
-    subscribed calendars, then the notes written by hand — are rendered under today's date by the
-    same `day_notes` macro, off the same two calls the board makes, asked for one day instead of a
-    month. It is markup parity rather than a second implementation: the home page carries
+    subscribed calendars, then the notes written by hand — are rendered in a box under today's
+    three slot cards by the same `day_notes` macro, off the same two calls the board makes, asked
+    for one day instead of a month. It is markup parity rather than a second implementation: the home page carries
     `[data-day-lines]`, which day-notes.js takes as a root alongside the board and the archive, and
     `[data-day-notes]`, which the calendar refresh below already patches by date. Only the spacing
     differs, through the macro's `extra_class` — there is no sheet there for the list to be the

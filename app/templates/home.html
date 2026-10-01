@@ -99,12 +99,6 @@
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-inbox-capture-cancel>Cancel</button>
             </div>
         </form>
-        {# Today's lines, the same ones today's sheet carries on the schedule:
-           what the calendars say is on, and what was written about the day by
-           hand. Under the date rather than beside the three cards, because they
-           are about the day and not about any one block of it - and the + comes
-           with them, so a note can be written where the day is being read. #}
-        {{ day_notes(day_lines, "day-lines") }}
     </section>
 
     <div class="day-slots-layout">
@@ -155,6 +149,17 @@
                     </div>
                 </article>
             {% endfor %}
+
+            {# Today's lines, the same ones today's sheet carries on the schedule:
+               what the calendars say is on, and what was written about the day by
+               hand. A box of their own under the three cards rather than a fourth
+               card, because they are about the day and not about any one block of
+               it - and the + comes with them, so a note can be written where the
+               day is being read. #}
+            <div class="dashboard-section day-lines-box">
+                <h2 class="h6 mb-0">Calendar &amp; notes</h2>
+                {{ day_notes(day_lines, "day-lines") }}
+            </div>
         </section>
 
         <aside class="day-slots-aside">
