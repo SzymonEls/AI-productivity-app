@@ -22,6 +22,35 @@
 (function () {
     "use strict";
 
+    /* An event that is over is struck through, and checked again every
+       minute so a page left open all day keeps up. The clock is the server's,
+       in the calendars' timezone ([data-calendar-now]), carried forward by the
+       time the page has been open - this device may be set to another zone.
+       Both sides are "YYYY-MM-DDTHH:MM", which compare as strings. */
+    const serverNow = document.querySelector("[data-calendar-now]")?.dataset.calendarNow;
+    const serverNowMs = serverNow ? Date.parse(`${serverNow}:00Z`) : NaN;
+    const openedAtMs = Date.now();
+
+    function localNow() {
+        if (Number.isNaN(serverNowMs)) {
+            return "";
+        }
+        return new Date(serverNowMs + Date.now() - openedAtMs).toISOString().slice(0, 16);
+    }
+
+    function markPast() {
+        const now = localNow();
+        if (!now) {
+            return;
+        }
+        document.querySelectorAll("[data-event-ends]").forEach((item) => {
+            item.classList.toggle("is-past", item.dataset.eventEnds <= now);
+        });
+    }
+
+    markPast();
+    window.setInterval(markPast, 60 * 1000);
+
     const root = document.querySelector("[data-calendar-refresh]");
     if (!root) {
         // No calendars, or nothing due: the page said so, and it has the
@@ -56,6 +85,7 @@
         const item = document.createElement("li");
         item.className = `day-event${event.all_day ? " day-event-all-day" : ""}`;
         item.title = `${event.summary} — ${event.calendar}`;
+        item.dataset.eventEnds = event.ends_at;
 
         if (event.time_label) {
             const time = document.createElement("span");
@@ -121,6 +151,7 @@
                 return;
             }
             const changed = paint(payload.days);
+            markPast();
             if (changed) {
                 setStatus("Calendars updated.", "success");
             }

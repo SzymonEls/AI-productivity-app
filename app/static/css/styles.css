@@ -2580,6 +2580,16 @@ button.picker-row:hover {
     color: var(--foreground);
 }
 
+/* Over already: still there to read, but out of the way of what is next. */
+.day-event.is-past {
+    opacity: 0.6;
+}
+
+.day-event.is-past .day-event-time,
+.day-event.is-past .day-event-title {
+    text-decoration: line-through;
+}
+
 /* A note is a line of text, so it is marked by a bullet rather than boxed like
    a block - the sheet has three of those already and a fourth card would read
    as a fourth slot. */
@@ -2771,9 +2781,15 @@ button.picker-row:hover {
     transition: background 0.12s ease;
 }
 
-.task:hover,
-.task.is-menu-open {
+.task:hover {
     background: var(--surface-hover);
+}
+
+/* The task its menu is changing, so it stays plain which one that is while
+   the menu sits wherever the right click put it. */
+.task.is-menu-open {
+    background: var(--primary-soft);
+    box-shadow: inset 0 0 0 1.5px var(--primary);
 }
 
 .day-tasks-home .task,
