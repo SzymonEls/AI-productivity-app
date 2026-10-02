@@ -286,7 +286,7 @@ def refresh_due_calendars():
 
 
 def _days_payload(user_id, first_day, last_day):
-    """``{"2026-09-15": [{"summary", "time_label", "all_day", "calendar"}]}``.
+    """``{"2026-09-15": [{"summary", "time_label", "all_day", "calendar", "ends_at"}]}``.
 
     The page redraws every sheet in the window from this, so a day that has
     dropped its last event has to be in here as an empty list rather than
@@ -303,6 +303,7 @@ def _days_payload(user_id, first_day, last_day):
                 "time_label": entry["time_label"],
                 "all_day": entry["all_day"],
                 "calendar": entry["calendar"],
+                "ends_at": entry["ends_at"],
             }
             for entry in events.get(day, ())
         ]

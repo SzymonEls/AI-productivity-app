@@ -31,7 +31,7 @@ import ipaddress
 import socket
 import time
 from collections import OrderedDict
-from datetime import timedelta
+from datetime import datetime, time as clock, timedelta
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -366,6 +366,34 @@ def _grouped(entries, name):
     ]
 
 
+STAMP_FORMAT = "%Y-%m-%dT%H:%M"
+
+
+def local_now_stamp():
+    """The time now in the calendars' timezone, in the format of ``ends_at``.
+
+    Rendered into the page so the browser strikes out finished events by this
+    clock rather than its own, which may be set to another timezone - the
+    same reason the tasks' quick moves count from ``data-tasks-today``.
+    """
+    return datetime.now(app_timezone()).strftime(STAMP_FORMAT)
+
+
+def _ends_at(day, entry):
+    """When one day's line of an event is over, as local ``YYYY-MM-DDTHH:MM``.
+
+    The end on that day when it has one; otherwise - an all-day entry, or one
+    running past midnight - the midnight after it. A string rather than a
+    datetime, because the page compares it against ``local_now_stamp()`` to
+    strike out what has already happened, and keeps doing so while it stays
+    open.
+    """
+    end = entry["span"][1] if entry["span"] is not None else None
+    if end is None:
+        return datetime.combine(day + timedelta(days=1), clock.min).strftime(STAMP_FORMAT)
+    return datetime.combine(day, end).strftime(STAMP_FORMAT)
+
+
 def events_by_date(user_id, first_day, last_day, feeds=None):
     """``{date: [event, ...]}`` over a range, from every switched-on calendar.
 
@@ -384,7 +412,9 @@ def events_by_date(user_id, first_day, last_day, feeds=None):
                 entries = _grouped(entries, feed.name)
             for entry in entries:
                 # A copy per line, which is also what keeps the cache read-only.
-                by_date.setdefault(day, []).append({**entry, "calendar": feed.name})
+                by_date.setdefault(day, []).append(
+                    {**entry, "calendar": feed.name, "ends_at": _ends_at(day, entry)}
+                )
 
     # One day's events read in the order the day does, whichever calendars they
     # came from.

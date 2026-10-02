@@ -73,6 +73,9 @@ def register_template_context(app):
     from .tasks.routes import REPEAT_RULES
 
     app.jinja_env.globals["task_repeat_rules"] = REPEAT_RULES
+    from .integrations.feeds import local_now_stamp
+
+    app.jinja_env.globals["calendar_now"] = local_now_stamp
 
     @app.context_processor
     def inject_feature_flags():

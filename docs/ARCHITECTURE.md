@@ -277,6 +277,12 @@ The schema in the code matches the latest migration (`20261001_0030`).
     window grew; parsing a few hundred lines is cheaper than that, and it means a feed that stops
     answering keeps showing the calendar it last knew about instead of emptying the sheets.
 
+    Each line carries `ends_at` (`_ends_at` in [feeds.py](../app/integrations/feeds.py)): when it
+    is over on that day, or the following midnight for an all-day entry. `calendar-feeds.js`
+    strikes out the lines whose end has passed, by the server's clock in the calendars' timezone
+    (`data-calendar-now`, rendered by the `calendar_now` template global) rather than the
+    browser's, and re-checks every minute.
+
     **The expansion is cached per version of the calendar** (`_expanded` in
     [feeds.py](../app/integrations/feeds.py)), keyed on the feed, its `fetched_at`, the window and
     the timezone, and bounded at `MAX_CACHED_WINDOWS`. Without it the same text was re-parsed on
@@ -463,7 +469,9 @@ The schema in the code matches the latest migration (`20261001_0030`).
     The quick moves in the ⋯ menu are counted in the browser from `data-tasks-today`, which the
     server renders from `today_local()` — the browser's own clock could be in another timezone
     from the one a task's day is kept in. "This weekend" is the coming Saturday, or the next one
-    when it already is the weekend; "Next week" is the coming Monday.
+    when it already is the weekend; "Next week" is the coming Monday. A right click (or a long
+    press) on a row opens the same menu where the pointer is, and the row it is changing is
+    outlined in the primary colour while it is open.
 
     A day off moves the open tasks from that day on, with the bookings and the notes
     (`shift_tasks_forward`); a finished task stays on its day, for the reason a finished session

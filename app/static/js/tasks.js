@@ -766,6 +766,9 @@
     document.body.append(menu);
     let menuRow = null;
     let menuAnchor = null;
+    // Where a right click landed, kept relative to its row so the menu rides
+    // along when the page scrolls; null when the ⋯ opened it.
+    let menuPoint = null;
 
     function menuItem(label, hint, action, extraClass) {
         const item = document.createElement("button");
@@ -785,7 +788,7 @@
         return item;
     }
 
-    function openMenu(row, anchor) {
+    function openMenu(row, anchor, point = null) {
         if (!row.dataset.taskId) {
             return;
         }
@@ -793,6 +796,7 @@
         const task = taskOf(row);
         menuRow = row;
         menuAnchor = anchor;
+        menuPoint = point;
         menu.replaceChildren();
 
         const heading = document.createElement("p");
@@ -882,7 +886,7 @@
     function showRepeatChoices(row, task) {
         menu.replaceChildren();
         menu.append(
-            menuItem("‹ Back", "", () => openMenu(row, menuAnchor), "is-back")
+            menuItem("‹ Back", "", () => openMenu(row, menuAnchor, menuPoint), "is-back")
         );
         const heading = document.createElement("p");
         heading.className = "task-menu-heading";
@@ -930,20 +934,34 @@
             });
     }
 
-    /* Under the ⋯, right-aligned to it, flipped above when there is no room
+    /* Under the ⋯, right-aligned to it - or, after a right click, with its
+       corner where the pointer was - flipped above when there is no room
        below, and kept inside the window either way. */
     function positionMenu() {
         if (menu.hidden || !menuAnchor) {
             return;
         }
-        const rect = menuAnchor.getBoundingClientRect();
         const width = menu.offsetWidth;
         const height = menu.offsetHeight;
         const margin = 8;
-        let left = rect.right - width;
-        let top = rect.bottom + 4;
-        if (top + height > window.innerHeight - margin) {
-            top = Math.max(margin, rect.top - height - 4);
+        let left;
+        let top;
+        if (menuPoint && menuRow?.isConnected) {
+            const rowRect = menuRow.getBoundingClientRect();
+            const x = rowRect.left + menuPoint.x;
+            const y = rowRect.top + menuPoint.y;
+            left = x;
+            top = y;
+            if (top + height > window.innerHeight - margin) {
+                top = Math.max(margin, y - height);
+            }
+        } else {
+            const rect = menuAnchor.getBoundingClientRect();
+            left = rect.right - width;
+            top = rect.bottom + 4;
+            if (top + height > window.innerHeight - margin) {
+                top = Math.max(margin, rect.top - height - 4);
+            }
         }
         left = Math.min(Math.max(margin, left), window.innerWidth - width - margin);
         menu.style.left = `${left}px`;
@@ -962,6 +980,7 @@
         }
         menuRow = null;
         menuAnchor = null;
+        menuPoint = null;
     }
 
     menu.addEventListener("keydown", (event) => {
@@ -1028,14 +1047,18 @@
         }
     });
 
-    // A right click, or a long press on a phone, opens the same menu.
+    // A right click, or a long press on a phone, opens the same menu where
+    // it happened. The menu key (no pointer, so no position) keeps it at the ⋯.
     document.addEventListener("contextmenu", (event) => {
         const row = event.target.closest("[data-task]");
         if (!row || event.target.closest("input") || !row.dataset.taskId) {
             return;
         }
         event.preventDefault();
-        openMenu(row, row.querySelector("[data-task-menu]"));
+        const fromKeyboard = event.clientX === 0 && event.clientY === 0;
+        const rect = row.getBoundingClientRect();
+        const point = fromKeyboard ? null : { x: event.clientX - rect.left, y: event.clientY - rect.top };
+        openMenu(row, row.querySelector("[data-task-menu]"), point);
     });
 
     document.addEventListener("keydown", (event) => {

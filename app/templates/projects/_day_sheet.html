@@ -149,9 +149,9 @@
            and a × that only took one off this page until the next read would be
            a lie. Switching a calendar off, on the integrations page, is how
            they go. #}
-        <ul class="day-event-list" data-event-list>
+        <ul class="day-event-list" data-event-list data-calendar-now="{{ calendar_now() }}">
             {%- for event in day.events %}
-                <li class="day-event{% if event.all_day %} day-event-all-day{% endif %}" title="{{ event.summary }} — {{ event.calendar }}">
+                <li class="day-event{% if event.all_day %} day-event-all-day{% endif %}" title="{{ event.summary }} — {{ event.calendar }}" data-event-ends="{{ event.ends_at }}">
                     {% if event.time_label %}<span class="day-event-time">{{ event.time_label }}</span>{% endif %}
                     <span class="day-event-title">{{ event.summary }}</span>
                 </li>
