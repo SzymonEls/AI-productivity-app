@@ -16,7 +16,7 @@ from ..time_tracking.service import (
     today_project_summary,
     utc_now,
 )
-from ..integrations.feeds import events_by_date, has_stale_feeds
+from ..integrations.feeds import events_by_date, has_grouped_feeds, has_stale_feeds
 from .day_notes import add_note, delete_note, notes_from, shift_notes_forward, update_note
 from ..tasks.routes import shift_tasks_forward, tasks_from
 from .slots import (
@@ -137,6 +137,7 @@ def schedule():
         calendar_window=(today, last_day),
         # Nothing to ask for when every calendar is fresh, or there are none.
         refresh_calendars=has_stale_feeds(current_user),
+        grouped_calendars=has_grouped_feeds(current_user.id),
         # Two more weeks per click, up to the point where the page would be all
         # empty sheets.
         more_weeks=min(week_count + 2, MAX_CALENDAR_WEEKS) if week_count < MAX_CALENDAR_WEEKS else None,

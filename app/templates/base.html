@@ -30,6 +30,9 @@
                 // Before first paint, like the theme: a private project's plan must
                 // not be on screen for a frame before safe mode hides it.
                 root.setAttribute("data-safe-mode", localStorage.getItem("app-safe-mode") === "on" ? "on" : "off");
+                // And so must a grouped calendar's line, or the schedule would
+                // show it for a frame before swapping in the events under it.
+                root.setAttribute("data-ungroup-calendars", localStorage.getItem("app-ungroup-calendars") === "on" ? "on" : "off");
             } catch (error) {
                 root.setAttribute("data-ui", "modern");
                 root.setAttribute("data-bs-theme", "light");
@@ -37,6 +40,7 @@
                 root.setAttribute("data-plan-editor", "blocks");
                 root.setAttribute("data-schedule-view", "calendar");
                 root.setAttribute("data-safe-mode", "off");
+                root.setAttribute("data-ungroup-calendars", "off");
             }
         })();
         if ("serviceWorker" in navigator && window.isSecureContext) {
@@ -370,6 +374,10 @@
             // Off unless asked for: safe mode is the exception you switch on when
             // someone can see the screen, not the way the app normally reads.
             const safeModeSetting = () => (read("app-safe-mode") === "on" ? "on" : "off");
+            // Off too: a calendar is grouped because that is how it is meant to
+            // be read, so seeing every event is the exception, asked for on the
+            // schedule page itself.
+            const ungroupCalendarsSetting = () => (read("app-ungroup-calendars") === "on" ? "on" : "off");
 
             const effectiveTheme = () => {
                 if (uiSetting() === "classic") { return "light"; }
@@ -407,6 +415,16 @@
                 });
             };
 
+            const syncUngroupButtons = () => {
+                const on = ungroupCalendarsSetting() === "on";
+                document.querySelectorAll("[data-ungroup-calendars-toggle]").forEach((button) => {
+                    button.setAttribute("aria-pressed", on ? "true" : "false");
+                    button.title = on
+                        ? "Showing every event — click to fold grouped calendars back into one line a day"
+                        : "Show every event of the calendars grouped into one line a day";
+                });
+            };
+
             const applyAll = () => {
                 root.setAttribute("data-ui", uiSetting());
                 root.setAttribute("data-bs-theme", effectiveTheme());
@@ -414,8 +432,10 @@
                 root.setAttribute("data-plan-editor", planEditorSetting());
                 root.setAttribute("data-schedule-view", scheduleViewSetting());
                 root.setAttribute("data-safe-mode", safeModeSetting());
+                root.setAttribute("data-ungroup-calendars", ungroupCalendarsSetting());
                 syncThemeColor();
                 syncSafeModeButtons();
+                syncUngroupButtons();
                 refreshSegments();
             };
 
@@ -452,6 +472,13 @@
 
             document.querySelectorAll("[data-safe-mode-toggle]").forEach((button) => {
                 button.addEventListener("click", () => setSafeMode(safeModeSetting() === "on" ? "off" : "on"));
+            });
+
+            document.querySelectorAll("[data-ungroup-calendars-toggle]").forEach((button) => {
+                button.addEventListener("click", () => {
+                    store("app-ungroup-calendars", ungroupCalendarsSetting() === "on" ? "off" : "on");
+                    applyAll();
+                });
             });
 
             document.querySelectorAll('[data-setting="ui"] .settings-segment').forEach((btn) => {

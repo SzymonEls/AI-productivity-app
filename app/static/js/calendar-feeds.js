@@ -86,6 +86,9 @@
         item.className = `day-event${event.all_day ? " day-event-all-day" : ""}`;
         item.title = `${event.summary} — ${event.calendar}`;
         item.dataset.eventEnds = event.ends_at;
+        if (event.group_role) {
+            item.dataset.groupRole = event.group_role;
+        }
 
         if (event.time_label) {
             const time = document.createElement("span");
@@ -104,10 +107,15 @@
     /* Whether a sheet's lines already say what the server just sent, so an
        unchanged calendar - much the commonest answer - repaints nothing. */
     function sameAsRendered(list, events) {
-        const rendered = Array.from(list.children).map((item) => item.title);
+        const rendered = Array.from(list.children).map(
+            (item) => `${item.title}|${item.dataset.groupRole || ""}`
+        );
         return (
             rendered.length === events.length &&
-            rendered.every((title, index) => title === `${events[index].summary} — ${events[index].calendar}`)
+            rendered.every(
+                (key, index) =>
+                    key === `${events[index].summary} — ${events[index].calendar}|${events[index].group_role || ""}`
+            )
         );
     }
 

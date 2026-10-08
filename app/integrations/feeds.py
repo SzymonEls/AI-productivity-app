@@ -270,6 +270,17 @@ def has_stale_feeds(user):
     )
 
 
+def has_grouped_feeds(user_id):
+    """Is any switched-on calendar shown as one line a day? One count.
+
+    The schedule offers "Ungroup calendars" only when there is something for
+    it to ungroup.
+    """
+    return bool(
+        CalendarFeed.query.filter_by(user_id=user_id, is_enabled=True, is_grouped=True).count()
+    )
+
+
 def refresh_due(user, force=False):
     """Re-read the feeds that have gone stale. Returns how many were read.
 
@@ -343,6 +354,10 @@ def _grouped(entries, name):
     all, because what the day sheet needs is when that part of the day is
     taken, not the timetable. All-day entries have no clock to fold into the
     span, so they stay lines of their own.
+
+    The events folded into the line come along too, marked as its parts and
+    hidden by the stylesheet: the schedule's "Ungroup calendars" switch shows
+    them in its place, and does so without asking the server again.
     """
     all_day = [entry for entry in entries if entry["span"] is None]
     timed = [entry for entry in entries if entry["span"] is not None]
@@ -362,7 +377,12 @@ def _grouped(entries, name):
             "time_label": label,
             "sort_key": (1, first),
             "span": (first, last),
+            "group_role": "line",
         }
+    ] + [
+        # Copies: these dicts are the cache's.
+        {**entry, "group_role": "part"}
+        for entry in timed
     ]
 
 
@@ -398,7 +418,9 @@ def events_by_date(user_id, first_day, last_day, feeds=None):
     """``{date: [event, ...]}`` over a range, from every switched-on calendar.
 
     Each event carries the calendar it came from, because a sheet showing two
-    lines from two calendars has to be able to say which is which.
+    lines from two calendars has to be able to say which is which, and its
+    ``group_role``: "line" for a grouped calendar's one line a day, "part" for
+    the events folded into it, "" for everything else.
     """
     zone = app_timezone()
     by_date = {}
@@ -413,7 +435,12 @@ def events_by_date(user_id, first_day, last_day, feeds=None):
             for entry in entries:
                 # A copy per line, which is also what keeps the cache read-only.
                 by_date.setdefault(day, []).append(
-                    {**entry, "calendar": feed.name, "ends_at": _ends_at(day, entry)}
+                    {
+                        **entry,
+                        "calendar": feed.name,
+                        "ends_at": _ends_at(day, entry),
+                        "group_role": entry.get("group_role", ""),
+                    }
                 )
 
     # One day's events read in the order the day does, whichever calendars they
