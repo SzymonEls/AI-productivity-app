@@ -390,7 +390,18 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
 @projects_bp.route("/timeline-view")
 @login_required
 def timeline_view():
-    """The original grouped timeline, kept as a secondary view."""
+    """The Projects page: the grouped timeline, or the waiting diagram.
+
+    Two tabs as two URLs (``?view=waiting``) rather than a switch in the page,
+    so a banner on a project page can link straight to the diagram.
+    """
+
+    if request.args.get("view") == "waiting":
+        return render_template(
+            "projects/timeline.html",
+            view="waiting",
+            diagram=_waiting_diagram(current_user.id),
+        )
 
     projects = (
         Project.query.filter_by(user_id=current_user.id, is_archived=False)
@@ -403,6 +414,7 @@ def timeline_view():
     backlog_data = _serialize_timeline_group(backlog_group, last_session_labels)
     return render_template(
         "projects/timeline.html",
+        view="timeline",
         projects=projects,
         timeline_groups=timeline_groups,
         timeline_data=timeline_data,
@@ -410,6 +422,114 @@ def timeline_view():
         backlog_data=backlog_data,
         project_last_session_labels=last_session_labels,
     )
+
+
+# The waiting diagram's grid, in pixels. Every card is the same size, so the
+# whole layout is worked out here and the template only places what it is given.
+WAITING_NODE_WIDTH = 230
+WAITING_NODE_HEIGHT = 62
+WAITING_COLUMN_GAP = 72
+WAITING_ROW_GAP = 14
+WAITING_TREE_GAP = 34
+
+
+def _waiting_diagram(user_id):
+    """Every project that waits or is waited for, laid out as trees.
+
+    A project waits for one other at most, so what comes out is a forest: the
+    projects waiting for nothing are the roots, on the left, and each column to
+    the right is one more step of waiting. A leaf takes the next free row and a
+    project is centred on the projects waiting for it - the usual tidy tree, and
+    with one parent per card it never needs to cross a line.
+
+    Archived projects are kept: a project still waiting for one that has been
+    archived is exactly the thing this page is there to show.
+    Returns None when no project is waiting for anything.
+    """
+
+    projects = (
+        Project.query.filter_by(user_id=user_id)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    by_id = {project.id: project for project in projects}
+    waiting_on = {}
+    for project in projects:
+        if project.waiting_for_project_id in by_id:
+            waiting_on.setdefault(project.waiting_for_project_id, []).append(project)
+    involved = [
+        project
+        for project in projects
+        if project.id in waiting_on or project.waiting_for_project_id in by_id
+    ]
+    if not involved:
+        return None
+
+    nodes, placed = [], {}
+    cursor = 0
+
+    def place(project, depth):
+        nonlocal cursor
+        node = {
+            "id": project.id,
+            "title": project.title,
+            "url": url_for("projects.project_detail", project_id=project.id),
+            "note": project.waiting_for_note,
+            "is_waiting": project.waiting_for_project_id in by_id,
+            "is_private": bool(project.is_private),
+            "is_archived": bool(project.is_archived),
+            "blocking": len(waiting_on.get(project.id, [])),
+            "x": depth * (WAITING_NODE_WIDTH + WAITING_COLUMN_GAP),
+        }
+        # Marked before the children are walked: validation keeps cycles out,
+        # but a card is never placed twice even if one got into the data.
+        placed[project.id] = node
+        nodes.append(node)
+        children = [child for child in waiting_on.get(project.id, []) if child.id not in placed]
+        if children:
+            centres = [place(child, depth + 1) for child in children]
+            centre = (centres[0] + centres[-1]) / 2
+        else:
+            centre = cursor + WAITING_NODE_HEIGHT / 2
+            cursor += WAITING_NODE_HEIGHT + WAITING_ROW_GAP
+        node["y"] = round(centre - WAITING_NODE_HEIGHT / 2)
+        return centre
+
+    roots = [project for project in involved if project.waiting_for_project_id not in by_id]
+    # Whatever no root reaches could only be a loop; start it anywhere rather
+    # than leave it off the page.
+    for project in roots + involved:
+        if project.id not in placed:
+            place(project, 0)
+            cursor += WAITING_TREE_GAP - WAITING_ROW_GAP
+
+    edges = []
+    for project in involved:
+        parent = placed.get(project.waiting_for_project_id)
+        child = placed[project.id]
+        if parent is None:
+            continue
+        x1 = parent["x"] + WAITING_NODE_WIDTH
+        y1 = parent["y"] + WAITING_NODE_HEIGHT / 2
+        x2 = child["x"]
+        y2 = child["y"] + WAITING_NODE_HEIGHT / 2
+        bend = WAITING_COLUMN_GAP / 2
+        edges.append(
+            {
+                "path": f"M{x1} {y1:g} C{x1 + bend:g} {y1:g} {x2 - bend:g} {y2:g} {x2 - 2} {y2:g}",
+                "is_archived": parent["is_archived"],
+            }
+        )
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "node_width": WAITING_NODE_WIDTH,
+        "node_height": WAITING_NODE_HEIGHT,
+        "width": max(node["x"] for node in nodes) + WAITING_NODE_WIDTH,
+        "height": max(node["y"] for node in nodes) + WAITING_NODE_HEIGHT,
+        "waiting_count": sum(1 for node in nodes if node["is_waiting"]),
+    }
 
 
 @projects_bp.route("/<int:project_id>/schedule-window")
@@ -791,6 +911,187 @@ def unarchive_project(project_id):
     return redirect(url_for("projects.archived_projects"))
 
 
+WAITING_NOTE_MAX_LENGTH = 200
+
+
+def _waits_on(project_id, target_id, waiting_for_by_id):
+    """Whether ``project_id`` already waits on ``target_id``, however indirectly.
+
+    Walks the chain of "waiting for" links from the project; the visited set
+    keeps a loop already in the data from walking forever.
+    """
+    seen = set()
+    current = project_id
+    while current is not None and current not in seen:
+        if current == target_id:
+            return True
+        seen.add(current)
+        current = waiting_for_by_id.get(current)
+    return False
+
+
+def _waiting_for_by_id(user_id):
+    """Each of the user's projects mapped to the one it waits for (or None)."""
+
+    return dict(
+        db.session.query(Project.id, Project.waiting_for_project_id)
+        .filter(Project.user_id == user_id)
+        .all()
+    )
+
+
+def _waiting_for_choices(project):
+    """The projects this one may be set to wait for, alphabetical.
+
+    Not itself, and not one already waiting on it - directly or down a chain -
+    since that would make two projects wait for each other and neither could
+    ever move. Archived projects are left out, except the one it already waits
+    for, so the dialog can show what is set.
+    """
+    links = _waiting_for_by_id(project.user_id)
+    candidates = (
+        Project.query.filter(Project.user_id == project.user_id, Project.id != project.id)
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    return [
+        candidate
+        for candidate in candidates
+        if (not candidate.is_archived or candidate.id == project.waiting_for_project_id)
+        and not _waits_on(candidate.id, project.id, links)
+    ]
+
+
+PLAN_HEADING_PATTERN = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.*\S)\s*$")
+# A long plan is a long list to scroll through in a dialog; past this many the
+# suggestions stop being a shortcut, and typing the milestone is quicker.
+MILESTONE_SUGGESTION_LIMIT = 80
+
+
+def _plan_milestones(markdown):
+    """The headings and the open list items of a plan, in the plan's order.
+
+    Ticked items are left out: a milestone already reached is nothing to wait
+    for. Headings stay whatever is under them, since a whole section can be the
+    thing another project is held up by.
+    """
+    milestones = []
+    for line in (markdown or "").splitlines():
+        heading = PLAN_HEADING_PATTERN.match(line)
+        if heading:
+            milestones.append(
+                {
+                    "text": heading.group("text"),
+                    "kind": "heading",
+                    "level": len(heading.group("hashes")),
+                }
+            )
+            continue
+        item = PLAN_LIST_ITEM_PATTERN.match(line)
+        if item and (item.group("checked") or "").lower() != "x":
+            milestones.append({"text": item.group("text"), "kind": "item", "level": 0})
+        if len(milestones) >= MILESTONE_SUGGESTION_LIMIT:
+            break
+    return milestones
+
+
+@projects_bp.route("/<int:project_id>/milestones")
+@login_required
+def project_milestones(project_id):
+    """What the waiting dialog suggests as the milestone, off this project's plan.
+
+    Asked for when a project is picked in the dialog rather than rendered into
+    every project page: it is another project's plan, and the page would carry
+    all of them for a dialog that is rarely opened. Only suggestions - what is
+    saved is the text in the field, so rewriting the plan later breaks nothing.
+    """
+    project = _get_user_project_or_404(project_id)
+    return jsonify(
+        {
+            "ok": True,
+            # Safe mode covers a private plan, and these are lines of it: the
+            # page is told, and leaves the suggestions out while the mode is on.
+            "is_private": bool(project.is_private),
+            "milestones": _plan_milestones(project.long_goal),
+        }
+    )
+
+
+@projects_bp.route("/<int:project_id>/waiting-for", methods=["POST"])
+@login_required
+def set_waiting_for(project_id):
+    """Put a project on hold until a milestone of another one is reached.
+
+    It leaves the planning the way an archived project does in the one place
+    that asks "what still needs a session" - the home page's Not scheduled list -
+    but nothing else: it can still be booked, and what is booked stays.
+    """
+    project = _get_user_project_or_404(project_id)
+    target_id = _coerce_int(request.form.get("waiting_for_project_id"))
+    note = request.form.get("waiting_for_note", "").strip()
+    target = (
+        Project.query.filter_by(id=target_id, user_id=current_user.id).first()
+        if target_id is not None
+        else None
+    )
+
+    if target is None:
+        flash("Choose the project this one is waiting for.", "danger")
+    elif target.id == project.id:
+        flash("A project cannot wait for itself.", "danger")
+    elif len(note) > WAITING_NOTE_MAX_LENGTH:
+        flash(f"Keep the milestone under {WAITING_NOTE_MAX_LENGTH} characters.", "danger")
+    elif _waits_on(target.id, project.id, _waiting_for_by_id(current_user.id)):
+        flash(
+            f"{target.title} is already waiting for this project — "
+            "the two would end up waiting for each other.",
+            "danger",
+        )
+    else:
+        project.waiting_for_project_id = target.id
+        project.waiting_for_note = note
+        try:
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            flash("Failed to save. The database is unavailable for writing.", "danger")
+        else:
+            flash(
+                f"Waiting for {target.title} — out of the Not scheduled list until then.",
+                "info",
+            )
+    return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+@projects_bp.route("/<int:project_id>/waiting-for/clear", methods=["POST"])
+@login_required
+def clear_waiting_for(project_id):
+    """Stop waiting: the project is back in the planning.
+
+    Pressed either on the waiting project itself or on the one it waits for,
+    when the milestone is reached there - ``next_project_id`` names the page to
+    go back to, and only one of the user's own projects is followed.
+    """
+    project = _get_user_project_or_404(project_id)
+    project.waiting_for_project_id = None
+    project.waiting_for_note = ""
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to save. The database is unavailable for writing.", "danger")
+    else:
+        flash(f"{project.title} is no longer waiting — it is back in the planning.", "info")
+
+    next_project = None
+    next_id = _coerce_int(request.form.get("next_project_id"))
+    if next_id is not None:
+        next_project = Project.query.filter_by(id=next_id, user_id=current_user.id).first()
+    return redirect(
+        url_for("projects.project_detail", project_id=(next_project or project).id)
+    )
+
+
 @projects_bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create_project():
@@ -861,6 +1162,8 @@ def project_detail(project_id):
         planned_sessions=planned_session_labels(current_user.id, project.id)
         if project.is_archived
         else [],
+        waiting_for_choices=_waiting_for_choices(project),
+        waiting_note_max_length=WAITING_NOTE_MAX_LENGTH,
     )
 
 
@@ -1062,6 +1365,11 @@ def delete_project(project_id):
     for entry in project.time_entries:
         if entry.ended_at is None:
             entry.ended_at = utc_now()
+    # SQLite does not enforce the key, so the projects waiting for this one are
+    # let go here: with it gone there is nothing left for them to wait on.
+    for waiting in project.waited_on_by:
+        waiting.waiting_for_project_id = None
+        waiting.waiting_for_note = ""
     db.session.delete(project)
     db.session.commit()
     flash("Project deleted.", "info")

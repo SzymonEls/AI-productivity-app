@@ -181,6 +181,9 @@ def _seed_projects(user):
             "title": "Portfolio website",
             "short_goal": "Ship a personal site that gets me interviews.",
             "is_starred": True,
+            # Fills the Waiting tab of the Projects page: the site cannot launch
+            # before there is a demo to link to.
+            "waiting_for": ("This productivity app", "Read-only demo for the portfolio"),
             "long_goal": (
                 "# Content\n"
                 "- [x] Pick the three projects worth showing\n"
@@ -291,6 +294,13 @@ def _seed_projects(user):
         )
         db.session.add(project)
         projects.append(project)
+
+    by_title = {project.title: project for project in projects}
+    for definition, project in zip(definitions, projects):
+        if "waiting_for" in definition:
+            title, note = definition["waiting_for"]
+            project.waiting_for = by_title[title]
+            project.waiting_for_note = note
 
     db.session.flush()
     return projects
