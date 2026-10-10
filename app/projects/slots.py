@@ -249,6 +249,10 @@ def unscheduled_projects(user_id):
 
     Deliberately excludes today: a project being worked on right now but with no
     next session still needs planning, so it belongs on this list.
+
+    A project waiting for another one is left off too: there is no next session
+    to plan until the milestone it waits for is reached, so listing it would
+    only be a reminder nobody can act on.
     """
     today = today_local()
     planned = (
@@ -260,6 +264,7 @@ def unscheduled_projects(user_id):
         Project.query.filter(
             Project.user_id == user_id,
             Project.is_archived.is_(False),
+            Project.waiting_for_project_id.is_(None),
             Project.id.notin_(planned),
         )
         .order_by(func.lower(Project.title).asc())
@@ -326,7 +331,11 @@ def system_health(user_id, unplanned=None):
     if unplanned is None:
         unplanned = unscheduled_projects(user_id)
     unplanned_count = len(unplanned)
-    active_count = Project.query.filter_by(user_id=user_id, is_archived=False).count()
+    # Counted on the same terms as the list: a waiting project is neither
+    # planned nor unplanned, so it stays out of both sides of the ring.
+    active_count = Project.query.filter_by(
+        user_id=user_id, is_archived=False, waiting_for_project_id=None
+    ).count()
     planned_count = max(active_count - unplanned_count, 0)
 
     return {

@@ -32,7 +32,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
-| [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline. |
+| [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline, waiting for another project and its diagram. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
 | [app/instance/](../app/instance/) | Local `.env`, secrets, the SQLite database file (not in git). |
@@ -71,6 +71,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   minutes at a time and re-veils everything when safe mode is switched on again. The text is in
   the page all along — nothing is withheld from the browser, and nothing about it is enforced
   server-side.
+  `waiting_for_project_id` (with `waiting_for_note`, the milestone) puts the project on hold
+  until something in another project is reached — see point 23.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -116,7 +118,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
   (point 17).
 
-The schema in the code matches the latest migration (`20261001_0030`).
+The schema in the code matches the latest migration (`20261010_0031`).
 
 ## Responsibility boundaries
 
@@ -214,7 +216,8 @@ The schema in the code matches the latest migration (`20261001_0030`).
     over: having booked ahead is the baseline rather than an achievement, and because it is normally
     complete it put a permanent floor under the score that no amount of missed sessions could break
     through. Read the other way round it is the "Not scheduled" list on the same page, so the two
-    always agree.
+    always agree. A project waiting for another one (point 23) is on neither side of the ring,
+    for the same reason it is not on the list.
 
 13. **The API answers a click, the web page answers a form — so their `start` rules differ.**
     `POST /time-tracking/projects/<id>/start` refuses with a 409 while another project's timer
@@ -541,6 +544,45 @@ The schema in the code matches the latest migration (`20261001_0030`).
     which is what lets the appended weeks work as they arrive. The calendar refresh
     (point 17) still covers only the weeks the page opened with; a week loaded later shows the
     cached copy.
+
+23. **Waiting is a pause in the planning, nothing more.** A project can be set (⋯ → "Waiting
+    for…") to wait for a milestone of one other project: `waiting_for_project_id` names the
+    project, `waiting_for_note` the milestone, as free text — it is usually a heading or a line
+    of the other plan, but nothing ties it to one, so rewriting that plan cannot break the link.
+    The dialog **suggests** those lines: picking a project asks `GET /projects/<id>/milestones`
+    (`_plan_milestones` — its headings and open items, ticked ones left out) and
+    [waiting-for.js](../app/static/js/waiting-for.js) lists them under the field, filtered as you
+    type. A pick only types the line into the field; the text is what gets saved. They are fetched
+    rather than rendered into the page because they are another project's plan, and a private
+    one's are left out while safe mode is on.
+    The one thing it changes is the home page's "Not scheduled" list and the planning ring beside
+    the health score (`unscheduled_projects` and `system_health` in
+    [app/projects/slots.py](../app/projects/slots.py)): there is no next session to plan for a
+    project until what it waits for has happened. Unlike archiving (point 15) it does not take the
+    project off the schedule picker, the timeline or the switcher, and `assign_slot` still books
+    it — a waiting project can still have work worth a session.
+
+    **One project at most, and never round in a circle.** A single column rather than a table
+    keeps the links a forest: every project has at most one parent. `set_waiting_for`
+    ([app/projects/routes.py](../app/projects/routes.py)) refuses a target that already waits on
+    this project down any chain (`_waits_on`), and the dialog leaves those out in the first place
+    (`_waiting_for_choices`), so two projects can never end up waiting for each other. SQLite does
+    not enforce the key, so `delete_project` lets go of the projects that were waiting for the
+    one being deleted.
+
+    Both ends say so on the project page: the waiting project gets an amber strip like the
+    archived one, with Change and Stop waiting, and the project it waits for gets a neutral strip
+    naming each project held up by it, with **Milestone reached** — which is the same
+    `clear_waiting_for`, posted from the other side with `next_project_id` to come back to.
+
+    The **Projects** page has two tabs as two URLs — the timeline, and `?view=waiting`, which is
+    the forest drawn as a diagram. `_waiting_diagram` lays it out on the server: projects waiting
+    for nothing in the first column, each step of waiting one column right, a leaf on the next
+    free row and a parent centred on its children. The cards are all one size, so the template
+    only places what it is given and draws the arrows as one SVG underneath; nothing measures
+    anything in the browser. Archived projects stay in the diagram (dashed arrow): a project still
+    waiting for an archived one is exactly what the page is there to show. The milestone of a
+    private project is covered in safe mode, like its plan.
 
 ## What not to touch (and why)
 

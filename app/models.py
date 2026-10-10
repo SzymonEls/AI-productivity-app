@@ -151,6 +151,13 @@ class Project(db.Model):
     is_starred = db.Column(db.Boolean, default=False, nullable=False)
     is_private = db.Column(db.Boolean, default=False, nullable=False)
     is_archived = db.Column(db.Boolean, default=False, nullable=False)
+    # The project this one cannot move on without: a milestone of that one
+    # (``waiting_for_note`` says which) has to be reached first. One at most, so
+    # the projects waiting on each other form trees, never a web. SQLite does
+    # not enforce the key here, so deleting the other project clears it by hand
+    # (``delete_project``).
+    waiting_for_project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
+    waiting_for_note = db.Column(db.String(200), nullable=False, default="")
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -160,6 +167,17 @@ class Project(db.Model):
     )
 
     owner = db.relationship("User", back_populates="projects")
+    waiting_for = db.relationship(
+        "Project",
+        remote_side=[id],
+        back_populates="waited_on_by",
+    )
+    waited_on_by = db.relationship(
+        "Project",
+        back_populates="waiting_for",
+        lazy=True,
+        order_by=lambda: Project.title,
+    )
     timeline_items = db.relationship(
         "ProjectTimelineItem",
         back_populates="project",

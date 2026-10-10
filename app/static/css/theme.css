@@ -684,6 +684,12 @@ hr, .dropdown-divider { border-color: var(--border); }
     color: var(--primary);
 }
 
+.project-badge-waiting {
+    border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+    background: color-mix(in srgb, var(--warning) 14%, var(--surface));
+    color: color-mix(in srgb, var(--warning) 75%, var(--foreground));
+}
+
 .project-detail-body {
     display: grid;
     gap: 1.5rem;
@@ -1092,6 +1098,41 @@ hr, .dropdown-divider { border-color: var(--border); }
     --bs-btn-active-bg: color-mix(in srgb, var(--warning) 30%, var(--surface));
     --bs-btn-active-border-color: var(--warning);
     --bs-btn-active-color: var(--foreground);
+}
+
+/* The projects held up by this one get a neutral strip rather than the amber:
+   nothing is wrong with this project, it is just where the milestone lives.
+   One row per waiting project, each with its own button. */
+.project-blocking-note .btn {
+    --bs-btn-color: var(--foreground);
+    --bs-btn-border-color: var(--border-strong);
+    --bs-btn-hover-bg: var(--surface-hover);
+    --bs-btn-hover-border-color: var(--border-strong);
+    --bs-btn-hover-color: var(--foreground);
+    --bs-btn-active-bg: var(--surface-hover);
+    --bs-btn-active-border-color: var(--border-strong);
+    --bs-btn-active-color: var(--foreground);
+}
+
+.project-blocking-row + .project-blocking-row {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid var(--border);
+}
+
+/* The Projects page's Timeline / Waiting switch: the settings segments, sized
+   to their labels instead of stretched across the header. */
+.project-view-tabs {
+    display: inline-flex;
+    width: auto;
+    padding: 0.18rem;
+}
+
+.project-view-tabs .settings-segment {
+    flex: 0 0 auto;
+    padding: 0.25rem 0.75rem;
+    font-size: 0.83rem;
+    text-decoration: none;
 }
 
 /* ------------------------------------------------------------------ *

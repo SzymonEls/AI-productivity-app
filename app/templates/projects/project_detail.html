@@ -27,6 +27,7 @@
             {% if project.is_starred %}<span class="project-badge project-badge-star" title="Starred (context for AI Daily Planning)">★ Starred</span>{% endif %}
             {% if project.is_private %}<span class="project-badge">🔒 Private</span>{% endif %}
             {% if project.is_archived %}<span class="project-badge project-badge-archived">Archived</span>{% endif %}
+            {% if project.waiting_for %}<span class="project-badge project-badge-waiting" title="Waiting for {{ project.waiting_for.title }}"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i>Waiting</span>{% endif %}
             <div class="inline-section-controls">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title"><i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Rename</button>
                 <button type="button" class="btn btn-primary btn-sm d-none" data-save-section="title">Save</button>
@@ -93,6 +94,9 @@
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
                 </li>
+                <li>
+                    <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectWaitingModal"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i>{{ "Change what it waits for" if project.waiting_for else "Waiting for…" }}</button>
+                </li>
                 <li><a class="dropdown-item" href="{{ url_for('main.home') }}"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to home</a></li>
                 <li><hr class="dropdown-divider"></li>
                 {% if not project.is_archived %}
@@ -137,6 +141,45 @@
             <input type="hidden" name="next" value="detail">
             <button type="submit" class="btn btn-outline-secondary btn-sm">Unarchive</button>
         </form>
+    </div>
+{% endif %}
+
+{% if project.waiting_for %}
+    {# The same strip as the archived one, for the same kind of news: this
+       project is out of the planning, and here is why and the way back. #}
+    <div class="alert alert-warning project-archived-note project-waiting-note d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span>
+            <i class="fa-regular fa-hourglass-half me-1" aria-hidden="true"></i>
+            Waiting for <a href="{{ url_for('projects.project_detail', project_id=project.waiting_for.id) }}">{{ project.waiting_for.title }}</a>{% if project.waiting_for_note %}: <strong>{{ project.waiting_for_note }}</strong>{% endif %}.
+            Out of the Not scheduled list until then.
+        </span>
+        <span class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#projectWaitingModal">Change</button>
+            <form method="post" action="{{ url_for('projects.clear_waiting_for', project_id=project.id) }}">
+                <button type="submit" class="btn btn-outline-secondary btn-sm">Stop waiting</button>
+            </form>
+        </span>
+    </div>
+{% endif %}
+
+{% if project.waited_on_by %}
+    {# The other end of the same link: what this project is holding up. The
+       milestone is reached here, so this is where it gets ticked off - which
+       lets the waiting project go back into the planning. #}
+    <div class="alert alert-info project-archived-note project-blocking-note">
+        {% for waiting in project.waited_on_by %}
+            <div class="project-blocking-row d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span>
+                    <i class="fa-solid fa-flag-checkered me-1" aria-hidden="true"></i>
+                    <a href="{{ url_for('projects.project_detail', project_id=waiting.id) }}">{{ waiting.title }}</a>
+                    is waiting for this project{% if waiting.waiting_for_note %}: <strong>{{ waiting.waiting_for_note }}</strong>{% endif %}.
+                </span>
+                <form method="post" action="{{ url_for('projects.clear_waiting_for', project_id=waiting.id) }}">
+                    <input type="hidden" name="next_project_id" value="{{ project.id }}">
+                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="Let {{ waiting.title }} go back into the planning">Milestone reached</button>
+                </form>
+            </div>
+        {% endfor %}
     </div>
 {% endif %}
 
@@ -352,6 +395,68 @@
     </div>
 </div>
 
+<div class="modal fade" id="projectWaitingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <form method="post" action="{{ url_for('projects.set_waiting_for', project_id=project.id) }}" data-waiting-form>
+                <div class="modal-header">
+                    <h2 class="modal-title h5">Waiting for another project</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        While it waits, this project stays out of the Not scheduled list on the home page.
+                        Sessions already booked for it stand.
+                    </p>
+                    {% if waiting_for_choices %}
+                        <label class="form-label" for="waitingForProject">Project</label>
+                        <select class="form-select mb-3" id="waitingForProject" name="waiting_for_project_id" required data-waiting-project>
+                            {% if not project.waiting_for %}<option value="" selected disabled>Choose a project…</option>{% endif %}
+                            {% for choice in waiting_for_choices %}
+                                <option value="{{ choice.id }}" data-milestones-url="{{ url_for('projects.project_milestones', project_id=choice.id) }}" {% if choice.id == project.waiting_for_project_id %}selected{% endif %}>{{ choice.title }}{% if choice.is_archived %} (archived){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                        <label class="form-label" for="waitingForNote">Milestone</label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="waitingForNote"
+                            name="waiting_for_note"
+                            maxlength="{{ waiting_note_max_length }}"
+                            value="{{ project.waiting_for_note }}"
+                            placeholder="e.g. API v2 released"
+                            autocomplete="off"
+                            data-waiting-note
+                        >
+                        <div class="form-text">What has to happen there before this one can move on. Type it, or pick a line of that project's plan.</div>
+                        {# Filled by waiting-for.js from the chosen project's plan: its
+                           headings and open items. Picking one only types it into the
+                           field above - the text is what gets saved. #}
+                        <div class="waiting-milestones d-none" data-waiting-milestones>
+                            <p class="waiting-milestones-status" data-waiting-milestones-status role="status"></p>
+                            <ul class="waiting-milestones-list" data-waiting-milestones-list></ul>
+                        </div>
+                    {% else %}
+                        <p class="mb-0">There is no other project this one could wait for.</p>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    {% if project.waiting_for %}
+                        <button
+                            type="submit"
+                            class="btn btn-outline-secondary me-auto"
+                            formaction="{{ url_for('projects.clear_waiting_for', project_id=project.id) }}"
+                            formnovalidate
+                        >Stop waiting</button>
+                    {% endif %}
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    {% if waiting_for_choices %}<button type="submit" class="btn btn-primary">Save</button>{% endif %}
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="projectSettingsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -406,6 +511,7 @@
 <script src="{{ url_for('static', filename='js/plan-block-editor.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/project-statistics.js') }}"></script>
+<script src="{{ url_for('static', filename='js/waiting-for.js') }}"></script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");

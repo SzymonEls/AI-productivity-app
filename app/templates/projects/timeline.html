@@ -6,14 +6,20 @@
 {% block content %}
 <div class="dashboard-page">
 <section class="dashboard-section dashboard-header-section">
-    <div class="d-flex justify-content-between align-items-center gap-3">
-        <div class="d-flex align-items-center gap-2">
+    <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <h1 class="h5 mb-0">Your Projects</h1>
+            {# Two tabs as two URLs: the diagram can be linked to, and the
+               timeline's editing script never runs on a page without one. #}
+            <nav class="settings-segments project-view-tabs" aria-label="Projects view">
+                <a class="settings-segment {% if view == 'timeline' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view') }}" {% if view == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
+                <a class="settings-segment {% if view == 'waiting' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view', view='waiting') }}" {% if view == 'waiting' %}aria-current="page"{% endif %}>Waiting</a>
+            </nav>
             <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
         </div>
         <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
     </div>
-    {% if projects %}
+    {% if view == "timeline" and projects %}
     <div class="project-view-toolbar dashboard-header-toolbar">
         <div class="timeline-edit-actions" data-timeline-edit-actions>
             <div class="form-check form-switch timeline-private-toggle">
@@ -33,7 +39,56 @@
     {% endif %}
 </section>
 
-{% if projects %}
+{% if view == "waiting" %}
+    <section class="dashboard-section waiting-diagram-section">
+        <h2 class="h6 mb-1">Waiting for{% if diagram %} <span class="text-muted fw-normal">({{ diagram.waiting_count }})</span>{% endif %}</h2>
+        <p class="text-muted small mb-3">
+            Each project on the right waits for a milestone of the one its arrow comes from.
+            A waiting project stays out of the Not scheduled list until the milestone is reached.
+        </p>
+        {% if diagram %}
+            <div class="waiting-diagram-scroll">
+                <div class="waiting-diagram" style="width: {{ diagram.width }}px; height: {{ diagram.height }}px;">
+                    <svg class="waiting-diagram-edges" width="{{ diagram.width }}" height="{{ diagram.height }}" viewBox="0 0 {{ diagram.width }} {{ diagram.height }}" aria-hidden="true">
+                        <defs>
+                            <marker id="waiting-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                <path d="M0 0 10 5 0 10z" class="waiting-diagram-arrowhead" />
+                            </marker>
+                        </defs>
+                        {% for edge in diagram.edges %}
+                            <path d="{{ edge.path }}" class="waiting-diagram-edge{% if edge.is_archived %} is-archived{% endif %}" marker-end="url(#waiting-arrow)" />
+                        {% endfor %}
+                    </svg>
+                    {% for node in diagram.nodes %}
+                        <a
+                            class="waiting-node{% if node.is_waiting %} is-waiting{% endif %}{% if node.is_archived %} is-archived{% endif %}{% if node.is_private %} is-private{% endif %}"
+                            href="{{ node.url }}"
+                            style="left: {{ node.x }}px; top: {{ node.y }}px; width: {{ diagram.node_width }}px; height: {{ diagram.node_height }}px;"
+                            title="{{ node.title }}{% if node.note and not node.is_private %} — waits for: {{ node.note }}{% endif %}"
+                        >
+                            <span class="waiting-node-title">{{ node.title }}</span>
+                            <span class="waiting-node-meta">
+                                {% if node.is_archived %}<span class="waiting-node-tag">archived</span>{% endif %}
+                                {% if node.is_waiting %}
+                                    <span class="waiting-node-note">{{ node.note or "Waiting" }}</span>
+                                    <span class="waiting-node-note-private">Private</span>
+                                {% endif %}
+                                {% if node.blocking and not node.is_waiting %}
+                                    <span>Holding up {{ node.blocking }} project{{ "s" if node.blocking != 1 }}</span>
+                                {% endif %}
+                            </span>
+                        </a>
+                    {% endfor %}
+                </div>
+            </div>
+        {% else %}
+            <p class="text-muted small mb-0">
+                No project is waiting for another one. Open a project and choose
+                <strong>Waiting for…</strong> in its ⋯ menu to add one.
+            </p>
+        {% endif %}
+    </section>
+{% elif projects %}
     <script type="application/json" id="project-timeline-data">
         {{ timeline_data | tojson }}
     </script>
