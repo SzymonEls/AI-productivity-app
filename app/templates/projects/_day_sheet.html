@@ -151,7 +151,10 @@
            they go. #}
         <ul class="day-event-list" data-event-list data-calendar-now="{{ calendar_now() }}">
             {%- for event in day.events %}
-                <li class="day-event{% if event.all_day %} day-event-all-day{% endif %}" title="{{ event.summary }} — {{ event.calendar }}" data-event-ends="{{ event.ends_at }}">
+                {# data-group-role: a grouped calendar's one line ("line") and
+                   the events folded into it ("part"), which stay hidden until
+                   the schedule's "Ungroup calendars" swaps the two. #}
+                <li class="day-event{% if event.all_day %} day-event-all-day{% endif %}" title="{{ event.summary }} — {{ event.calendar }}" data-event-ends="{{ event.ends_at }}"{% if event.group_role %} data-group-role="{{ event.group_role }}"{% endif %}>
                     {% if event.time_label %}<span class="day-event-time">{{ event.time_label }}</span>{% endif %}
                     <span class="day-event-title">{{ event.summary }}</span>
                 </li>

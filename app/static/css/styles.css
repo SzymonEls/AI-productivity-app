@@ -2161,6 +2161,14 @@ button.picker-row:hover {
 .schedule-status-success { color: var(--success); }
 .schedule-status-danger { color: var(--danger); }
 
+/* Pressed the way safe mode's shield is: the accent colour says it is on. */
+.schedule-ungroup-toggle[aria-pressed="true"],
+.schedule-ungroup-toggle[aria-pressed="true"]:hover {
+    color: var(--primary);
+    border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+    background: var(--primary-soft);
+}
+
 .schedule-hint {
     margin: 0.6rem 0 0;
     color: var(--muted-foreground);
@@ -2578,6 +2586,21 @@ button.picker-row:hover {
 /* No clock on it, so the bar does the talking. */
 .day-event-all-day .day-event-title {
     color: var(--foreground);
+}
+
+/* A grouped calendar sends its one line a day and the events folded into it.
+   The parts stay hidden everywhere but on the schedule with "Ungroup
+   calendars" switched on, where they take the line's place. */
+.day-event[data-group-role="part"] {
+    display: none;
+}
+
+[data-ungroup-calendars="on"] .schedule-page .day-event[data-group-role="part"] {
+    display: flex;
+}
+
+[data-ungroup-calendars="on"] .schedule-page .day-event[data-group-role="line"] {
+    display: none;
 }
 
 /* Over already: still there to read, but out of the way of what is next. */

@@ -113,6 +113,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   means by "last read". Events are not stored — see point 17. `is_grouped` folds each day's
   timed events into one line — the calendar's name and the span from the first start to the last
   end (`_grouped` in `feeds.py`) — for a timetable-like calendar; all-day entries stay separate.
+  The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
+  (point 17).
 
 The schema in the code matches the latest migration (`20261001_0030`).
 
@@ -282,6 +284,15 @@ The schema in the code matches the latest migration (`20261001_0030`).
     strikes out the lines whose end has passed, by the server's clock in the calendars' timezone
     (`data-calendar-now`, rendered by the `calendar_now` template global) rather than the
     browser's, and re-checks every minute.
+
+    A grouped calendar's day comes out as its one line (`group_role` "line") **and** the timed
+    events folded into it (`group_role` "part"), rendered as `data-group-role` on the `<li>`. The
+    stylesheet hides the parts everywhere; on the schedule page, "Ungroup calendars" (shown only
+    when `has_grouped_feeds` finds a switched-on grouped calendar) swaps the two by setting
+    `data-ungroup-calendars="on"` on `<html>`. It is a per-browser setting in `localStorage`
+    (`app-ungroup-calendars`), off by default and applied before first paint like the theme, kept
+    in `base.html` with the others. Swapping is CSS only — no request, and the weeks the calendar
+    view loads as it scrolls and the lines the refresh redraws carry both versions already.
 
     **The expansion is cached per version of the calendar** (`_expanded` in
     [feeds.py](../app/integrations/feeds.py)), keyed on the feed, its `fetched_at`, the window and

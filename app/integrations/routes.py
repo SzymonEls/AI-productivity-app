@@ -304,6 +304,7 @@ def _days_payload(user_id, first_day, last_day):
                 "all_day": entry["all_day"],
                 "calendar": entry["calendar"],
                 "ends_at": entry["ends_at"],
+                "group_role": entry["group_role"],
             }
             for entry in events.get(day, ())
         ]
