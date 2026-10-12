@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
 from ..markdown_utils import TAG_PATTERN, render_project_markdown
-from ..models import Project, ProjectTimelineGroup, ProjectTimelineItem
+from ..models import Project, ProjectDaySlot, ProjectTimelineGroup, ProjectTimelineItem
 from ..time_tracking.service import (
     daily_totals_by_project,
     first_plan_section_title,
@@ -30,8 +30,12 @@ from .slots import (
     booking_note,
     calendar_weeks,
     clear_slot,
+    deadline_label,
+    deadline_warning,
     first_booked_day,
+    is_after_deadline,
     move_booking,
+    move_deadline_warning,
     parse_slot_date,
     past_calendar_weeks,
     planned_session_labels,
@@ -72,7 +76,31 @@ def dashboard():
     return redirect(url_for("main.home"))
 
 
-def serialize_slot_card(slot, booking, totals):
+def _block_deadline(booking, day):
+    """The project's session deadline, as a booked block shows it.
+
+    ``shows_deadline`` is whether the block prints it in place of its letter:
+    only on a session still to be done, since a finished one has met it. The
+    date itself is passed either way - the board moves a block onto another day
+    in place, which reopens it, and then has to know what to print.
+    """
+    project = booking.project if booking else None
+    if project is None or project.session_deadline is None:
+        return {
+            "deadline": None,
+            "deadline_label": "",
+            "after_deadline": False,
+            "shows_deadline": False,
+        }
+    return {
+        "deadline": project.session_deadline,
+        "deadline_label": deadline_label(project.session_deadline),
+        "after_deadline": is_after_deadline(project, day),
+        "shows_deadline": not booking.is_done,
+    }
+
+
+def serialize_slot_card(slot, booking, totals, day):
     """One slot for the dashboard. Slot C deliberately carries no time."""
 
     project = booking.project if booking else None
@@ -93,6 +121,7 @@ def serialize_slot_card(slot, booking, totals):
         # The compact format, not "00:45:00": format_duration() stays for the
         # time-tracking pages, where seconds matter.
         "tracked_label": _minutes_label(tracked_seconds // 60, zero="0m") if shows_time else "",
+        **_block_deadline(booking, day),
     }
 
 
@@ -230,7 +259,7 @@ def schedule_day_off():
     if day is None:
         return jsonify({"ok": False, "message": "Pick a day."}), 400
 
-    ok, message, _moved = shift_bookings_forward(current_user.id, day)
+    ok, message, _moved, late = shift_bookings_forward(current_user.id, day)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
 
@@ -248,7 +277,10 @@ def schedule_day_off():
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
 
-    return jsonify({"ok": True, "message": message})
+    warning = (
+        f"The day off pushed past the session deadline: {', '.join(late)}." if late else ""
+    )
+    return jsonify({"ok": True, "message": message, "warning": warning})
 
 
 @projects_bp.route("/schedule/archive")
@@ -371,6 +403,7 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
             ),
             # C is the spare slot; it stays visibly secondary once it is filled.
             "is_optional": slot not in TIMED_SLOTS,
+            **_block_deadline(booked[slot], day),
         }
         for slot in SLOTS
     ]
@@ -548,11 +581,22 @@ def project_schedule_window(project_id):
 
 
 def _schedule_window_payload(project_id):
-    """The planner grid plus the one line saying where the project already is."""
+    """The planner grid plus the one line saying where the project already is.
 
+    The deadline and the title ride along for the question the dialog asks
+    before booking a day past it.
+    """
+
+    project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
     return {
         "days": schedule_window(current_user.id, project_id),
         "note": booking_note(current_user.id, project_id),
+        "project_title": project.title if project else "",
+        "deadline_label": (
+            deadline_label(project.session_deadline)
+            if project and project.session_deadline
+            else ""
+        ),
     }
 
 
@@ -729,6 +773,9 @@ def assign_project_slot():
     ok, message = assign_slot(current_user.id, project_id, day, slot)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
+    warning = deadline_warning(
+        Project.query.filter_by(id=project_id, user_id=current_user.id).first(), day
+    )
 
     try:
         db.session.commit()
@@ -736,7 +783,14 @@ def assign_project_slot():
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
 
-    return jsonify({"ok": True, "message": message, **_schedule_window_payload(project_id)})
+    return jsonify(
+        {
+            "ok": True,
+            "message": message,
+            "warning": warning,
+            **_schedule_window_payload(project_id),
+        }
+    )
 
 
 @projects_bp.route("/schedule/move", methods=["POST"])
@@ -756,6 +810,8 @@ def move_project_slot():
     ok, message = move_booking(current_user.id, from_day, from_slot, to_day, to_slot)
     if not ok:
         return jsonify({"ok": False, "message": message}), 409
+    db.session.flush()
+    warning = move_deadline_warning(current_user.id, from_day, from_slot, to_day, to_slot)
 
     try:
         db.session.commit()
@@ -763,7 +819,7 @@ def move_project_slot():
         db.session.rollback()
         return jsonify({"ok": False, "message": "Failed to save the schedule."}), 500
 
-    return jsonify({"ok": True, "message": message})
+    return jsonify({"ok": True, "message": message, "warning": warning})
 
 
 @projects_bp.route("/schedule/clear", methods=["POST"])
@@ -1092,6 +1148,75 @@ def clear_waiting_for(project_id):
     )
 
 
+@projects_bp.route("/<int:project_id>/session-deadline", methods=["POST"])
+@login_required
+def set_session_deadline(project_id):
+    """Set the last day the project's next session should happen on.
+
+    A plan rather than a rule: booking the session later still works, it only
+    comes with a warning - and a session already booked past the new deadline
+    is left where it is and named in the same way.
+    """
+    project = _get_user_project_or_404(project_id)
+    deadline = parse_slot_date(request.form.get("session_deadline"))
+
+    if deadline is None:
+        flash("Pick the day the session has to happen by.", "danger")
+    elif deadline < today_local():
+        flash("A deadline has to be today or later.", "danger")
+    else:
+        project.session_deadline = deadline
+        try:
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            flash("Failed to save. The database is unavailable for writing.", "danger")
+        else:
+            flash(f"Session deadline set to {deadline_label(deadline)}.", "info")
+            late = [
+                booking
+                for booking in _undone_bookings_from_today(project.id)
+                if is_after_deadline(project, booking.slot_date)
+            ]
+            if late:
+                flash(
+                    f"Already booked for {deadline_label(late[0].slot_date)} in slot {late[0].slot} "
+                    "— after the deadline.",
+                    "warning",
+                )
+    return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+@projects_bp.route("/<int:project_id>/session-deadline/clear", methods=["POST"])
+@login_required
+def clear_session_deadline(project_id):
+    """Drop the deadline without a session having met it."""
+    project = _get_user_project_or_404(project_id)
+    project.session_deadline = None
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to save. The database is unavailable for writing.", "danger")
+    else:
+        flash("Session deadline removed.", "info")
+    return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+def _undone_bookings_from_today(project_id):
+    """The project's sessions still to be done, from today on, earliest first."""
+    return (
+        ProjectDaySlot.query.filter(
+            ProjectDaySlot.user_id == current_user.id,
+            ProjectDaySlot.project_id == project_id,
+            ProjectDaySlot.slot_date >= today_local(),
+            ProjectDaySlot.is_done.is_(False),
+        )
+        .order_by(ProjectDaySlot.slot_date.asc())
+        .all()
+    )
+
+
 @projects_bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create_project():
@@ -1164,6 +1289,10 @@ def project_detail(project_id):
         else [],
         waiting_for_choices=_waiting_for_choices(project),
         waiting_note_max_length=WAITING_NOTE_MAX_LENGTH,
+        today=today_local(),
+        session_deadline_label=deadline_label(project.session_deadline)
+        if project.session_deadline
+        else "",
     )
 
 

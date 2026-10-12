@@ -41,7 +41,7 @@ def home():
     # One query for every project's time today, rather than one per slot.
     totals = daily_totals_by_project(current_user.id, today)
     unplanned = unscheduled_projects(current_user.id)
-    slot_cards = [serialize_slot_card(slot, booked[slot], totals) for slot in SLOTS]
+    slot_cards = [serialize_slot_card(slot, booked[slot], totals, today) for slot in SLOTS]
     # Two more queries on a page that already makes several. The projects are
     # fetched even with an empty inbox: the + beside "Today" can fill it without
     # a reload, and the picker it would then need has to already be on the page.

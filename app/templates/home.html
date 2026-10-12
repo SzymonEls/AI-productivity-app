@@ -108,7 +108,15 @@
             {% for card in slot_cards %}
                 {% set is_optional = card.slot not in timed_slots %}
                 <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}{% if card.is_done %} slot-card-done{% endif %}">
-                    <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
+                    {% if card.shows_deadline %}
+                        {# The session's deadline, on end, in place of the letter. #}
+                        <div
+                            class="slot-card-letter is-deadline{% if card.after_deadline %} is-after-deadline{% endif %}"
+                            title="Session deadline {{ card.deadline_label }}{% if card.after_deadline %} — this session is after it{% endif %}"
+                        >{{ card.deadline.day }}</div>
+                    {% else %}
+                        <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
+                    {% endif %}
                     <div class="slot-card-body">
                         {% if card.project %}
                             <div class="slot-card-heading">

@@ -72,7 +72,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   the page all along — nothing is withheld from the browser, and nothing about it is enforced
   server-side.
   `waiting_for_project_id` (with `waiting_for_note`, the milestone) puts the project on hold
-  until something in another project is reached — see point 23.
+  until something in another project is reached — see point 23. `session_deadline` is the last
+  day its next session should happen on — see point 24.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -118,7 +119,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
   (point 17).
 
-The schema in the code matches the latest migration (`20261010_0031`).
+The schema in the code matches the latest migration (`20261012_0032`).
 
 ## Responsibility boundaries
 
@@ -555,12 +556,13 @@ The schema in the code matches the latest migration (`20261010_0031`).
     type. A pick only types the line into the field; the text is what gets saved. They are fetched
     rather than rendered into the page because they are another project's plan, and a private
     one's are left out while safe mode is on.
-    The one thing it changes is the home page's "Not scheduled" list and the planning ring beside
+    What it changes is the home page's "Not scheduled" list and the planning ring beside
     the health score (`unscheduled_projects` and `system_health` in
-    [app/projects/slots.py](../app/projects/slots.py)): there is no next session to plan for a
-    project until what it waits for has happened. Unlike archiving (point 15) it does not take the
-    project off the schedule picker, the timeline or the switcher, and `assign_slot` still books
-    it — a waiting project can still have work worth a session.
+    [app/projects/slots.py](../app/projects/slots.py)), and the picker behind an empty block
+    (`slot_candidates`): there is no next session to plan for a project until what it waits for
+    has happened. Unlike archiving (point 15) it does not take the project off the timeline or
+    the switcher, and `assign_slot` still books it — "Plan next session" on its own page still
+    works, since a waiting project can still have work worth a session.
 
     **One project at most, and never round in a circle.** A single column rather than a table
     keeps the links a forest: every project has at most one parent. `set_waiting_for`
@@ -583,6 +585,37 @@ The schema in the code matches the latest migration (`20261010_0031`).
     anything in the browser. Archived projects stay in the diagram (dashed arrow): a project still
     waiting for an archived one is exactly what the page is there to show. The milestone of a
     private project is covered in safe mode, like its plan.
+
+24. **A session deadline asks, it never refuses.** `session_deadline` on `Project` (⋯ →
+    "Session deadline…" on the project page, `set_session_deadline` / `clear_session_deadline`)
+    is the last day the project's next session should happen on, the day itself still in time.
+    It belongs to the project rather than to a booking because it is set before anything is
+    booked. Booking or moving a session past it pops up a `confirm()` **before** anything is
+    sent — the planner dialog (`confirmLate` in
+    [day-planner.js](../app/static/js/day-planner.js), on `after_deadline` per day and on the
+    picker's `deadline_warning`) and the board (`lateQuestion` in
+    [schedule-board.js](../app/static/js/schedule-board.js), weighing both sessions of a swap)
+    — so a "no" leaves nothing to undo, and a "yes" books it. The planner also marks the late
+    days in red and the picker says "Past its deadline" under a project before anything is
+    clicked. The server applies the same rule on its own and answers `assign_project_slot` and
+    `move_project_slot` with a `warning` beside the `message` (`deadline_warning` /
+    `move_deadline_warning` in [app/projects/slots.py](../app/projects/slots.py)), for a client
+    that did not ask first; the pages ignore it, having already asked. A day off cannot ask
+    block by block, so it books first and `alert()`s the projects it has just pushed past
+    their deadline. Setting a deadline that a session already booked overshoots flashes a
+    warning.
+
+    **Ticking a session done meets the deadline and clears it** (`meet_deadline`, called from
+    `set_session_done` and `set_block_done`); reopening the session does not bring it back.
+
+    On the schedule and the home page a booked block still to be done prints the deadline's day
+    of the month ("14") on end in place of its A/B/C letter, with the full date in the tooltip,
+    in red when the block's own day is past it.
+    The date rides on `[data-slot-content]` (`data-deadline`, `data-deadline-label`) like the
+    postponement count, because it belongs to the project and the letter belongs to the
+    position: `setLetter` in [schedule-board.js](../app/static/js/schedule-board.js) rewrites
+    the letter after every move, and puts the plain letter back (`data-slot-letter`) when the
+    block is freed or holds a finished session.
 
 ## What not to touch (and why)
 

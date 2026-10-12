@@ -23,6 +23,25 @@
     let dialog = null;
     let currentProjectId = null;
 
+    /**
+     * Ask before booking a session past its project's deadline.
+     *
+     * A deadline warns rather than refuses, but the warning comes as a question
+     * before anything is sent: a late booking made by accident should never
+     * need undoing. The server checks the same rule and would warn again, so
+     * once this says yes the answer is reported as a plain success.
+     */
+    function confirmLate(title, deadlineLabel, dayLabel) {
+        return window.confirm(
+            `The session deadline for ${title} is ${deadlineLabel}.\n\nPlan it for ${dayLabel} anyway?`
+        );
+    }
+
+    // "2026-10-16" as the server spells a day: "16 Oct".
+    function shortDate(iso) {
+        return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    }
+
     function getJson(url) {
         return fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } }).then(async (response) => {
             const payload = await response.json().catch(() => ({}));
@@ -113,11 +132,17 @@
 
         payload.days.forEach((day) => {
             const row = document.createElement("div");
-            row.className = `planner-day${day.is_today ? " planner-day-today" : ""}`;
+            row.className = `planner-day${day.is_today ? " planner-day-today" : ""}${
+                day.after_deadline ? " planner-day-late" : ""
+            }`;
 
             const label = document.createElement("div");
             label.className = "planner-day-label";
             label.textContent = day.is_today ? `${day.label} · today` : day.label;
+            // Still bookable: the deadline asks first, it does not refuse.
+            if (day.after_deadline) {
+                label.title = `After the session deadline (${payload.deadline_label})`;
+            }
             row.appendChild(label);
 
             const slots = document.createElement("div");
@@ -169,7 +194,15 @@
                     button.type = "button";
                     button.className = "btn btn-outline-secondary btn-sm planner-take";
                     button.textContent = "Take";
-                    button.addEventListener("click", () => takeSlot(day.date, slot.slot));
+                    button.addEventListener("click", () => {
+                        if (
+                            day.after_deadline &&
+                            !confirmLate(payload.project_title, payload.deadline_label, shortDate(day.date))
+                        ) {
+                            return;
+                        }
+                        takeSlot(day.date, slot.slot);
+                    });
                     cell.appendChild(button);
                 } else {
                     cell.classList.add("planner-slot-blocked");
@@ -239,7 +272,15 @@
             row.className = `picker-row${project.can_take ? "" : " picker-row-blocked"}`;
             if (project.can_take) {
                 row.type = "button";
-                row.addEventListener("click", () => takeSlotFor(project.id, date, slot));
+                row.addEventListener("click", () => {
+                    if (
+                        project.deadline_warning &&
+                        !confirmLate(project.title, project.deadline_label, shortDate(date))
+                    ) {
+                        return;
+                    }
+                    takeSlotFor(project.id, date, slot);
+                });
             }
 
             const text = document.createElement("span");
@@ -263,6 +304,13 @@
                 ? project.plan_heading || project.last_session
                 : project.reason;
             text.appendChild(note);
+
+            if (project.can_take && project.deadline_warning) {
+                const late = document.createElement("span");
+                late.className = "picker-row-deadline";
+                late.textContent = project.deadline_warning;
+                text.appendChild(late);
+            }
 
             row.appendChild(text);
             list.appendChild(row);
@@ -354,6 +402,11 @@
                     doneButton.classList.toggle("btn-outline-secondary", !payload.is_done);
                     doneButton.querySelector("[data-session-done-label]").textContent =
                         payload.is_done ? "Done" : "Mark done";
+                    // A session done meets the deadline, and the server has
+                    // just cleared it - the badge saying otherwise goes too.
+                    if (payload.is_done) {
+                        document.querySelector("[data-session-deadline-badge]")?.remove();
+                    }
                 })
                 .catch((error) => window.alert(error.message))
                 .finally(() => {

@@ -129,6 +129,36 @@
         warn.setAttribute("aria-label", title);
     }
 
+    /* The letter, or the project's session deadline in its place. The letter
+       belongs to the position and the deadline to the project, so after a move
+       the block prints whichever the session now in it calls for - the date,
+       red when the block's day is past it, on a session not yet done. ISO
+       dates compare as the days they name. */
+    function setLetter(cell, booked, done) {
+        const letter = cell.querySelector("[data-slot-letter]");
+        const content = contentOf(cell);
+        const deadline = booked && !done ? content.dataset.deadline : "";
+        const late = Boolean(deadline) && cell.dataset.date > deadline;
+
+        letter.classList.toggle("is-deadline", Boolean(deadline));
+        letter.classList.toggle("is-after-deadline", late);
+        if (deadline) {
+            const title = `Session deadline ${content.dataset.deadlineLabel}${
+                late ? " — this session is after it" : ""
+            }`;
+            // Only the day of the month is printed; the tooltip names the month.
+            letter.textContent = String(Number(deadline.slice(8, 10)));
+            letter.title = title;
+            letter.setAttribute("aria-label", title);
+            letter.removeAttribute("aria-hidden");
+        } else {
+            letter.textContent = letter.dataset.slotLetter;
+            letter.removeAttribute("title");
+            letter.removeAttribute("aria-label");
+            letter.setAttribute("aria-hidden", "true");
+        }
+    }
+
     /* Mirrors the classes the template renders, so a block looks the same
        whether the page drew it or a move put the project there. */
     function refreshCell(cell) {
@@ -144,6 +174,7 @@
         cell.classList.toggle("is-postponed-1", level === 1);
         cell.classList.toggle("is-postponed-2", level === 2);
         setWarn(cell, postponed, done);
+        setLetter(cell, booked, done);
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
         content.draggable = booked;
@@ -215,8 +246,44 @@
         };
     }
 
+    // "2026-10-16" as the server spells a day: "16 Oct".
+    function shortDate(iso) {
+        return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    }
+
+    /**
+     * The question a move past a session deadline has to get a yes to first.
+     *
+     * Both sessions of a swap are weighed, each on the day it is about to land
+     * on. A move inside one sheet is not a move in time, so it never asks.
+     * Returns the question, or "" when nothing would land late.
+     */
+    function lateQuestion(fromCell, toCell) {
+        if (fromCell.dataset.date === toCell.dataset.date) {
+            return "";
+        }
+        const late = [
+            [contentOf(fromCell), toCell.dataset.date],
+            [contentOf(toCell), fromCell.dataset.date],
+        ]
+            .filter(([content, day]) => content.dataset.projectId && content.dataset.deadline && day > content.dataset.deadline)
+            .map(([content, day]) => {
+                const title = content.querySelector(".day-slot-title")?.textContent.trim() || "This project";
+                return `The session deadline for ${title} is ${content.dataset.deadlineLabel} — this moves it to ${shortDate(day)}.`;
+            });
+        return late.length ? `${late.join("\n")}\n\nMove it anyway?` : "";
+    }
+
     function requestMove(fromCell, toCell) {
         if (fromCell === toCell) {
+            return;
+        }
+
+        // A deadline asks, it does not refuse - and it asks before the page
+        // changes, so a "no" leaves nothing to undo.
+        const question = lateQuestion(fromCell, toCell);
+        if (question && !window.confirm(question)) {
+            setStatus("", "");
             return;
         }
 
@@ -254,6 +321,8 @@
             projectId: content.dataset.projectId,
             done: content.dataset.done,
             postponed: content.dataset.postponed,
+            deadline: content.dataset.deadline,
+            deadlineLabel: content.dataset.deadlineLabel,
             nodes: Array.from(content.childNodes),
         };
 
@@ -267,6 +336,8 @@
         // Freeing the block throws the booking away, and with it the record of
         // how often it was put off - whatever is booked here next starts clean.
         content.dataset.postponed = "0";
+        content.dataset.deadline = "";
+        content.dataset.deadlineLabel = "";
         content.replaceChildren(free);
         refreshCell(cell);
 
@@ -274,6 +345,8 @@
             content.dataset.projectId = previous.projectId;
             content.dataset.done = previous.done;
             content.dataset.postponed = previous.postponed;
+            content.dataset.deadline = previous.deadline;
+            content.dataset.deadlineLabel = previous.deadlineLabel;
             content.replaceChildren(...previous.nodes);
             refreshCell(cell);
         };
@@ -383,6 +456,11 @@
 
         postJson(DAY_OFF_ENDPOINT, { date }, "Could not take the day off.")
             .then((payload) => {
+                // A day off cannot ask block by block before it goes ahead, so
+                // what it pushed past a session deadline pops up afterwards.
+                if (payload.warning) {
+                    window.alert(payload.warning);
+                }
                 try {
                     window.sessionStorage.setItem(DAY_OFF_MESSAGE_KEY, payload.message || "");
                 } catch (error) {
