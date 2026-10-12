@@ -158,6 +158,10 @@ class Project(db.Model):
     # (``delete_project``).
     waiting_for_project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
     waiting_for_note = db.Column(db.String(200), nullable=False, default="")
+    # The last day the next session should happen on (a day in
+    # CALENDAR_TIMEZONE, like a slot's). Booking past it is allowed with a
+    # warning; ticking a session done meets it, and clears it.
+    session_deadline = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,

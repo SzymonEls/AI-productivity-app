@@ -90,6 +90,44 @@ def parse_slot_date(value):
         return None
 
 
+def deadline_label(day):
+    """A deadline as the blocks print it: "14 Oct" - short enough to stand on end."""
+    return f"{day.day} {day.strftime('%b')}"
+
+
+def is_after_deadline(project, day):
+    """Whether a session of ``project`` on ``day`` would come too late.
+
+    The deadline is the last day the session may happen on, so the day itself
+    is still in time.
+    """
+    return project is not None and project.session_deadline is not None and day > project.session_deadline
+
+
+def deadline_warning(project, day):
+    """What booking ``project`` on ``day`` should be warned about, or "".
+
+    A warning and never a refusal: a deadline is a plan, and a plan that has
+    slipped still needs its session booked somewhere.
+    """
+    if not is_after_deadline(project, day):
+        return ""
+    return (
+        f"{project.title} is now planned after its session deadline "
+        f"({deadline_label(project.session_deadline)})."
+    )
+
+
+def meet_deadline(booking):
+    """A session ticked done meets its project's deadline, which then goes.
+
+    The deadline is about the next session, so the one that has just happened
+    is the one it was for. Reopening the session does not bring it back.
+    """
+    if booking.is_done and booking.project is not None:
+        booking.project.session_deadline = None
+
+
 def slots_for_date(user_id, day):
     """Return {"A": ProjectDaySlot|None, "B": ..., "C": ...} for one day."""
     booked = (
@@ -492,6 +530,7 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
     # The project's own two bookings do not change from day to day, so they are
     # read once for the whole grid rather than per row.
     bookings = project_bookings(user_id, project_id)
+    project = Project.query.filter_by(id=project_id, user_id=user_id).first()
 
     window = []
     for offset in range(days):
@@ -504,6 +543,8 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
                 "date": day.isoformat(),
                 "label": day.strftime("%a %d %b"),
                 "is_today": day == today,
+                # Still bookable - the dialog only marks the days as late.
+                "after_deadline": is_after_deadline(project, day),
                 "slots": [
                     {
                         "slot": slot,
@@ -567,12 +608,23 @@ def booking_note(user_id, project_id):
     the rule behind them, or nothing at all when the project is free to plan.
     """
     booked = planned_session_labels(user_id, project_id)
+    project = Project.query.filter_by(id=project_id, user_id=user_id).first()
+    deadline = (
+        f"Session deadline: {deadline_label(project.session_deadline)}."
+        if project is not None and project.session_deadline is not None
+        else ""
+    )
     if not booked:
-        return ""
+        return deadline
 
-    return (
-        f"Already planned for {' and '.join(booked)} — "
-        "a project takes at most one block today and one later."
+    return " ".join(
+        part
+        for part in (
+            f"Already planned for {' and '.join(booked)} — "
+            "a project takes at most one block today and one later.",
+            deadline,
+        )
+        if part
     )
 
 
@@ -586,7 +638,8 @@ def _blocked_reason(blocker, day, today):
 
 def slot_candidates(user_id, day, slot):
     """
-    Every active project, annotated with whether it can take this slot.
+    Every active project not waiting for another one, annotated with whether it
+    can take this slot.
 
     Projects the two-block rule rules out are returned too, with the reason,
     rather than silently missing from the list - "where did that project go" is
@@ -594,8 +647,10 @@ def slot_candidates(user_id, day, slot):
     """
     from ..time_tracking.service import first_plan_section_title, project_last_session_labels
 
+    # A project waiting for another one is left out too: until the milestone is
+    # reached there is no session to offer it. Its own page can still book one.
     projects = (
-        Project.query.filter_by(user_id=user_id, is_archived=False)
+        Project.query.filter_by(user_id=user_id, is_archived=False, waiting_for_project_id=None)
         .order_by(func.lower(Project.title).asc())
         .all()
     )
@@ -623,6 +678,16 @@ def slot_candidates(user_id, day, slot):
                 "is_starred": bool(project.is_starred),
                 "can_take": not reason,
                 "reason": reason,
+                # Bookable all the same; the picker says it would be late, and
+                # asks before booking it.
+                "deadline_warning": (
+                    f"Past its deadline ({deadline_label(project.session_deadline)})"
+                    if is_after_deadline(project, day)
+                    else ""
+                ),
+                "deadline_label": (
+                    deadline_label(project.session_deadline) if project.session_deadline else ""
+                ),
             }
         )
 
@@ -706,6 +771,7 @@ def set_session_done(user_id, project_id, day, done):
         return False, "This project has no session today.", False
 
     booking.is_done = bool(done)
+    meet_deadline(booking)
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
 
 
@@ -727,6 +793,7 @@ def set_block_done(user_id, day, slot, done):
         return False, "That block is free.", False
 
     booking.is_done = bool(done)
+    meet_deadline(booking)
     return (
         True,
         "Session marked done." if booking.is_done else "Session reopened.",
@@ -819,13 +886,35 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     return True, f"Moved to {to_day.strftime('%d %b')}, slot {to_slot}."
 
 
+def move_deadline_warning(user_id, from_day, from_slot, to_day, to_slot):
+    """What a finished move should be warned about: a session now past its deadline.
+
+    Read off the two blocks once the move has been made, so a swap is weighed on
+    both of its sessions. A move inside one sheet is not a move in time and
+    cannot make anything later than it was.
+    """
+    if from_day == to_day:
+        return ""
+    warnings = []
+    for day, slot in ((to_day, to_slot), (from_day, from_slot)):
+        booking = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
+        if booking is not None and not booking.is_done:
+            warning = deadline_warning(booking.project, day)
+            if warning:
+                warnings.append(warning)
+    return " ".join(warnings)
+
+
 def shift_bookings_forward(user_id, from_day, days=1):
     """
     Take a day off: push the bookings from ``from_day`` on ``days`` days later.
 
     The chosen day is freed and everything planned for it - and for every day
     after it - simply happens a day later, so the order of the plan survives a
-    day that does not. Returns ``(ok, message, moved)``; the caller commits.
+    day that does not. Returns ``(ok, message, moved, late)``; the caller
+    commits. ``late`` names the projects whose session the day off has just
+    pushed past their session deadline - it goes ahead anyway, and the caller
+    warns about them.
 
     A session already marked done stays exactly where it is. It happened: moving
     it would file work already done under a day it was not done on, and would
@@ -845,9 +934,9 @@ def shift_bookings_forward(user_id, from_day, days=1):
     counts nothing: it did not move.
     """
     if days < 1:
-        return False, "A day off is at least one day.", 0
+        return False, "A day off is at least one day.", 0, []
     if from_day < today_local():
-        return False, "That day is in the past.", 0
+        return False, "That day is in the past.", 0, []
 
     entries = (
         ProjectDaySlot.query.filter(
@@ -857,9 +946,12 @@ def shift_bookings_forward(user_id, from_day, days=1):
         .all()
     )
     if not entries:
-        return True, f"{from_day.strftime('%d %b')} was already free.", 0
+        return True, f"{from_day.strftime('%d %b')} was already free.", 0, []
 
     moved = 0
+    # Projects a moved session has pushed past their deadline - the day off
+    # still goes ahead, as any late booking does.
+    late = []
     # The (date, slot) spots nothing may move onto: a finished session, or a
     # booking stuck behind one.
     staying = set()
@@ -872,11 +964,14 @@ def shift_bookings_forward(user_id, from_day, days=1):
         entry.postponed_count = postponement_after(
             entry.postponed_count, entry.slot_date, target[0]
         )
+        was_late = is_after_deadline(entry.project, entry.slot_date)
         entry.slot_date = target[0]
         db.session.flush()
         moved += 1
+        if not was_late and is_after_deadline(entry.project, entry.slot_date):
+            late.append(entry.project.title)
 
-    return True, _day_off_message(from_day, moved, len(staying)), moved
+    return True, _day_off_message(from_day, moved, len(staying)), moved, sorted(set(late))
 
 
 def _day_off_message(from_day, moved, stayed):

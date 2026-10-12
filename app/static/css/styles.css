@@ -1896,6 +1896,11 @@ button.picker-row:hover {
     white-space: nowrap;
 }
 
+.picker-row-deadline {
+    color: var(--danger);
+    font-size: 0.8rem;
+}
+
 /* Empty is empty, whichever letter it is: grey and dashed, waiting to be filled. */
 .slot-card-empty {
     background: var(--surface-2);
@@ -1961,6 +1966,15 @@ button.picker-row:hover {
 .slot-card:not(.slot-card-empty) .slot-card-letter {
     background: color-mix(in srgb, var(--slot-card-accent) 16%, var(--surface));
     color: var(--slot-card-accent);
+}
+
+/* Stood on end, the day needs a little more height than the letter's square. */
+.slot-card-letter.is-deadline {
+    width: 1.6rem;
+    height: auto;
+    min-height: 2.75rem;
+    align-self: stretch;
+    font-size: 1rem;
 }
 
 .slot-card-heading {
@@ -2542,6 +2556,36 @@ button.picker-row:hover {
 
 .day-slot.is-booked .day-slot-letter {
     color: var(--slot-card-accent);
+}
+
+/* A session with a deadline prints the deadline's day of the month in place of
+   its letter (the tooltip names the month), on end, read bottom to top like a
+   book's spine. Past
+   the deadline it turns red whatever the block's own colour - being late for
+   a deadline is not the same news as having been put off. */
+.day-slot-letter.is-deadline,
+.slot-card-letter.is-deadline {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.day-slot-letter.is-deadline {
+    align-self: stretch;
+    display: grid;
+    place-items: center;
+}
+
+.day-slot.is-booked .day-slot-letter.is-after-deadline,
+.slot-card:not(.slot-card-empty) .slot-card-letter.is-after-deadline {
+    color: var(--danger);
+}
+
+.slot-card:not(.slot-card-empty) .slot-card-letter.is-after-deadline {
+    background: color-mix(in srgb, var(--danger) 14%, var(--surface));
 }
 
 .day-slot-content {
@@ -3542,6 +3586,11 @@ button.picker-row:hover {
 .planner-day-label {
     font-size: 0.875rem;
     font-weight: 500;
+}
+
+/* Past the project's session deadline: still bookable, only marked late. */
+.planner-day-late .planner-day-label {
+    color: var(--danger);
 }
 
 .planner-day-slots {

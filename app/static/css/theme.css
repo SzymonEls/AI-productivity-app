@@ -690,6 +690,21 @@ hr, .dropdown-divider { border-color: var(--border); }
     color: color-mix(in srgb, var(--warning) 75%, var(--foreground));
 }
 
+/* A button dressed as a badge: it opens the deadline dialog. */
+.project-badge-deadline {
+    cursor: pointer;
+}
+
+.project-badge-deadline:hover {
+    border-color: var(--border-strong);
+}
+
+.project-badge-deadline.is-overdue {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+    background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+    color: var(--danger);
+}
+
 .project-detail-body {
     display: grid;
     gap: 1.5rem;
