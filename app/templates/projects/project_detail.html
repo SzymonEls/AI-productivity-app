@@ -98,6 +98,20 @@
                 <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
+                {% if today_slot %}
+                    {# The other way today's session can end, kept a click further
+                       away than "Mark done" - it marks the whole project. #}
+                    <li>
+                        <button
+                            type="button"
+                            class="dropdown-item{% if not today_session_failed %} text-danger{% endif %}"
+                            data-session-failed
+                            data-project-id="{{ project.id }}"
+                            data-failed="{{ 1 if today_session_failed else 0 }}"
+                        ><i class="fa-regular fa-circle-xmark" aria-hidden="true"></i>{{ "Undo session failed" if today_session_failed else "Mark session failed" }}</button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                {% endif %}
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectSettingsModal"><i class="fa-solid fa-gear" aria-hidden="true"></i>Settings</button>
                 </li>
@@ -139,6 +153,20 @@
         </div>
     </div>
 </header>
+
+{% if project.is_problematic %}
+    {# Red, and first: a session of this project failed, and nothing has been
+       done since. Every session still to come carries the full !! until one of
+       them is ticked done - or the flag is switched off in the settings. #}
+    <div class="alert alert-danger project-archived-note project-problematic-note d-flex justify-content-between align-items-center flex-wrap gap-2" data-problematic-banner>
+        <span>
+            <i class="fa-solid fa-triangle-exclamation me-1" aria-hidden="true"></i>
+            <strong>Problematic project.</strong>
+            A session failed — its sessions are flagged !! until one is marked done.
+        </span>
+        <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#projectSettingsModal">Settings</button>
+    </div>
+{% endif %}
 
 {% if project.is_archived %}
     {# One line, in the amber the schedule already uses for a booked block: the
@@ -496,6 +524,15 @@
                         value="{{ project.session_deadline.isoformat() if project.session_deadline else '' }}"
                         required
                     >
+                    <label class="form-label mt-3" for="sessionDeadlineTime">Hour <span class="text-muted">(optional)</span></label>
+                    <input
+                        type="time"
+                        class="form-control"
+                        id="sessionDeadlineTime"
+                        name="session_deadline_time"
+                        value="{{ project.session_deadline_time.strftime('%H:%M') if project.session_deadline_time else '' }}"
+                    >
+                    <div class="form-text">Printed beside the day on the home page and the schedule.</div>
                 </div>
                 <div class="modal-footer">
                     {% if project.session_deadline %}
@@ -528,6 +565,7 @@
                     <input type="hidden" name="long_goal" value="{{ project.long_goal }}" data-settings-long-goal>
                     <input type="hidden" name="is_private" value="{{ 'true' if project.is_private else 'false' }}" data-settings-private-input>
                     <input type="hidden" name="is_starred" value="{{ 'true' if project.is_starred else 'false' }}" data-settings-starred-input>
+                    <input type="hidden" name="is_problematic" value="{{ 'true' if project.is_problematic else 'false' }}" data-settings-problematic-input>
 
                     <div class="form-check form-switch">
                         <input
@@ -549,6 +587,18 @@
                             {% if project.is_private %}checked{% endif %}
                         >
                         <label class="form-check-label" for="projectPrivate">Private project</label>
+                    </div>
+
+                    <div class="form-check form-switch">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="projectProblematic"
+                            data-settings-problematic-toggle
+                            {% if project.is_problematic %}checked{% endif %}
+                        >
+                        <label class="form-check-label" for="projectProblematic">Problematic (flags its sessions !!)</label>
+                        <div class="form-text">Set by a failed session, cleared by one marked done.</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1497,7 +1547,13 @@
                 const starredInput = settingsForm.querySelector("[data-settings-starred-input]");
                 const starredToggle = settingsForm.querySelector("[data-settings-starred-toggle]");
                 const previousStarred = starredInput?.value === "true";
+                const problematicInput = settingsForm.querySelector("[data-settings-problematic-input]");
+                const problematicToggle = settingsForm.querySelector("[data-settings-problematic-toggle]");
+                const previousProblematic = problematicInput?.value === "true";
 
+                if (problematicInput) {
+                    problematicInput.value = problematicToggle?.checked ? "true" : "false";
+                }
                 if (privateInput) {
                     privateInput.value = privateToggle?.checked ? "true" : "false";
                 }
@@ -1522,6 +1578,12 @@
                         throw new Error(payload.message || "Could not save settings.");
                     }
 
+                    // The banner is the server's to draw: switching the flag
+                    // reloads the page rather than building it here.
+                    if (payload.project.is_problematic !== previousProblematic) {
+                        window.location.reload();
+                        return;
+                    }
                     updateDisplayValues(payload.project);
                     bootstrap.Modal.getInstance(settingsForm.closest(".modal"))?.hide();
                     showAlert(payload.message, "success");
@@ -1537,6 +1599,12 @@
                     }
                     if (starredToggle) {
                         starredToggle.checked = previousStarred;
+                    }
+                    if (problematicInput) {
+                        problematicInput.value = previousProblematic ? "true" : "false";
+                    }
+                    if (problematicToggle) {
+                        problematicToggle.checked = previousProblematic;
                     }
                     showAlert(error.message, "danger");
                 } finally {

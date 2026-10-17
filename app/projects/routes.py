@@ -1,5 +1,5 @@
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -31,6 +31,7 @@ from .slots import (
     calendar_weeks,
     clear_slot,
     deadline_label,
+    deadline_time_label,
     deadline_warning,
     first_booked_day,
     is_after_deadline,
@@ -40,16 +41,19 @@ from .slots import (
     past_calendar_weeks,
     planned_session_labels,
     planned_session_labels_by_project,
-    postponed_level,
+    project_deadline_label,
     project_statistics,
     schedule_window,
     set_block_done,
     set_session_done,
+    set_session_failed,
     shift_bookings_forward,
     slot_candidates,
     slots_for_date,
     today_local,
     unscheduled_projects,
+    warn_level,
+    warn_title,
     weeks_to_cover,
 )
 
@@ -88,15 +92,35 @@ def _block_deadline(booking, day):
     if project is None or project.session_deadline is None:
         return {
             "deadline": None,
+            "deadline_time": "",
             "deadline_label": "",
             "after_deadline": False,
             "shows_deadline": False,
         }
     return {
         "deadline": project.session_deadline,
-        "deadline_label": deadline_label(project.session_deadline),
+        # "14:30" when the deadline has an hour; printed under the day.
+        "deadline_time": deadline_time_label(project),
+        "deadline_label": project_deadline_label(project),
         "after_deadline": is_after_deadline(project, day),
-        "shows_deadline": not booking.is_done,
+        "shows_deadline": not booking.is_done and not booking.is_failed,
+    }
+
+
+def _block_warn(booking):
+    """The ! a booked block carries, the same on the home page and the schedule.
+
+    ``warn_level`` is 2 for every open session of a problematic project and the
+    postponement stage otherwise; ``is_problematic`` rides along so the board's
+    script can redraw the marks after a move without asking the server.
+    """
+    if booking is None:
+        return {"is_failed": False, "is_problematic": False, "warn_level": 0, "warn_title": ""}
+    return {
+        "is_failed": bool(booking.is_failed),
+        "is_problematic": bool(booking.project and booking.project.is_problematic),
+        "warn_level": warn_level(booking),
+        "warn_title": warn_title(booking),
     }
 
 
@@ -122,6 +146,7 @@ def serialize_slot_card(slot, booking, totals, day):
         # time-tracking pages, where seconds matter.
         "tracked_label": _minutes_label(tracked_seconds // 60, zero="0m") if shows_time else "",
         **_block_deadline(booking, day),
+        **_block_warn(booking),
     }
 
 
@@ -393,17 +418,15 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
             ),
             "is_done": bool(booked[slot].is_done) if booked[slot] else False,
             # How often the session has been put off - the count itself, which
-            # the ! spells out, and how far up the colour scale it puts the
-            # block. The level is worked out here rather than in the template so
-            # that the class rendered is always one the stylesheet has a colour
-            # for, however high the count has run.
+            # the board's script needs after a move. How far up the colour scale
+            # the block goes is ``warn_level`` (from _block_warn), worked out here
+            # rather than in the template so that the class rendered is always
+            # one the stylesheet has a colour for, however high the count has run.
             "postponed": booked[slot].postponed_count if booked[slot] else 0,
-            "postponed_level": (
-                postponed_level(booked[slot].postponed_count) if booked[slot] else 0
-            ),
             # C is the spare slot; it stays visibly secondary once it is filled.
             "is_optional": slot not in TIMED_SLOTS,
             **_block_deadline(booked[slot], day),
+            **_block_warn(booked[slot]),
         }
         for slot in SLOTS
     ]
@@ -592,11 +615,7 @@ def _schedule_window_payload(project_id):
         "days": schedule_window(current_user.id, project_id),
         "note": booking_note(current_user.id, project_id),
         "project_title": project.title if project else "",
-        "deadline_label": (
-            deadline_label(project.session_deadline)
-            if project and project.session_deadline
-            else ""
-        ),
+        "deadline_label": project_deadline_label(project),
     }
 
 
@@ -725,6 +744,39 @@ def toggle_session_done(project_id):
         return jsonify({"ok": False, "message": "Failed to update the session."}), 500
 
     return jsonify({"ok": True, "message": message, "is_done": is_done})
+
+
+@projects_bp.route("/<int:project_id>/session-failed", methods=["POST"])
+@login_required
+def toggle_session_failed(project_id):
+    """Mark today's session for this project as failed, or take that back.
+
+    Failing it marks the project problematic, which the page shows as a banner
+    - so the answer says whether it now is, and the page reloads to show it.
+    """
+
+    project = _get_user_project_or_404(project_id)
+    payload = request.get_json(silent=True) or request.form
+    failed = str(payload.get("failed", "1")).lower() not in {"0", "false", "no", "off"}
+
+    ok, message, is_failed = set_session_failed(current_user.id, project.id, today_local(), failed)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    return jsonify(
+        {
+            "ok": True,
+            "message": message,
+            "is_failed": is_failed,
+            "is_problematic": bool(project.is_problematic),
+        }
+    )
 
 
 @projects_bp.route("/schedule/session-done", methods=["POST"])
@@ -1159,20 +1211,26 @@ def set_session_deadline(project_id):
     """
     project = _get_user_project_or_404(project_id)
     deadline = parse_slot_date(request.form.get("session_deadline"))
+    # The hour is optional: left empty, the deadline is the whole day.
+    raw_time = (request.form.get("session_deadline_time") or "").strip()
+    deadline_time = _parse_clock_time(raw_time)
 
     if deadline is None:
         flash("Pick the day the session has to happen by.", "danger")
     elif deadline < today_local():
         flash("A deadline has to be today or later.", "danger")
+    elif raw_time and deadline_time is None:
+        flash("The hour should look like 14:30.", "danger")
     else:
         project.session_deadline = deadline
+        project.session_deadline_time = deadline_time
         try:
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
             flash("Failed to save. The database is unavailable for writing.", "danger")
         else:
-            flash(f"Session deadline set to {deadline_label(deadline)}.", "info")
+            flash(f"Session deadline set to {project_deadline_label(project)}.", "info")
             late = [
                 booking
                 for booking in _undone_bookings_from_today(project.id)
@@ -1193,6 +1251,7 @@ def clear_session_deadline(project_id):
     """Drop the deadline without a session having met it."""
     project = _get_user_project_or_404(project_id)
     project.session_deadline = None
+    project.session_deadline_time = None
     try:
         db.session.commit()
     except SQLAlchemyError:
@@ -1201,6 +1260,14 @@ def clear_session_deadline(project_id):
     else:
         flash("Session deadline removed.", "info")
     return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+def _parse_clock_time(value):
+    """ "14:30" from a time input as a ``time``, or None when it is not one."""
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except (TypeError, ValueError):
+        return None
 
 
 def _undone_bookings_from_today(project_id):
@@ -1282,6 +1349,7 @@ def project_detail(project_id):
         timer_summary=today_project_summary(current_user.id, project.id),
         today_slot=today_booking.slot if today_booking else "",
         today_session_done=bool(today_booking and today_booking.is_done),
+        today_session_failed=bool(today_booking and today_booking.is_failed),
         # What archiving left standing, for the banner to name. Only asked for
         # when there is a banner to put it in.
         planned_sessions=planned_session_labels(current_user.id, project.id)
@@ -1290,9 +1358,7 @@ def project_detail(project_id):
         waiting_for_choices=_waiting_for_choices(project),
         waiting_note_max_length=WAITING_NOTE_MAX_LENGTH,
         today=today_local(),
-        session_deadline_label=deadline_label(project.session_deadline)
-        if project.session_deadline
-        else "",
+        session_deadline_label=project_deadline_label(project),
     )
 
 
@@ -1340,6 +1406,9 @@ def edit_project(project_id):
     starred_value = request.form.get("is_starred")
     is_starred = project.is_starred if starred_value is None else starred_value.lower() in {"1", "true", "on", "yes"}
     is_private = _form_bool("is_private", default=project.is_private)
+    # Switched by hand in the settings; a failed session sets it and a done one
+    # clears it on their own.
+    is_problematic = _form_bool("is_problematic", default=project.is_problematic)
 
     # A navigator.sendBeacon() save fired while the page is being closed: it can't
     # set request headers, so we detect it by a form flag and answer quietly (no
@@ -1360,6 +1429,7 @@ def edit_project(project_id):
         project.long_goal = long_goal
         project.is_starred = is_starred
         project.is_private = is_private
+        project.is_problematic = is_problematic
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -1390,6 +1460,7 @@ def edit_project(project_id):
                         "has_archived_long_goal": bool((project.archived_long_goal or "").strip()),
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
+                        "is_problematic": project.is_problematic,
                         "updated_label": "just now",
                     },
                 }

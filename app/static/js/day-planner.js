@@ -404,13 +404,41 @@
                         payload.is_done ? "Done" : "Mark done";
                     // A session done meets the deadline, and the server has
                     // just cleared it - the badge saying otherwise goes too.
+                    // It also ends a failed session and the project being
+                    // problematic, which the page draws in several places, so
+                    // then it is simpler to load it again.
                     if (payload.is_done) {
+                        const failedItem = document.querySelector("[data-session-failed]");
+                        if (document.querySelector("[data-problematic-banner]") || failedItem?.dataset.failed === "1") {
+                            window.location.reload();
+                            return;
+                        }
                         document.querySelector("[data-session-deadline-badge]")?.remove();
                     }
                 })
                 .catch((error) => window.alert(error.message))
                 .finally(() => {
                     doneButton.disabled = false;
+                });
+            return;
+        }
+
+        // The ⋯ menu's alternative to done. Failing it marks the project
+        // problematic - a banner and a switch the server draws - so the page
+        // is loaded again rather than patched.
+        const failedButton = event.target.closest("[data-session-failed]");
+        if (failedButton) {
+            event.preventDefault();
+            const next = failedButton.dataset.failed === "1" ? 0 : 1;
+            if (next && !window.confirm("Mark today's session as failed? The project will be marked problematic until a session of it is done.")) {
+                return;
+            }
+            failedButton.disabled = true;
+            postJson(`/projects/${failedButton.dataset.projectId}/session-failed`, { failed: next })
+                .then(() => window.location.reload())
+                .catch((error) => {
+                    window.alert(error.message);
+                    failedButton.disabled = false;
                 });
             return;
         }

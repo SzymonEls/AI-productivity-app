@@ -1926,9 +1926,25 @@ button.picker-row:hover {
     --slot-card-accent: var(--slot-optional-accent);
 }
 
+/* The schedule's tint for a session put off - or for every session of a
+   problematic project, which goes straight to the red. After the optional
+   rule for the same reason as on the board: a late C is as late as an A. */
+.slot-card-warn-1:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-late-accent);
+}
+
+.slot-card-warn-2:not(.slot-card-empty) {
+    --slot-card-accent: var(--slot-latest-accent);
+}
+
 /* A finished session goes green, whichever slot it sits in - last one wins. */
 .slot-card-done:not(.slot-card-empty) {
     --slot-card-accent: var(--success);
+}
+
+/* A failed one ended too, the other way. */
+.slot-card-failed:not(.slot-card-empty) {
+    --slot-card-accent: var(--danger);
 }
 
 .slot-done-tag {
@@ -1940,6 +1956,21 @@ button.picker-row:hover {
     font-weight: 600;
     letter-spacing: 0.03em;
     text-transform: uppercase;
+}
+
+.slot-failed-tag {
+    background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+    color: var(--danger);
+}
+
+/* The board's ! on the home card, in the accent the card has just been given. */
+.slot-card-warn {
+    color: var(--slot-card-accent);
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    cursor: help;
 }
 
 .slot-card:not(.slot-card-empty):hover {
@@ -2529,6 +2560,10 @@ button.picker-row:hover {
     --slot-card-accent: var(--success);
 }
 
+.day-slot.is-booked.is-failed {
+    --slot-card-accent: var(--danger);
+}
+
 /* The ! on a block that has been put off, between the title and the block's own
    buttons. It takes the accent the block has just been given, so it deepens with
    the tint rather than repeating it in a third colour, and it doubles where the
@@ -2579,6 +2614,20 @@ button.picker-row:hover {
     place-items: center;
 }
 
+/* A deadline with an hour: the hour stands beside the day as a second column,
+   smaller, rather than under it - one column of "17 14:30" would be taller than
+   the block. */
+.day-slot-letter.is-deadline:has(.deadline-time),
+.slot-card-letter.is-deadline:has(.deadline-time) {
+    width: auto;
+    column-gap: 0;
+}
+
+.deadline-time {
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
 .day-slot.is-booked .day-slot-letter.is-after-deadline,
 .slot-card:not(.slot-card-empty) .slot-card-letter.is-after-deadline {
     color: var(--danger);
@@ -2610,6 +2659,12 @@ button.picker-row:hover {
 
 .day-slot-done {
     color: var(--success);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.day-slot-failed {
+    color: var(--danger);
     font-size: 0.75rem;
     font-weight: 700;
 }

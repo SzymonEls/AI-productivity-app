@@ -107,13 +107,13 @@
         <section class="day-slots-main">
             {% for card in slot_cards %}
                 {% set is_optional = card.slot not in timed_slots %}
-                <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}{% if card.is_done %} slot-card-done{% endif %}">
+                <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}{% if card.is_done %} slot-card-done{% endif %}{% if card.is_failed %} slot-card-failed{% endif %}{% if card.project and card.warn_level %} slot-card-warn-{{ card.warn_level }}{% endif %}">
                     {% if card.shows_deadline %}
                         {# The session's deadline, on end, in place of the letter. #}
                         <div
                             class="slot-card-letter is-deadline{% if card.after_deadline %} is-after-deadline{% endif %}"
                             title="Session deadline {{ card.deadline_label }}{% if card.after_deadline %} — this session is after it{% endif %}"
-                        >{{ card.deadline.day }}</div>
+                        >{{ card.deadline.day }}{% if card.deadline_time %}<span class="deadline-time">{{ card.deadline_time }}</span>{% endif %}</div>
                     {% else %}
                         <div class="slot-card-letter" aria-hidden="true">{{ card.slot }}</div>
                     {% endif %}
@@ -132,6 +132,13 @@
                                    Privacy shows on the project's own page instead, where the plan
                                    and the thoughts stay behind a button. #}
                                 {% if card.is_done %}<span class="slot-done-tag">Done</span>{% endif %}
+                                {% if card.is_failed %}<span class="slot-done-tag slot-failed-tag">Failed</span>{% endif %}
+                                {# The schedule's !, here too: put off, or the
+                                   project marked problematic (which is always
+                                   the full two). #}
+                                {% if card.warn_level %}
+                                    <span class="slot-card-warn" role="img" title="{{ card.warn_title }}" aria-label="{{ card.warn_title }}">{{ "!" * card.warn_level }}</span>
+                                {% endif %}
                             </div>
                             {% if card.plan_heading %}
                                 <p class="slot-card-step mb-0">{{ card.plan_heading }}</p>

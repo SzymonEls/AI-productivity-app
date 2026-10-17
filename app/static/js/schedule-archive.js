@@ -66,6 +66,13 @@
                     throw new Error(payload.message || "Could not update the session.");
                 }
                 paint(button, payload.is_done);
+                // Done is the other way a session ends: the server has dropped
+                // the failed mark, so the block sheds its ✗ and its red.
+                if (payload.is_done) {
+                    const block = button.closest(".day-slot");
+                    block.classList.remove("is-failed");
+                    block.querySelector("[data-slot-failed]")?.remove();
+                }
                 setStatus(payload.message, "success");
             })
             .catch((error) => {

@@ -95,6 +95,22 @@ def deadline_label(day):
     return f"{day.day} {day.strftime('%b')}"
 
 
+def deadline_time_label(project):
+    """The deadline's hour as "14:30", or "" for a deadline that is a whole day."""
+    if project is None or project.session_deadline_time is None:
+        return ""
+    return project.session_deadline_time.strftime("%H:%M")
+
+
+def project_deadline_label(project):
+    """A project's deadline in words: "14 Oct", or "14 Oct 14:30" with an hour."""
+    if project is None or project.session_deadline is None:
+        return ""
+    time_label = deadline_time_label(project)
+    label = deadline_label(project.session_deadline)
+    return f"{label} {time_label}" if time_label else label
+
+
 def is_after_deadline(project, day):
     """Whether a session of ``project`` on ``day`` would come too late.
 
@@ -114,7 +130,7 @@ def deadline_warning(project, day):
         return ""
     return (
         f"{project.title} is now planned after its session deadline "
-        f"({deadline_label(project.session_deadline)})."
+        f"({project_deadline_label(project)})."
     )
 
 
@@ -123,9 +139,47 @@ def meet_deadline(booking):
 
     The deadline is about the next session, so the one that has just happened
     is the one it was for. Reopening the session does not bring it back.
+
+    It is also the way out of being problematic: one session that did happen
+    is what the flag was waiting for, and it is not brought back either.
     """
     if booking.is_done and booking.project is not None:
         booking.project.session_deadline = None
+        booking.project.session_deadline_time = None
+        booking.project.is_problematic = False
+
+
+# What the ! says on hover, on the board and on the home page alike. The board's
+# script spells the same two out after a move (schedule-board.js).
+PROBLEMATIC_TITLE = "Problematic project — a session of it failed"
+
+
+def postponed_title(count):
+    """ "Put off twice — moved to a later day": the number the ! stops counting."""
+    times = "once" if count == 1 else "twice" if count == 2 else f"{count} times"
+    return f"Put off {times} — moved to a later day"
+
+
+def warn_title(booking):
+    """What a session's ! means: its project is problematic, or it was put off."""
+    if booking is not None and booking.project is not None and booking.project.is_problematic:
+        return PROBLEMATIC_TITLE
+    return postponed_title(booking.postponed_count) if booking is not None else ""
+
+
+def warn_level(booking):
+    """How many ! a booked session carries, and how far it is tinted: 0, 1 or 2.
+
+    A problematic project comes first: every one of its sessions still to come
+    gets the full two, however rarely it has been moved. Otherwise it is the
+    postponement count, as before. A session that has ended - done or failed -
+    carries none, since nothing about it is late any more.
+    """
+    if booking is None or booking.is_done or booking.is_failed:
+        return 0
+    if booking.project is not None and booking.project.is_problematic:
+        return MAX_POSTPONED_LEVEL
+    return postponed_level(booking.postponed_count)
 
 
 def slots_for_date(user_id, day):
@@ -610,7 +664,7 @@ def booking_note(user_id, project_id):
     booked = planned_session_labels(user_id, project_id)
     project = Project.query.filter_by(id=project_id, user_id=user_id).first()
     deadline = (
-        f"Session deadline: {deadline_label(project.session_deadline)}."
+        f"Session deadline: {project_deadline_label(project)}."
         if project is not None and project.session_deadline is not None
         else ""
     )
@@ -681,13 +735,11 @@ def slot_candidates(user_id, day, slot):
                 # Bookable all the same; the picker says it would be late, and
                 # asks before booking it.
                 "deadline_warning": (
-                    f"Past its deadline ({deadline_label(project.session_deadline)})"
+                    f"Past its deadline ({project_deadline_label(project)})"
                     if is_after_deadline(project, day)
                     else ""
                 ),
-                "deadline_label": (
-                    deadline_label(project.session_deadline) if project.session_deadline else ""
-                ),
+                "deadline_label": project_deadline_label(project),
             }
         )
 
@@ -771,8 +823,35 @@ def set_session_done(user_id, project_id, day, done):
         return False, "This project has no session today.", False
 
     booking.is_done = bool(done)
+    if booking.is_done:
+        booking.is_failed = False
     meet_deadline(booking)
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
+
+
+def set_session_failed(user_id, project_id, day, failed):
+    """
+    Mark the project's session on ``day`` as failed, or take that back.
+
+    The alternative to done: the session was meant to happen and did not work
+    out. Failing it marks the project problematic; taking it back reopens the
+    session but leaves the flag alone - it is cleared by a session done, or by
+    hand in the project's settings.
+
+    Returns ``(ok, message, is_failed)``; the caller commits.
+    """
+    booking = ProjectDaySlot.query.filter_by(
+        user_id=user_id, project_id=project_id, slot_date=day
+    ).first()
+    if booking is None:
+        return False, "This project has no session today.", False
+
+    booking.is_failed = bool(failed)
+    if booking.is_failed:
+        booking.is_done = False
+        booking.project.is_problematic = True
+        return True, "Session marked failed — the project is now problematic.", True
+    return True, "Session reopened.", False
 
 
 def set_block_done(user_id, day, slot, done):
@@ -793,6 +872,8 @@ def set_block_done(user_id, day, slot, done):
         return False, "That block is free.", False
 
     booking.is_done = bool(done)
+    if booking.is_done:
+        booking.is_failed = False
     meet_deadline(booking)
     return (
         True,
@@ -850,6 +931,7 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         (
             target.project_id,
             target.is_done,
+            target.is_failed,
             postponement_after(target.postponed_count, to_day, from_day),
             target.project.title,
         )
@@ -861,16 +943,18 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         db.session.flush()
 
     # "Done" describes a day's session, so it travels within a day and is
-    # dropped when the booking lands on another date.
+    # dropped when the booking lands on another date. "Failed" is the same kind
+    # of thing and goes the same way.
     source.slot_date = to_day
     source.slot = to_slot
     source.postponed_count = postponement_after(source.postponed_count, from_day, to_day)
     if to_day != from_day:
         source.is_done = False
+        source.is_failed = False
     db.session.flush()
 
     if displaced is not None:
-        project_id, was_done, was_postponed, displaced_title = displaced
+        project_id, was_done, was_failed, was_postponed, displaced_title = displaced
         db.session.add(
             ProjectDaySlot(
                 user_id=user_id,
@@ -878,6 +962,7 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
                 slot_date=from_day,
                 slot=from_slot,
                 is_done=was_done if to_day == from_day else False,
+                is_failed=was_failed if to_day == from_day else False,
                 postponed_count=was_postponed,
             )
         )
@@ -898,7 +983,7 @@ def move_deadline_warning(user_id, from_day, from_slot, to_day, to_slot):
     warnings = []
     for day, slot in ((to_day, to_slot), (from_day, from_slot)):
         booking = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
-        if booking is not None and not booking.is_done:
+        if booking is not None and not booking.is_done and not booking.is_failed:
             warning = deadline_warning(booking.project, day)
             if warning:
                 warnings.append(warning)
@@ -957,7 +1042,9 @@ def shift_bookings_forward(user_id, from_day, days=1):
     staying = set()
     for entry in entries:
         target = (entry.slot_date + timedelta(days=days), entry.slot)
-        if entry.is_done or target in staying:
+        # A failed session ended too, on the day it was meant for - it stays
+        # put the way a done one does.
+        if entry.is_done or entry.is_failed or target in staying:
             staying.add((entry.slot_date, entry.slot))
             continue
 

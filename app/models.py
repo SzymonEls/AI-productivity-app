@@ -162,6 +162,14 @@ class Project(db.Model):
     # CALENDAR_TIMEZONE, like a slot's). Booking past it is allowed with a
     # warning; ticking a session done meets it, and clears it.
     session_deadline = db.Column(db.Date, nullable=True)
+    # An optional hour on that day, for the blocks to print next to it. Only
+    # ever set together with the date; the slots carry no clock time, so being
+    # late is still decided by the day alone.
+    session_deadline_time = db.Column(db.Time, nullable=True)
+    # Set by a session marked failed, cleared by one marked done - or by hand,
+    # in the project's settings. While it is on, every session still to come is
+    # flagged with the full "!!", whatever its postponement count.
+    is_problematic = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -313,6 +321,10 @@ class ProjectDaySlot(db.Model):
     # Marks that day's session as finished. It lives on the slot, not the
     # project, so it resets by itself tomorrow - that is a different row.
     is_done = db.Column(db.Boolean, default=False, nullable=False)
+    # The other way a session can end: it was meant to happen and did not work
+    # out. Never set together with ``is_done``; marking it also marks the
+    # project problematic (``Project.is_problematic``).
+    is_failed = db.Column(db.Boolean, default=False, nullable=False)
     # How often this session has been pushed onto a later day, which is what
     # colours the block on the schedule. It belongs to the booking rather than
     # to the project on purpose: freeing the block and booking the project again

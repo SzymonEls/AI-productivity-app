@@ -73,7 +73,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   server-side.
   `waiting_for_project_id` (with `waiting_for_note`, the milestone) puts the project on hold
   until something in another project is reached — see point 23. `session_deadline` is the last
-  day its next session should happen on — see point 24.
+  day its next session should happen on, `session_deadline_time` an optional hour on it — see
+  point 24. `is_problematic` flags every session still to come with "!!" — see point 25.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -81,6 +82,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **ProjectTimelineItem** — a tile: a project or a note (`item_type` = `"project"`/`"note"`).
 - **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
   `is_done` marks that day's session finished - it lives on the slot, so it clears itself tomorrow.
+  `is_failed` is the other way it can end (see point 25); the two are never set together.
   `postponed_count` is how often the session has been pushed onto a later day, which is what
   colours its block on the schedule - see point 18.
   Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
@@ -368,7 +370,8 @@ The schema in the code matches the latest migration (`20261012_0032`).
     of that: 0, 1 or 2, and the class rendered is the level, so the stylesheet always has a colour
     for it however high the count has run. Past two the extra moves are invisible on the block and
     readable in the tooltip, which says the number — that is where "four times" and "twice", which
-    look identical, differ.
+    look identical, differ. What a block is actually given is `warn_level()`, which puts a
+    problematic project ahead of the count (point 25) and gives a done or failed session nothing.
 
     A swap moves both bookings, in opposite directions, and the displaced row is rebuilt only to
     get past the unique constraint, so its count is carried across by hand — it was moved, not
@@ -616,6 +619,27 @@ The schema in the code matches the latest migration (`20261012_0032`).
     position: `setLetter` in [schedule-board.js](../app/static/js/schedule-board.js) rewrites
     the letter after every move, and puts the plain letter back (`data-slot-letter`) when the
     block is freed or holds a finished session.
+
+    The deadline can carry an hour (`session_deadline_time`, the optional second field in the
+    dialog). The slots have no clock time, so being late is still decided by the day alone; the
+    hour is printed beside the day as a second, smaller column ("17 14:30"), rides on the
+    content as `data-deadline-time`, and is part of `project_deadline_label()` wherever the
+    deadline is named in words. Clearing or meeting the deadline clears the hour with it.
+
+25. **A failed session makes its project problematic.** The ⋯ menu on the project page offers
+    "Mark session failed" beside the "Mark done" button whenever the project has a session today
+    (`toggle_session_failed` → `set_session_failed` in
+    [app/projects/slots.py](../app/projects/slots.py)). It sets `is_failed` on the booking (and
+    clears `is_done`) and `is_problematic` on the project, which then gets a red banner on its
+    page. While a project is problematic **every one of its open sessions carries the full "!!"
+    and the red tint, whatever its postponement count** — `warn_level()` asks about the project
+    first and the count second, and the board's `warnLevel` mirrors it from `data-problematic`.
+    The home page's cards carry the same marks and tint now, from either cause.
+    **Any session of the project ticked done clears the flag** (`meet_deadline`, alongside the
+    deadline); taking the failure back does not. The flag can also be switched by hand in the
+    project's settings (`is_problematic` through `edit_project`). A failed session has ended:
+    it shows ✗ / "Failed", carries no marks, keeps its place on a day off like a done one, and
+    loses the mark when it is moved onto another day.
 
 ## What not to touch (and why)
 
