@@ -20,6 +20,13 @@
     white-space: pre-wrap;
 }
 
+/* Thoughts are optional, so an empty card says so instead of standing blank.
+   :empty holds both as rendered and after a save clears the text. */
+[data-display-value="short_goal"]:empty::before {
+    content: "Nothing written yet.";
+    color: var(--muted-foreground);
+}
+
 .markdown-content > *:last-child {
     margin-bottom: 0;
 }
