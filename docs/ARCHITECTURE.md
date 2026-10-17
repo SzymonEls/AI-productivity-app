@@ -219,7 +219,7 @@ The schema in the code matches the latest migration (`20261012_0032`).
     shows as the "Not scheduled" list on the same page instead.
 
     **The week behind the score is drawn on request.** `health_history` works out the score as it
-    stood on each of the last 8 days (`HEALTH_HISTORY_DAYS`) - each one over the 7 days before it,
+    stood on each of the last 15 days (`HEALTH_HISTORY_DAYS`) - each one over the 7 days before it,
     exactly like today's - from one grouped query, and `GET /health/history`
     ([app/main/routes.py](../app/main/routes.py)) returns it. The widget's **Show** fetches it and
     [health-history.js](../app/static/js/health-history.js) draws the line with a spinner in the

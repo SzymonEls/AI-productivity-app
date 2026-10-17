@@ -262,8 +262,8 @@
                             <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
                         </p>
                     </div>
-                    {# How the score moved over the last week. Worked out only when
-                       asked for: the eight points read two weeks of bookings, and
+                    {# How the score moved over the last two weeks. Worked out only
+                       when asked for: the fifteen points read three weeks of bookings, and
                        the home page is opened far more often than the line is
                        wanted. health-history.js fills it in. #}
                     <div
@@ -272,7 +272,7 @@
                         data-history-url="{{ url_for('main.health_history_data') }}"
                     >
                         <div class="system-health-history-head">
-                            <span class="system-health-part-label">Last week</span>
+                            <span class="system-health-part-label">Last two weeks</span>
                             <button type="button" class="btn btn-outline-secondary btn-sm" data-health-history-load>Show</button>
                         </div>
                         <div class="statistics-loading d-none" data-health-history-loading>

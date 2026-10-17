@@ -1,11 +1,12 @@
 /**
- * The "Last week" line under the System health ring on the home page: the score
- * as it stood on each of the last eight mornings, worked out only when asked for.
+ * The "Last two weeks" line under the System health ring on the home page: the
+ * score as it stood on each of the last fifteen mornings, worked out only when
+ * asked for.
  *
  * The same shape as the Statistics card on a project page (project-statistics.js):
  * the section arrives empty, Show asks the server, a spinner stands in while it
  * counts, and the chart is drawn in place. The points read two weeks of bookings
- * to sum eight overlapping weeks, and the home page is opened far more often than
+ * to sum fifteen overlapping weeks, and the home page is opened far more often than
  * the line is wanted, so the page itself never pays for it.
  *
  * Asking again re-reads rather than redrawing what came back before: a session
@@ -86,7 +87,7 @@
         const root = svg("svg", {
             viewBox: `0 0 ${WIDTH} ${HEIGHT}`,
             role: "img",
-            "aria-label": `System health over the last week: ${first.percent} a week ago, ${last.percent} today.`,
+            "aria-label": `System health over the last two weeks: ${first.percent} two weeks ago, ${last.percent} today.`,
         });
 
         [0, ...THRESHOLDS, 100].forEach((value) => {
@@ -104,8 +105,12 @@
         });
 
         history.forEach((point, index) => {
-            // The day of the month is enough under a week of points; the
-            // tooltip names the weekday.
+            // Every other day, counted back from today so "Today" always has
+            // its label: fifteen would not fit side by side in the sidebar.
+            // The day of the month is enough; the tooltip names the weekday.
+            if ((history.length - 1 - index) % 2) {
+                return;
+            }
             const label = point.label === "Today" ? "Today" : String(Number(point.date.slice(8, 10)));
             root.append(
                 svg(
@@ -190,7 +195,7 @@
 
         const change = last.percent - first.percent;
         const direction = change > 0 ? `Up ${change}` : change < 0 ? `Down ${-change}` : "Unchanged";
-        setNote(`${direction} since a week ago.`, "quiet");
+        setNote(`${direction} since two weeks ago.`, "quiet");
     }
 
     function load() {

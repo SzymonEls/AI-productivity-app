@@ -63,9 +63,9 @@ HEALTH_WINDOW_DAYS = 7
 HEALTH_GOOD_PERCENT = 75
 HEALTH_WARN_PERCENT = 50
 # How far back the health chart on the home page goes: the score as it stood on
-# each of the last eight mornings, so the first point is a full week before
-# today's and the line shows what the week did to it.
-HEALTH_HISTORY_DAYS = 8
+# each of the last fifteen mornings, so the first point is a full two weeks
+# before today's and the line shows what the fortnight did to it.
+HEALTH_HISTORY_DAYS = 15
 
 # How far back the Statistics widget on a project page looks. Three weeks is long
 # enough that one skipped week does not halve the average and short enough that

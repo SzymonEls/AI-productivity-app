@@ -88,7 +88,7 @@ def home():
 def health_history_data():
     """The health chart's points, fetched when the widget's Show is pressed.
 
-    Not part of home(): it reads two weeks of bookings to work out eight
+    Not part of home(): it reads three weeks of bookings to work out fifteen
     overlapping weeks, and the home page is opened far more often than the
     chart is wanted.
     """

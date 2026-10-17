@@ -31,7 +31,7 @@ container, no external services.
   shows what is in them, the first heading of each plan and today's tracked time.
   Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
   were ticked off. Only finished work moves it. Under it, **Show** draws how the score moved over
-  the last week, one point a day, worked out only when asked for.
+  the last two weeks, one point a day, worked out only when asked for.
 - **Schedule** — a month of day sheets, each showing its A/B/C blocks in the same colours as
   the home page: dashed grey while free, amber once booked, green when the session is done. The
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
