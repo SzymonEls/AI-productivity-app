@@ -82,11 +82,62 @@
         return `Remove the thought \u201c${body}\u201d from the inbox`;
     }
 
+    /* A link in a thought: http(s):// or a bare www., up to the next space. The
+       full stop or bracket a sentence ends on is not part of the address. */
+    const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+    const TRAILING = ".,;:!?'\"]}";
+    // Long addresses are shortened on the page; the tooltip has all of it.
+    const MAX_LINK_LABEL = 40;
+
+    /* Fill a row's text with the thought, its addresses turned into links.
+       Built from text nodes and <a>s rather than HTML, so nothing typed into
+       the inbox is ever read as markup - and only http(s) is linked, so a
+       "javascript:" in a thought stays text. */
+    function renderBody(element, body) {
+        const parts = [];
+        let last = 0;
+        for (const match of body.matchAll(URL_PATTERN)) {
+            let address = match[0];
+            // One character at a time from the end. A ")" stays when it closes
+            // a bracket the address itself opened, as in a Wikipedia link.
+            for (;;) {
+                const end = address.slice(-1);
+                const unbalanced =
+                    end === ")" && address.split("(").length < address.split(")").length;
+                if (!end || (!TRAILING.includes(end) && !unbalanced)) {
+                    break;
+                }
+                address = address.slice(0, -1);
+            }
+            if (!address) {
+                continue;
+            }
+            if (match.index > last) {
+                parts.push(document.createTextNode(body.slice(last, match.index)));
+            }
+            const link = document.createElement("a");
+            link.href = /^https?:\/\//i.test(address) ? address : `https://${address}`;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            link.className = "inbox-item-link";
+            const label = address.replace(/^https?:\/\//i, "");
+            link.textContent =
+                label.length > MAX_LINK_LABEL ? `${label.slice(0, MAX_LINK_LABEL - 1)}\u2026` : label;
+            link.title = address;
+            parts.push(link);
+            last = match.index + address.length;
+        }
+        if (last < body.length) {
+            parts.push(document.createTextNode(body.slice(last)));
+        }
+        element.replaceChildren(...parts);
+    }
+
     function buildRow(item) {
         const fragment = template.content.cloneNode(true);
         const row = fragment.querySelector("[data-inbox-item]");
         row.dataset.itemId = String(item.id);
-        row.querySelector("[data-inbox-text]").textContent = item.body;
+        renderBody(row.querySelector("[data-inbox-text]"), item.body);
         row.querySelector("[data-inbox-remove]").setAttribute("aria-label", removeLabel(item.body));
         return row;
     }
@@ -155,6 +206,12 @@
     }
 
     if (list) {
+        // The page renders the thoughts as plain text; their links are made
+        // here, by the same code that makes them for a thought just added.
+        list.querySelectorAll("[data-inbox-text]").forEach((element) => {
+            renderBody(element, element.textContent);
+        });
+
         list.addEventListener("click", (event) => {
             const remove = event.target.closest("[data-inbox-remove]");
             if (!remove) {

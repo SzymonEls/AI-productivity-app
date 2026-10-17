@@ -2165,6 +2165,12 @@ button.picker-row:hover {
     white-space: pre-wrap;
 }
 
+.inbox-item-link {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
 .inbox-status {
     color: var(--muted-foreground);
     font-size: 0.8rem;
