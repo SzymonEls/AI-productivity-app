@@ -210,7 +210,7 @@
         <div class="switcher-panel" data-switcher-panel>
             <div class="switcher-search">
                 <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-                <input type="text" data-switcher-input placeholder="Search projects…" aria-label="Search projects" autocomplete="off">
+                <input type="text" data-switcher-input placeholder="Search projects…" aria-label="Search projects" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go">
             </div>
             <div class="switcher-results" data-switcher-results>
                 {% for group in nav_project_groups %}
@@ -553,7 +553,11 @@
                 overlay.classList.add("is-open");
                 input.value = "";
                 filter();
-                requestAnimationFrame(() => input.focus());
+                // Right here, inside the tap or the ⌘K that opened it, not a
+                // frame later: iOS - the iPad PWA above all - only lets a script
+                // focus an input from within the user's own gesture, and quietly
+                // refuses it (no caret, no keyboard) once that has returned.
+                input.focus({ preventScroll: true });
             };
 
             const close = () => {
