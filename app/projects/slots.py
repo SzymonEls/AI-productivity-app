@@ -54,14 +54,18 @@ MAX_POSTPONED_LEVEL = 2
 # Planning deliberately stays out of it: every project is meant to have a next
 # session booked, so having done that is the baseline rather than an achievement,
 # and paying for it put a floor under the score that a week of missed sessions
-# could not break through. It is reported alongside instead, as a state to be in
-# or out of - see the planning keys in system_health().
+# could not break through. The "Not scheduled" list on the home page is where
+# planning shows.
 # The window ends yesterday. Today is still being worked on, and counting its
 # bookings would open every morning with a drop that the day then undoes.
 HEALTH_WINDOW_DAYS = 7
 # Below these the ring turns amber and then red.
 HEALTH_GOOD_PERCENT = 75
 HEALTH_WARN_PERCENT = 50
+# How far back the health chart on the home page goes: the score as it stood on
+# each of the last eight mornings, so the first point is a full week before
+# today's and the line shows what the week did to it.
+HEALTH_HISTORY_DAYS = 8
 
 # How far back the Statistics widget on a project page looks. Three weeks is long
 # enough that one skipped week does not halve the average and short enough that
@@ -386,64 +390,99 @@ def session_counts_since(user_id, first_day, last_day):
     return booked or 0, done or 0
 
 
-def system_health(user_id, unplanned=None):
+def _health_percent(booked, done):
+    # A week with nothing booked scores zero rather than full marks: there is no
+    # completion rate to read off it, and an empty week is not a healthy one.
+    return round(done / booked * 100) if booked else 0
+
+
+def _health_level(percent):
+    if percent >= HEALTH_GOOD_PERCENT:
+        return "good"
+    if percent >= HEALTH_WARN_PERCENT:
+        return "warn"
+    return "bad"
+
+
+def system_health(user_id):
     """
-    One 0-100 figure for "is the work getting done", plus the planning state.
+    One 0-100 figure for "is the work getting done".
 
     The score is the sessions alone: of the sessions booked over the week before
     today, how many were ticked off. Only booked slots count, in A, B and C
     alike - a slot nobody filled was never a session to miss, so leaving one
     empty neither helps nor hurts. Today is left out entirely, so the score only
-    falls in the morning if yesterday was left unfinished.
-
-    Planning rides along but scores nothing. The ``planning_*` keys say whether
-    every active project has a next session booked - the "Not scheduled" list
-    read the other way round - and the caller shows that as a state rather than
-    folding it into the number; see the note on HEALTH_WINDOW_DAYS.
-
-    ``unplanned`` takes the list the caller already has (the home page renders
-    it) so the same query does not run twice; leave it out and it is fetched.
+    falls in the morning if yesterday was left unfinished. Planning scores
+    nothing; see the note on HEALTH_WINDOW_DAYS.
     """
     today = today_local()
     yesterday = today - timedelta(days=1)
     booked, done = session_counts_since(
         user_id, yesterday - timedelta(days=HEALTH_WINDOW_DAYS - 1), yesterday
     )
-    # A week with nothing booked scores zero rather than full marks: there is no
-    # completion rate to read off it, and an empty week is not a healthy one.
-    percent = round(done / booked * 100) if booked else 0
-
-    if percent >= HEALTH_GOOD_PERCENT:
-        level = "good"
-    elif percent >= HEALTH_WARN_PERCENT:
-        level = "warn"
-    else:
-        level = "bad"
-
-    if unplanned is None:
-        unplanned = unscheduled_projects(user_id)
-    unplanned_count = len(unplanned)
-    # Counted on the same terms as the list: a waiting project is neither
-    # planned nor unplanned, so it stays out of both sides of the ring.
-    active_count = Project.query.filter_by(
-        user_id=user_id, is_archived=False, waiting_for_project_id=None
-    ).count()
-    planned_count = max(active_count - unplanned_count, 0)
+    percent = _health_percent(booked, done)
 
     return {
         "percent": percent,
-        "level": level,
+        "level": _health_level(percent),
         "window_days": HEALTH_WINDOW_DAYS,
         "done_sessions": done,
         "booked_sessions": booked,
-        # An empty project list has nothing left to plan, so it reads as settled
-        # rather than as a warning - the same way the "Not scheduled" list above
-        # it says every project is planned when there is nothing in it.
-        "planning_ok": not unplanned_count,
-        "planned_projects": planned_count,
-        "active_projects": active_count,
-        "unplanned_projects": unplanned_count,
     }
+
+
+def health_history(user_id, days=HEALTH_HISTORY_DAYS):
+    """The health score as it stood on each of the last ``days`` days, oldest first.
+
+    Each day's score is worked out the way ``system_health`` works out today's:
+    the week of sessions before that day. It is read off the bookings as they
+    are now, so a session ticked off late counts on the days after it was due,
+    the same as it does in today's score.
+
+    One query for the whole stretch, counted per day; the overlapping weeks are
+    then summed here rather than asked for one by one.
+    """
+    today = today_local()
+    first_day = today - timedelta(days=days - 1)
+    window_start = first_day - timedelta(days=HEALTH_WINDOW_DAYS)
+    yesterday = today - timedelta(days=1)
+
+    rows = (
+        db.session.query(
+            ProjectDaySlot.slot_date,
+            func.count(ProjectDaySlot.id),
+            func.count(case((ProjectDaySlot.is_done.is_(True), 1))),
+        )
+        .filter(
+            ProjectDaySlot.user_id == user_id,
+            ProjectDaySlot.slot_date >= window_start,
+            ProjectDaySlot.slot_date <= yesterday,
+        )
+        .group_by(ProjectDaySlot.slot_date)
+        .all()
+    )
+    per_day = {slot_date: (booked, done) for slot_date, booked, done in rows}
+
+    history = []
+    for offset in range(days):
+        day = first_day + timedelta(days=offset)
+        booked = done = 0
+        for back in range(1, HEALTH_WINDOW_DAYS + 1):
+            day_booked, day_done = per_day.get(day - timedelta(days=back), (0, 0))
+            booked += day_booked
+            done += day_done
+        percent = _health_percent(booked, done)
+        history.append(
+            {
+                "date": day.isoformat(),
+                "label": "Today" if day == today else day.strftime("%a %d"),
+                "percent": percent,
+                "level": _health_level(percent),
+                "booked": booked,
+                "done": done,
+            }
+        )
+    return history
 
 
 def project_statistics(user_id, project_id, weeks=STATISTICS_WEEKS):

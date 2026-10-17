@@ -2307,42 +2307,84 @@ button.picker-row:hover {
     white-space: nowrap;
 }
 
-/* The planning ring: a second, smaller circle that is only ever ok or not ok.
-   It carries its own accent rather than the score's - a week of missed sessions
-   says nothing about whether the next ones are booked - and its circle is always
-   whole, so it reads as a state rather than as a second percentage. */
-.system-health-planning {
-    --planning-accent: var(--success);
-    position: relative;
-    flex: none;
+/* The week behind the score, under the ring: a line of eight mornings, drawn
+   by health-history.js once Show is pressed. */
+.system-health-history {
     display: grid;
-    place-items: center;
-    /* As wide as the score's gauge, so the smaller circle it draws still sits
-       under the middle of that one; only the height follows the circle. */
-    width: 5.25rem;
-    height: 2.75rem;
-    color: var(--planning-accent);
+    gap: 0.5rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.85rem;
 }
 
-.system-health-planning.is-warn {
-    --planning-accent: var(--warning);
+.system-health-history-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
 }
 
-.system-health-planning svg:first-child {
-    width: 2.75rem;
-    height: 2.75rem;
+.system-health-chart svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
 }
 
-.system-health-planning-ring {
-    fill: color-mix(in srgb, var(--planning-accent) 10%, transparent);
-    stroke: var(--planning-accent);
-    /* Thinner than the score's ring, in proportion to the smaller radius. */
-    stroke-width: 5;
+/* Recessive: the 50 and 75 lines are where the ring changes colour, so they
+   are what a point is read against; the rest of the frame stays out of it. */
+.health-chart-grid {
+    stroke: var(--border);
+    stroke-width: 1;
 }
 
-.system-health-planning .app-icon {
-    position: absolute;
-    stroke-width: 2.5;
+.health-chart-threshold {
+    stroke: var(--border-strong);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+}
+
+.health-chart-axis {
+    fill: var(--muted-foreground);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+.health-chart-line {
+    fill: none;
+    stroke: var(--foreground);
+    stroke-opacity: 0.55;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* A point takes the colour the ring would have had that morning, with a ring
+   of the card's surface so it stands off the line. */
+.health-chart-point {
+    stroke: var(--surface);
+    stroke-width: 2;
+}
+
+.health-chart-point.is-good { fill: var(--success); }
+.health-chart-point.is-warn { fill: var(--warning); }
+.health-chart-point.is-bad { fill: var(--danger); }
+
+.health-chart-value {
+    fill: var(--foreground);
+    font-size: 10px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.health-chart-hit {
+    fill: transparent;
+    cursor: default;
+}
+
+.health-chart-hit:hover + .health-chart-point,
+.health-chart-hit:focus + .health-chart-point {
+    stroke: var(--foreground);
 }
 
 /* Schedule page — three weeks of calendar sheets -------------------- */

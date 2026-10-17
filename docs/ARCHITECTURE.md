@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and the three-week figures behind the Statistics card on a project page. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its week of history, and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
@@ -213,14 +213,19 @@ The schema in the code matches the latest migration (`20261012_0032`).
     the morning only when yesterday was left unfinished, and a week with nothing booked scores zero
     rather than dividing by zero.
 
-    **Planning is reported, not scored.** Whether every active project has a next session booked
-    comes back from the same call (`planning_ok` and the counts beside it) and the home page shows it
-    as a second, smaller ring beside the score: green with a check when every project is booked ahead, amber with a cross when some are not. It used to be 40% of the number, which was wrong twice
-    over: having booked ahead is the baseline rather than an achievement, and because it is normally
-    complete it put a permanent floor under the score that no amount of missed sessions could break
-    through. Read the other way round it is the "Not scheduled" list on the same page, so the two
-    always agree. A project waiting for another one (point 23) is on neither side of the ring,
-    for the same reason it is not on the list.
+    **Planning is not scored.** It used to be 40% of the number, which was wrong twice over: having
+    booked ahead is the baseline rather than an achievement, and because it is normally complete it
+    put a permanent floor under the score that no amount of missed sessions could break through. It
+    shows as the "Not scheduled" list on the same page instead.
+
+    **The week behind the score is drawn on request.** `health_history` works out the score as it
+    stood on each of the last 8 days (`HEALTH_HISTORY_DAYS`) - each one over the 7 days before it,
+    exactly like today's - from one grouped query, and `GET /health/history`
+    ([app/main/routes.py](../app/main/routes.py)) returns it. The widget's **Show** fetches it and
+    [health-history.js](../app/static/js/health-history.js) draws the line with a spinner in the
+    meantime, the way the Statistics card on a project page works: the home page itself never pays
+    for it. It reads the bookings as they are now, so a session ticked off late raises the past
+    points too.
 
 13. **The API answers a click, the web page answers a form — so their `start` rules differ.**
     `POST /time-tracking/projects/<id>/start` refuses with a 409 while another project's timer
@@ -559,8 +564,7 @@ The schema in the code matches the latest migration (`20261012_0032`).
     type. A pick only types the line into the field; the text is what gets saved. They are fetched
     rather than rendered into the page because they are another project's plan, and a private
     one's are left out while safe mode is on.
-    What it changes is the home page's "Not scheduled" list and the planning ring beside
-    the health score (`unscheduled_projects` and `system_health` in
+    What it changes is the home page's "Not scheduled" list (`unscheduled_projects` in
     [app/projects/slots.py](../app/projects/slots.py)), and the picker behind an empty block
     (`slot_candidates`): there is no next session to plan for a project until what it waits for
     has happened. Unlike archiving (point 15) it does not take the project off the timeline or

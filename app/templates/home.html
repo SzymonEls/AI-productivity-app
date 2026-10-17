@@ -233,10 +233,8 @@
             <div class="dashboard-section system-health system-health-{{ health.level }}">
                 <h2 class="h6 mb-1">System health</h2>
                 <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done.</p>
-                {# A row per ring, one under the other, each next to its own
-                   numbers. The two circles share a centre line: the planning one
-                   is drawn smaller but sits in a box as wide as the score's, so
-                   both rows of text start at the same place. #}
+                {# The ring and its numbers, and under them the week that led
+                   up to it, drawn on request. #}
                 <div class="system-health-body">
                     <div class="system-health-row">
                         {# pathLength normalises the ring to 100 units, so the dash is
@@ -264,26 +262,25 @@
                             <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
                         </p>
                     </div>
-                    <div class="system-health-row">
-                        {# Planning is not in the score - having every project booked
-                           ahead is the baseline, not something to be paid for - so it
-                           gets a ring of its own, smaller and with no percentage in
-                           it: the state is either settled or it is not. The circle is
-                           always whole, so nobody reads it as a second score. #}
-                        <div
-                            class="system-health-planning {{ 'is-ok' if health.planning_ok else 'is-warn' }}"
-                            role="img"
-                            aria-label="{% if health.planning_ok %}Every project has a next session planned{% else %}{{ health.unplanned_projects }} of {{ health.active_projects }} projects have no next session planned{% endif %}"
-                        >
-                            <svg viewBox="0 0 44 44" aria-hidden="true">
-                                <circle class="system-health-planning-ring" cx="22" cy="22" r="18" />
-                            </svg>
-                            {{ icon("check" if health.planning_ok else "x", 18) }}
+                    {# How the score moved over the last week. Worked out only when
+                       asked for: the eight points read two weeks of bookings, and
+                       the home page is opened far more often than the line is
+                       wanted. health-history.js fills it in. #}
+                    <div
+                        class="system-health-history"
+                        data-health-history
+                        data-history-url="{{ url_for('main.health_history_data') }}"
+                    >
+                        <div class="system-health-history-head">
+                            <span class="system-health-part-label">Last week</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-health-history-load>Show</button>
                         </div>
-                        <p class="system-health-row-text">
-                            <span class="system-health-part-label">Planned ahead</span>
-                            <span class="system-health-part-value">{{ health.planned_projects }} / {{ health.active_projects }}</span>
-                        </p>
+                        <div class="statistics-loading d-none" data-health-history-loading>
+                            <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                            <span>Working it out&hellip;</span>
+                        </div>
+                        <div class="system-health-chart d-none" data-health-history-chart></div>
+                        <p class="statistics-note mb-0 d-none" data-health-history-note></p>
                     </div>
                 </div>
             </div>
@@ -304,6 +301,7 @@
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inbox.js') }}"></script>
+<script src="{{ url_for('static', filename='js/health-history.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-notes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
 <script src="{{ url_for('static', filename='js/calendar-feeds.js') }}"></script>

@@ -1,11 +1,12 @@
-from flask import Blueprint, current_app, redirect, render_template, send_from_directory, url_for
-from flask_login import current_user
+from flask import Blueprint, current_app, jsonify, redirect, render_template, send_from_directory, url_for
+from flask_login import current_user, login_required
 
 from ..integrations.feeds import events_by_date, has_stale_feeds
 from ..projects.day_notes import notes_from
 from ..projects.slots import (
     SLOTS,
     TIMED_SLOTS,
+    health_history,
     slots_for_date,
     system_health,
     today_local,
@@ -76,12 +77,22 @@ def home():
         timed_slots=TIMED_SLOTS,
         unplanned_projects=unplanned,
         project_last_session_labels=project_last_session_labels(current_user.id, unplanned),
-        # The list is passed in so the health figure reuses it instead of
-        # asking for the unscheduled projects a second time.
-        health=system_health(current_user.id, unplanned),
+        health=system_health(current_user.id),
         inbox_items=inbox_items,
         inbox_projects=inbox_projects,
     )
+
+
+@main_bp.route("/health/history")
+@login_required
+def health_history_data():
+    """The health chart's points, fetched when the widget's Show is pressed.
+
+    Not part of home(): it reads two weeks of bookings to work out eight
+    overlapping weeks, and the home page is opened far more often than the
+    chart is wanted.
+    """
+    return jsonify({"ok": True, "history": health_history(current_user.id)})
 
 
 @main_bp.route("/manifest.webmanifest")
