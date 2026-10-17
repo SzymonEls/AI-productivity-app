@@ -77,7 +77,10 @@
             data-task-add
             title="Add a task to {{ list_date.strftime('%d %b') }}"
         >{{ icon("plus", size=12) }}<span class="day-note-add-label">Task</span></button>
-        <div class="task-editor" data-task-editor hidden>
+        {# A form, not a bare input: a phone's keyboard doesn't always report
+           its Enter as a keydown "Enter" (Android's says "Unidentified" while
+           a word is being suggested), but it always submits the form. #}
+        <form class="task-editor" data-task-editor hidden>
             <input
                 type="text"
                 class="day-note-input"
@@ -85,7 +88,8 @@
                 maxlength="{{ task_title_max_length }}"
                 placeholder="Task for {{ list_date.strftime('%d %b') }}"
                 aria-label="New task for {{ list_date.strftime('%d %b') }}"
+                enterkeyhint="enter"
             >
-        </div>
+        </form>
     </section>
 {% endmacro %}

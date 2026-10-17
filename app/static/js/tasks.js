@@ -365,7 +365,7 @@
             add.innerHTML = `${PLUS_ICON}<span class="day-note-add-label">Task</span>`;
             add.title = date ? `Add a task to ${dayLabel(date)}` : "Add a task with no day";
 
-            const editor = document.createElement("div");
+            const editor = document.createElement("form");
             editor.className = "task-editor";
             editor.setAttribute("data-task-editor", "");
             editor.hidden = true;
@@ -376,6 +376,7 @@
             input.maxLength = maxLength;
             input.placeholder = date ? `Task for ${dayLabel(date)}` : "Task with no day";
             input.setAttribute("aria-label", input.placeholder);
+            input.enterKeyHint = "enter";
             editor.append(input);
             section.append(add, editor);
         }
@@ -1067,13 +1068,10 @@
         if (!newTask && !editing) {
             return;
         }
-        if (event.key === "Enter") {
+        // A new task's Enter is left to its form's submit, below.
+        if (event.key === "Enter" && editing) {
             event.preventDefault();
-            if (newTask) {
-                submitAdd(newTask.closest("[data-task-list]"));
-            } else {
-                saveTitle(editing);
-            }
+            saveTitle(editing);
         } else if (event.key === "Escape") {
             event.stopPropagation();
             if (newTask) {
@@ -1081,6 +1079,14 @@
             } else {
                 closeTitle(editing);
             }
+        }
+    });
+
+    document.addEventListener("submit", (event) => {
+        const editor = event.target.closest("[data-task-editor]");
+        if (editor) {
+            event.preventDefault();
+            submitAdd(editor.closest("[data-task-list]"));
         }
     });
 
