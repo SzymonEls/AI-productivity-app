@@ -1293,8 +1293,10 @@ def create_project():
         long_goal = request.form.get("long_goal", "").strip()
         is_private = _form_bool("is_private", default=False)
 
-        if not title or not short_goal or not long_goal:
-            flash("Please complete all project fields.", "danger")
+        # Only the name is required: the thoughts and the plan can be written
+        # later, on the project's page.
+        if not title:
+            flash("Please give the project a name.", "danger")
         else:
             project = Project(
                 title=title,
@@ -1416,8 +1418,9 @@ def edit_project(project_id):
     wants_json = _wants_json_response()
     is_beacon = request.form.get("_beacon") == "1"
 
-    if not title or not short_goal:
-        error_message = "Please complete all project fields."
+    # As on creation, the name is the one thing a project cannot be without.
+    if not title:
+        error_message = "Please give the project a name."
         if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
         if is_beacon:
