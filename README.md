@@ -30,8 +30,11 @@ container, no external services.
 - **Day slots** — every day has slots A, B and an optional C, one project each. The home page
   shows what is in them, the first heading of each plan and today's tracked time.
   Below that sits a health ring, 0 to 100: how many of the booked sessions in the week before today
-  were ticked off. Only finished work moves it. Under it, **Show** draws how the score moved over
-  the last two weeks, one point a day, worked out only when asked for.
+  were ticked off. Only finished work moves it. Beside it sits a second ring for **mood**: the
+  button left of **Inbox** rates the day from 1 to 5 — once a day, and pressing it again changes
+  that day's rating — and the ring shows the average over the last 7 days. Under both, **Show**
+  draws how the score and the mood average moved over the last two weeks, as two lines on one
+  chart, worked out only when asked for.
 - **Schedule** — a month of day sheets, each showing its A/B/C blocks in the same colours as
   the home page: dashed grey while free, amber once booked, green when the session is done. The
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a

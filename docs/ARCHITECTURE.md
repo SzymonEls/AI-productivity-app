@@ -24,14 +24,15 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its week of history, and the three-week figures behind the Statistics card on a project page. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its two weeks of history, and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
+| [app/mood/](../app/mood/) | The daily mood: rating today from 1 to 5 (`POST /mood`, one row per day, rewritten when rated again), and the 7-day average the home page and the health chart read - see point 26. |
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
-| [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score, the inbox widget) + PWA files (manifest, service worker). |
+| [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score and mood average, the inbox widget) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline, waiting for another project and its diagram. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
 | [app/templates/](../app/templates/), [app/static/](../app/static/) | HTML views (Jinja) and CSS/JS. |
@@ -112,6 +113,10 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   the one that wrote it — a plain integer, not a foreign key. It belongs to the user, never to
   a project or a slot, and a day takes as many as get written. See point 21.
 
+- **MoodRating** — how one day felt: `rating_date` (a day in `CALENDAR_TIMEZONE`) and `score`,
+  `MOOD_MIN`…`MOOD_MAX` (1…5). Unique on `(user_id, rating_date)`, so rating a day again rewrites
+  its score instead of adding a row. It belongs to the user, never to a project. See point 26.
+
 - **CalendarFeed** — one subscribed iCal URL, plus the last copy of it that was read
   (`cached_ics`) and when. `checked_at` is every attempt, `fetched_at` only the ones that worked:
   the first keeps a dead URL from being retried on every page render, the second is what the page
@@ -121,7 +126,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
   (point 17).
 
-The schema in the code matches the latest migration (`20261012_0032`).
+The schema in the code matches the latest migration (`20261027_0034`).
 
 ## Responsibility boundaries
 
@@ -644,6 +649,22 @@ The schema in the code matches the latest migration (`20261012_0032`).
     project's settings (`is_problematic` through `edit_project`). A failed session has ended:
     it shows ✗ / "Failed", carries no marks, keeps its place on a day off like a done one, and
     loses the mark when it is moved onto another day.
+
+26. **Mood is rated once a day and read as a week.** The button left of **Inbox** on the home
+    page opens a dialog of five numbers; picking one posts it to `POST /mood`
+    ([app/mood/routes.py](../app/mood/routes.py)) and closes the dialog, and
+    [mood.js](../app/static/js/mood.js) redraws the button and the ring from the answer. The day
+    has one `MoodRating`, so pressing the button again later opens on the score already given and
+    picking another rewrites it. The System health widget shows the average over the last 7 days
+    (`MOOD_WINDOW_DAYS`) as a second ring — **ending today**, unlike the sessions score (point 12):
+    a mood rated this morning is already what the day felt like. Days nobody rated are left out
+    of the average rather than counted as anything. The ring is always the primary colour, not a
+    band's, because that colour is what tells the mood line apart on the chart.
+    `GET /health/history` adds the mood average as it stood on each of the 15 days (`mood`,
+    `mood_days`, `mood_score`; `mood` is None for a week with nothing rated, and the line breaks
+    there). The chart lays the 1–5 scale over the 0–100 one so that 1, 3, 4 and 5 fall on the
+    0, 50, 75 and 100 lines — one set of gridlines reads for both, with the mood scale on the
+    right-hand axis — and today's value of each line sits in the legend instead of on the plot.
 
 ## What not to touch (and why)
 

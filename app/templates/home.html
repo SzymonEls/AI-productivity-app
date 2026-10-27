@@ -80,6 +80,19 @@
                 {# Here rather than on the inbox widget itself: the widget is gone
                    whenever the inbox is empty, which is exactly when you are most
                    likely to want to put something in it. #}
+                {# Today's mood, one rating a day: the dialog opens on the score
+                   already given, and picking another rewrites it. #}
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary btn-sm mood-button"
+                    data-mood-open
+                    data-bs-toggle="modal"
+                    data-bs-target="#moodModal"
+                    aria-label="{% if mood.today %}Today's mood: {{ mood.today }} out of 5. Change it{% else %}Rate today's mood{% endif %}"
+                >
+                    <span class="mood-button-dot{% if not mood.today %} is-empty{% endif %}" aria-hidden="true"></span>
+                    <span data-mood-button-text>{% if mood.today %}Mood {{ mood.today }}{% else %}Mood{% endif %}</span>
+                </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm inbox-add" data-inbox-add>
                     {{ icon("plus", 14) }} Inbox
                 </button>
@@ -232,7 +245,7 @@
 
             <div class="dashboard-section system-health system-health-{{ health.level }}">
                 <h2 class="h6 mb-1">System health</h2>
-                <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done.</p>
+                <p class="text-muted small mb-3">How many of the sessions booked over the {{ health.window_days }} days before today were done, and the average mood of the last {{ mood.window_days }} days.</p>
                 {# The ring and its numbers, and under them the week that led
                    up to it, drawn on request. #}
                 <div class="system-health-body">
@@ -260,6 +273,37 @@
                         <p class="system-health-row-text">
                             <span class="system-health-part-label">Sessions done</span>
                             <span class="system-health-part-value">{{ health.done_sessions }} / {{ health.booked_sessions }}</span>
+                        </p>
+                    </div>
+                    {# The mood ring is always the mood colour rather than a band's:
+                       it is the same colour as the mood line on the chart below,
+                       which is how the two are told apart there. mood.js redraws
+                       it when today's rating changes. #}
+                    <div class="system-health-row system-health-mood" data-mood-summary>
+                        <div
+                            class="system-health-gauge"
+                            role="img"
+                            data-mood-gauge
+                            aria-label="{% if mood.average is not none %}Average mood {{ '%.1f'|format(mood.average) }} out of 5{% else %}No mood rated in the last {{ mood.window_days }} days{% endif %}"
+                        >
+                            <svg viewBox="0 0 84 84" aria-hidden="true">
+                                <circle class="system-health-track" cx="42" cy="42" r="36" pathLength="100" />
+                                <circle
+                                    class="system-health-value"
+                                    cx="42"
+                                    cy="42"
+                                    r="36"
+                                    pathLength="100"
+                                    style="stroke-dasharray: {{ mood.percent }} 100"
+                                    data-mood-ring
+                                    {% if mood.average is none %}hidden{% endif %}
+                                />
+                            </svg>
+                            <span class="system-health-score" data-mood-average>{% if mood.average is not none %}{{ '%.1f'|format(mood.average) }}{% else %}&ndash;{% endif %}</span>
+                        </div>
+                        <p class="system-health-row-text">
+                            <span class="system-health-part-label">Mood</span>
+                            <span class="system-health-part-value" data-mood-days>{{ mood.rated_days }} / {{ mood.window_days }} days</span>
                         </p>
                     </div>
                     {# How the score moved over the last two weeks. Worked out only
@@ -296,12 +340,45 @@
         </aside>
     </div>
 </div>
+
+{# The mood dialog. Each number saves the moment it is picked and closes the
+   dialog, so there is no Save to forget; the one already picked today is
+   marked when it opens again. #}
+<div class="modal fade" id="moodModal" tabindex="-1" aria-labelledby="moodModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered mood-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title h5" id="moodModalTitle">How is today?</h2>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">One rating a day &mdash; pick again later to change it.</p>
+                <div class="mood-scale" role="radiogroup" aria-labelledby="moodModalTitle">
+                    {% for value, word in [(1, "Awful"), (2, "Bad"), (3, "Okay"), (4, "Good"), (5, "Great")] %}
+                        <button
+                            type="button"
+                            class="mood-option{% if mood.today == value %} is-selected{% endif %}"
+                            role="radio"
+                            aria-checked="{{ 'true' if mood.today == value else 'false' }}"
+                            data-mood-score="{{ value }}"
+                        >
+                            <span class="mood-option-number">{{ value }}</span>
+                            <span class="mood-option-word">{{ word }}</span>
+                        </button>
+                    {% endfor %}
+                </div>
+                <p class="mood-status mb-0" data-mood-status role="status"></p>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/inbox.js') }}"></script>
 <script src="{{ url_for('static', filename='js/health-history.js') }}"></script>
+<script src="{{ url_for('static', filename='js/mood.js') }}"></script>
 <script src="{{ url_for('static', filename='js/day-notes.js') }}"></script>
 <script src="{{ url_for('static', filename='js/tasks.js') }}"></script>
 <script src="{{ url_for('static', filename='js/calendar-feeds.js') }}"></script>

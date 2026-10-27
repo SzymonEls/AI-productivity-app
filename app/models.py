@@ -93,6 +93,13 @@ class User(UserMixin, db.Model):
         # thought you just dictated is the one you are still thinking about.
         order_by=lambda: (InboxItem.created_at.desc(), InboxItem.id.desc()),
     )
+    mood_ratings = db.relationship(
+        "MoodRating",
+        back_populates="owner",
+        cascade="all, delete-orphan",
+        lazy=True,
+        order_by=lambda: MoodRating.rating_date,
+    )
     tasks = db.relationship(
         "Task",
         back_populates="owner",
@@ -426,6 +433,41 @@ class InboxItem(db.Model):
 
     __table_args__ = (
         db.Index("ix_inbox_items_user", "user_id"),
+    )
+
+
+# The scale a day's mood is rated on: 1 is a bad day, 5 a great one.
+MOOD_MIN = 1
+MOOD_MAX = 5
+
+
+class MoodRating(db.Model):
+    """How one day felt, on a 1-5 scale.
+
+    One row per user and day, enforced by the unique constraint: rating the day
+    again rewrites the score rather than adding a second one, so the average
+    over a week is an average of days, never of how often the button was
+    pressed. The day is a date in CALENDAR_TIMEZONE, like a slot's.
+    """
+
+    __tablename__ = "mood_ratings"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    rating_date = db.Column(db.Date, nullable=False)
+    score = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(
+        db.DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    owner = db.relationship("User", back_populates="mood_ratings")
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "rating_date", name="uq_mood_rating_day"),
     )
 
 

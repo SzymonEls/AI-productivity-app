@@ -1,3 +1,5 @@
+from datetime import date
+
 from flask import Blueprint, current_app, jsonify, redirect, render_template, send_from_directory, url_for
 from flask_login import current_user, login_required
 
@@ -13,6 +15,7 @@ from ..projects.slots import (
     unscheduled_projects,
 )
 from ..inbox.routes import filing_projects, items_for
+from ..mood.routes import mood_history, mood_summary
 from ..tasks.routes import overdue_tasks, tasks_from
 from ..time_tracking.service import daily_totals_by_project, project_last_session_labels
 
@@ -78,6 +81,7 @@ def home():
         unplanned_projects=unplanned,
         project_last_session_labels=project_last_session_labels(current_user.id, unplanned),
         health=system_health(current_user.id),
+        mood=mood_summary(current_user.id),
         inbox_items=inbox_items,
         inbox_projects=inbox_projects,
     )
@@ -91,8 +95,21 @@ def health_history_data():
     Not part of home(): it reads three weeks of bookings to work out fifteen
     overlapping weeks, and the home page is opened far more often than the
     chart is wanted.
+
+    Each point also carries the week's mood average as it stood that day, for
+    the chart's second line; ``mood`` is None where no day in that week was
+    rated, and the line breaks there.
     """
-    return jsonify({"ok": True, "history": health_history(current_user.id)})
+    history = health_history(current_user.id)
+    moods = mood_history(
+        current_user.id, [date.fromisoformat(point["date"]) for point in history]
+    )
+    for point in history:
+        mood = moods[date.fromisoformat(point["date"])]
+        point["mood"] = mood["average"]
+        point["mood_days"] = mood["rated_days"]
+        point["mood_score"] = mood["score"]
+    return jsonify({"ok": True, "history": history})
 
 
 @main_bp.route("/manifest.webmanifest")

@@ -2218,8 +2218,91 @@ button.picker-row:hover {
     white-space: nowrap;
 }
 
-/* System health — a big ring for the last week of sessions, and a small one
-   under it that is only ever ok or not ok, for planning.
+/* Today's mood, beside the inbox button: a dot that fills in once the day is
+   rated, and the dialog's row of five. */
+.mood-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.mood-button-dot {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    background: var(--primary);
+    border: 1.5px solid var(--primary);
+}
+
+.mood-button-dot.is-empty {
+    background: transparent;
+}
+
+.mood-dialog {
+    max-width: 24rem;
+}
+
+.mood-scale {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.4rem;
+}
+
+.mood-option {
+    display: grid;
+    justify-items: center;
+    gap: 0.15rem;
+    padding: 0.6rem 0.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--foreground);
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.mood-option:hover:not(:disabled) {
+    border-color: var(--primary);
+    background: var(--primary-soft);
+}
+
+.mood-option:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+.mood-option.is-selected {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.mood-option-number {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+
+.mood-option-word {
+    font-size: 0.7rem;
+    color: var(--muted-foreground);
+}
+
+.mood-option.is-selected .mood-option-word {
+    color: inherit;
+    opacity: 0.85;
+}
+
+.mood-status:not(:empty) {
+    margin-top: 0.75rem;
+    color: var(--danger);
+    font-size: 0.85rem;
+}
+
+/* System health — a ring for the last week of sessions, and one under it for
+   the week's mood.
    The three bands only change --health-accent; everything below reads it. */
 .system-health {
     --health-accent: var(--success);
@@ -2370,21 +2453,99 @@ button.picker-row:hover {
 .health-chart-point.is-warn { fill: var(--warning); }
 .health-chart-point.is-bad { fill: var(--danger); }
 
-.health-chart-value {
-    fill: var(--foreground);
-    font-size: 10px;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-}
-
 .health-chart-hit {
     fill: transparent;
     cursor: default;
 }
 
-.health-chart-hit:hover + .health-chart-point,
-.health-chart-hit:focus + .health-chart-point {
+.health-chart-hit:hover + .health-chart-column circle,
+.health-chart-hit:focus + .health-chart-column circle {
     stroke: var(--foreground);
+}
+
+/* The mood ring and line share one colour, whatever band the sessions ring
+   is in: that colour is what tells the two lines apart on the chart. */
+.system-health-mood {
+    --health-accent: var(--primary);
+}
+
+.health-chart-mood-line {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.health-chart-mood-point {
+    fill: var(--primary);
+    stroke: var(--surface);
+    stroke-width: 1.5;
+}
+
+.health-chart-axis.is-mood {
+    fill: var(--primary);
+}
+
+.health-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+}
+
+.health-chart-legend-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+/* A short stroke with a dot on it, drawn the way the line itself is. */
+.health-chart-legend-swatch {
+    position: relative;
+    width: 1rem;
+    height: 2px;
+    border-radius: 1px;
+    background: color-mix(in srgb, var(--foreground) 55%, transparent);
+}
+
+.health-chart-legend-swatch::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 50%;
+    background: var(--success);
+    transform: translate(-50%, -50%);
+}
+
+.health-chart-legend-entry.is-mood .health-chart-legend-swatch {
+    background: var(--primary);
+}
+
+.health-chart-legend-entry.is-mood .health-chart-legend-swatch::after {
+    width: 0.35rem;
+    height: 0.35rem;
+    background: var(--primary);
+}
+
+.health-chart-legend-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+}
+
+.health-chart-legend-entry.is-mood .health-chart-legend-value {
+    color: var(--primary);
+}
+
+.health-chart-legend-scale {
+    font-weight: 400;
+    color: var(--muted-foreground);
 }
 
 /* Schedule page — three weeks of calendar sheets -------------------- */
