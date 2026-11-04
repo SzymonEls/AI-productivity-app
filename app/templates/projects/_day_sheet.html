@@ -48,7 +48,7 @@
         {% endif %}
         <div
             class="day-slot-content"
-            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-postponed="{{ entry.postponed }}" data-failed="{{ 1 if entry.is_failed else 0 }}" data-problematic="{{ 1 if entry.is_problematic else 0 }}" data-deadline="{{ entry.deadline.isoformat() if entry.deadline else '' }}" data-deadline-label="{{ entry.deadline_label }}" data-deadline-time="{{ entry.deadline_time }}"{% endif %}
+            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-postponed="{{ entry.postponed }}" data-failed="{{ 1 if entry.is_failed else 0 }}" data-problematic="{{ 1 if entry.is_problematic else 0 }}" data-deadline="{{ entry.deadline.isoformat() if entry.deadline else '' }}" data-deadline-last="{{ entry.deadline_last.isoformat() if entry.deadline_last else '' }}" data-deadline-label="{{ entry.deadline_label }}" data-deadline-time="{{ entry.deadline_time }}"{% endif %}
         >
             {% if entry.project %}
                 <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
@@ -125,6 +125,39 @@
             <span class="day-sheet-weekday">{{ day.date.strftime("%a") }}</span>
             <span class="day-sheet-number">{{ day.date.strftime("%d") }}</span>
             <span class="day-sheet-month">{{ day.date.strftime("%b") }}</span>
+            {% if day.deadlines %}
+                {# A purple D for a day something is due on. The list it opens
+                   is kept in a <template> so it costs the sheet nothing until
+                   asked for; deadline-days.js shows it in a panel of its own,
+                   since the sheet clips anything that sticks out of it. #}
+                {% set deadline_names = day.deadlines | map(attribute="title") | join(", ") %}
+                <button
+                    type="button"
+                    class="day-deadline-marker"
+                    data-deadline-marker
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    title="Deadline{{ 's' if day.deadlines | length > 1 }}: {{ deadline_names }}"
+                    aria-label="Deadlines on {{ day.date.strftime('%d %b') }}: {{ deadline_names }}"
+                >D</button>
+                <template data-deadline-list>
+                    <p class="day-deadline-heading">Deadline{{ 's' if day.deadlines | length > 1 }} · {{ day.date.strftime("%a %d %b") }}</p>
+                    <ul class="day-deadline-list">
+                        {% for deadline in day.deadlines %}
+                            <li class="day-deadline-item">
+                                <a class="day-deadline-project" href="{{ url_for('projects.project_detail', project_id=deadline.id) }}">{{ deadline.title }}</a>
+                                {% if deadline.time or deadline.rule %}
+                                    <span class="day-deadline-meta">
+                                        {%- if deadline.time %}{{ deadline.time }}{% endif -%}
+                                        {%- if deadline.time and deadline.rule %} · {% endif -%}
+                                        {%- if deadline.rule %}{{ deadline.rule }}{% endif -%}
+                                    </span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </template>
+            {% endif %}
             {% if day.is_today %}<span class="day-sheet-tag">Today</span>{% endif %}
         </header>
         <ul class="day-sheet-slots">

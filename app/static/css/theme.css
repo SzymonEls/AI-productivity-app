@@ -36,6 +36,10 @@
        reads as a tag and not as a link. */
     --tag-color: #7c3aed;
     --tag-soft: rgba(124, 58, 237, 0.12);
+    /* The schedule's D for a day with a deadline on it: a purple of its own,
+       warmer than the tags' violet so the two never read as one thing. */
+    --deadline-mark: #9333ea;
+    --deadline-mark-foreground: #ffffff;
 
     --success: #16a34a;
     --danger: #dc2626;
@@ -82,6 +86,8 @@
 
     --tag-color: #c4b5fd;
     --tag-soft: rgba(167, 139, 250, 0.2);
+    --deadline-mark: #a855f7;
+    --deadline-mark-foreground: #ffffff;
 
     --success: #22c55e;
     --danger: #f87171;
@@ -825,6 +831,8 @@ hr, .dropdown-divider { border-color: var(--border); }
 
     --tag-color: #6f42c1;
     --tag-soft: rgba(111, 66, 193, 0.12);
+    --deadline-mark: #6f42c1;
+    --deadline-mark-foreground: #ffffff;
 
     --success: #198754;
     --danger: #dc3545;

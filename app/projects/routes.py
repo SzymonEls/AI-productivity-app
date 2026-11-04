@@ -24,6 +24,9 @@ from .slots import (
     DAYS_PER_WEEK,
     MAX_CALENDAR_WEEKS,
     MAX_SCROLL_WEEKS,
+    DEADLINE_RULE_DAY_BEFORE,
+    DEADLINE_RULE_LABELS,
+    DEADLINE_RULE_SAME_DAY,
     SLOTS,
     TIMED_SLOTS,
     assign_slot,
@@ -31,10 +34,13 @@ from .slots import (
     calendar_weeks,
     clear_slot,
     deadline_label,
+    deadline_rule_note,
     deadline_time_label,
     deadline_warning,
+    deadlines_by_day,
     first_booked_day,
     is_after_deadline,
+    last_session_day,
     move_booking,
     move_deadline_warning,
     parse_slot_date,
@@ -92,6 +98,7 @@ def _block_deadline(booking, day):
     if project is None or project.session_deadline is None:
         return {
             "deadline": None,
+            "deadline_last": None,
             "deadline_time": "",
             "deadline_label": "",
             "after_deadline": False,
@@ -99,6 +106,9 @@ def _block_deadline(booking, day):
         }
     return {
         "deadline": project.session_deadline,
+        # The last day the session is still in time on - the deadline, or the
+        # day before it. The board's script weighs a move against this one.
+        "deadline_last": last_session_day(project),
         # "14:30" when the deadline has an hour; printed under the day.
         "deadline_time": deadline_time_label(project),
         "deadline_label": project_deadline_label(project),
@@ -256,6 +266,10 @@ def _schedule_weeks(calendar, today):
     # up. See the note above [data-calendar-refresh] in the template.
     events = events_by_date(current_user.id, first_day, last_day)
     tasks = tasks_from(current_user.id, first_day, last_day)
+    # What is due on each day, for the purple D in the sheet's header. Only the
+    # schedule asks: the archive's days are past, and a deadline still open
+    # back there is already named by the project page in red.
+    deadlines = deadlines_by_day(current_user.id, first_day, last_day)
     return [
         {
             "label": _week_label(_weeks_ahead(days[0][0] - timedelta(days=days[0][0].weekday()), today)),
@@ -265,7 +279,13 @@ def _schedule_weeks(calendar, today):
             "lead_days": days[0][0].weekday(),
             "days": [
                 _serialize_schedule_day(
-                    day, booked, today, notes.get(day, ()), events.get(day, ()), tasks.get(day, ())
+                    day,
+                    booked,
+                    today,
+                    notes.get(day, ()),
+                    events.get(day, ()),
+                    tasks.get(day, ()),
+                    deadlines.get(day, ()),
                 )
                 for day, booked in days
             ],
@@ -401,7 +421,7 @@ def _date_range_label(first, last):
     return f"{first.strftime('%d %b')} – {last.strftime('%d %b')}"
 
 
-def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
+def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), deadlines=()):
     """One calendar sheet: its three slots, its tasks, its lines, and what the header shows.
 
     "Lines" is the foot of the sheet: the day's events, read off the subscribed
@@ -439,6 +459,17 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=()):
         "notes": list(notes),
         "events": list(events),
         "tasks": list(tasks),
+        # The projects whose deadline is this day, for the header's D.
+        "deadlines": [
+            {
+                "id": project.id,
+                "title": project.title,
+                "time": deadline_time_label(project),
+                "rule": deadline_rule_note(project),
+                "is_private": bool(project.is_private),
+            }
+            for project in deadlines
+        ],
         "booked_count": sum(1 for entry in slots if entry["project"]),
     }
 
@@ -1200,10 +1231,32 @@ def clear_waiting_for(project_id):
     )
 
 
+def _deadline_badge_label(project):
+    """What the project page's badge says: "Session by 14 Oct 14:30".
+
+    With the session due a day early the badge leads with that day, since it is
+    the one to plan for, and names the deadline after it:
+    "Session by 13 Oct · deadline 14 Oct 14:30".
+    """
+    last_day = last_session_day(project)
+    if last_day is None:
+        return ""
+    time_label = deadline_time_label(project)
+    deadline = deadline_label(project.session_deadline)
+    deadline = f"{deadline} {time_label}" if time_label else deadline
+    if not project.session_deadline_day_before:
+        return f"Session by {deadline}"
+    return f"Session by {deadline_label(last_day)} · deadline {deadline}"
+
+
 @projects_bp.route("/<int:project_id>/session-deadline", methods=["POST"])
 @login_required
 def set_session_deadline(project_id):
-    """Set the last day the project's next session should happen on.
+    """Set the project's deadline, and how long before it the next session has to be.
+
+    ``session_deadline_rule`` is "same_day" - the session may still happen on
+    the deadline day - or "day_before"; anything else, or nothing, is the first,
+    which is also how every deadline set before the choice existed reads.
 
     A plan rather than a rule: booking the session later still works, it only
     comes with a warning - and a session already booked past the new deadline
@@ -1214,16 +1267,21 @@ def set_session_deadline(project_id):
     # The hour is optional: left empty, the deadline is the whole day.
     raw_time = (request.form.get("session_deadline_time") or "").strip()
     deadline_time = _parse_clock_time(raw_time)
+    day_before = request.form.get("session_deadline_rule") == DEADLINE_RULE_DAY_BEFORE
 
     if deadline is None:
-        flash("Pick the day the session has to happen by.", "danger")
+        flash("Pick the day of the deadline.", "danger")
     elif deadline < today_local():
         flash("A deadline has to be today or later.", "danger")
+    elif day_before and deadline <= today_local():
+        # The day before it is already gone: no session could be in time.
+        flash("With the session a day before, the deadline has to be tomorrow or later.", "danger")
     elif raw_time and deadline_time is None:
         flash("The hour should look like 14:30.", "danger")
     else:
         project.session_deadline = deadline
         project.session_deadline_time = deadline_time
+        project.session_deadline_day_before = day_before
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -1252,6 +1310,7 @@ def clear_session_deadline(project_id):
     project = _get_user_project_or_404(project_id)
     project.session_deadline = None
     project.session_deadline_time = None
+    project.session_deadline_day_before = False
     try:
         db.session.commit()
     except SQLAlchemyError:
@@ -1361,6 +1420,14 @@ def project_detail(project_id):
         waiting_note_max_length=WAITING_NOTE_MAX_LENGTH,
         today=today_local(),
         session_deadline_label=project_deadline_label(project),
+        # The day the badge says the session has to happen by - the deadline,
+        # or the day before it - and the badge's words.
+        session_last_day=last_session_day(project),
+        session_deadline_badge=_deadline_badge_label(project),
+        deadline_rules=DEADLINE_RULE_LABELS,
+        deadline_rule=DEADLINE_RULE_DAY_BEFORE
+        if project.session_deadline_day_before
+        else DEADLINE_RULE_SAME_DAY,
     )
 
 

@@ -152,13 +152,20 @@
     /* The letter, or the project's session deadline in its place. The letter
        belongs to the position and the deadline to the project, so after a move
        the block prints whichever the session now in it calls for - the date,
-       red when the block's day is past it, on a session not yet done. ISO
+       red when the block's day is past the last day the session is in time on
+       (the deadline, or the day before it), on a session not yet done. ISO
        dates compare as the days they name. */
+    // The last day a session is still in time on. Falls back to the deadline
+    // for a block rendered before the page knew the two could differ.
+    function lastDayOf(content) {
+        return content.dataset.deadlineLast || content.dataset.deadline;
+    }
+
     function setLetter(cell, booked, ended) {
         const letter = cell.querySelector("[data-slot-letter]");
         const content = contentOf(cell);
         const deadline = booked && !ended ? content.dataset.deadline : "";
-        const late = Boolean(deadline) && cell.dataset.date > deadline;
+        const late = Boolean(deadline) && cell.dataset.date > lastDayOf(content);
 
         letter.classList.toggle("is-deadline", Boolean(deadline));
         letter.classList.toggle("is-after-deadline", late);
@@ -323,7 +330,7 @@
             [contentOf(fromCell), toCell.dataset.date],
             [contentOf(toCell), fromCell.dataset.date],
         ]
-            .filter(([content, day]) => content.dataset.projectId && content.dataset.deadline && day > content.dataset.deadline)
+            .filter(([content, day]) => content.dataset.projectId && content.dataset.deadline && day > lastDayOf(content))
             .map(([content, day]) => {
                 const title = content.querySelector(".day-slot-title")?.textContent.trim() || "This project";
                 return `The session deadline for ${title} is ${content.dataset.deadlineLabel} — this moves it to ${shortDate(day)}.`;
@@ -381,6 +388,7 @@
             failed: content.dataset.failed,
             problematic: content.dataset.problematic,
             deadline: content.dataset.deadline,
+            deadlineLast: content.dataset.deadlineLast,
             deadlineLabel: content.dataset.deadlineLabel,
             deadlineTime: content.dataset.deadlineTime,
             nodes: Array.from(content.childNodes),
@@ -399,6 +407,7 @@
         content.dataset.failed = "0";
         content.dataset.problematic = "0";
         content.dataset.deadline = "";
+        content.dataset.deadlineLast = "";
         content.dataset.deadlineLabel = "";
         content.dataset.deadlineTime = "";
         content.replaceChildren(free);
@@ -411,6 +420,7 @@
             content.dataset.failed = previous.failed;
             content.dataset.problematic = previous.problematic;
             content.dataset.deadline = previous.deadline;
+            content.dataset.deadlineLast = previous.deadlineLast;
             content.dataset.deadlineLabel = previous.deadlineLabel;
             content.dataset.deadlineTime = previous.deadlineTime;
             content.replaceChildren(...previous.nodes);

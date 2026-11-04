@@ -34,12 +34,12 @@
                    the day has gone with no session ticked off. #}
                 <button
                     type="button"
-                    class="project-badge project-badge-deadline{% if project.session_deadline < today %} is-overdue{% endif %}"
+                    class="project-badge project-badge-deadline{% if session_last_day < today %} is-overdue{% endif %}"
                     data-session-deadline-badge
                     data-bs-toggle="modal"
                     data-bs-target="#projectDeadlineModal"
-                    title="{{ 'The session deadline has passed' if project.session_deadline < today else 'The next session should happen by this day' }}"
-                ><i class="fa-regular fa-calendar-check" aria-hidden="true"></i>Session by {{ session_deadline_label }}</button>
+                    title="{{ 'The last day for the session has passed' if session_last_day < today else 'The next session should happen by this day' }}"
+                ><i class="fa-regular fa-calendar-check" aria-hidden="true"></i>{{ session_deadline_badge }}</button>
             {% endif %}
             <div class="inline-section-controls">
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-edit-toggle="title"><i class="fa-solid fa-pen me-1" aria-hidden="true"></i>Rename</button>
@@ -510,10 +510,11 @@
                 </div>
                 <div class="modal-body">
                     <p class="text-muted small">
-                        The last day the next session should happen on. Booking it later still works,
-                        with a warning. Ticking a session done meets the deadline and clears it.
+                        The day the project is due, and how long before it the next session has to
+                        happen. Booking it later still works, with a warning. Ticking a session done
+                        meets the deadline and clears it.
                     </p>
-                    <label class="form-label" for="sessionDeadline">Session by</label>
+                    <label class="form-label" for="sessionDeadline">Deadline</label>
                     <input
                         type="date"
                         class="form-control"
@@ -532,6 +533,12 @@
                         value="{{ project.session_deadline_time.strftime('%H:%M') if project.session_deadline_time else '' }}"
                     >
                     <div class="form-text">Printed beside the day on the home page and the schedule.</div>
+                    <label class="form-label mt-3" for="sessionDeadlineRule">Session</label>
+                    <select class="form-select" id="sessionDeadlineRule" name="session_deadline_rule">
+                        {% for value, label in deadline_rules.items() %}
+                            <option value="{{ value }}"{% if value == deadline_rule %} selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="modal-footer">
                     {% if project.session_deadline %}

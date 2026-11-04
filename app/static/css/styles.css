@@ -4317,3 +4317,104 @@ button.picker-row:hover {
         border-top: 1px dashed var(--border-strong);
     }
 }
+
+/* ---------------------------------------------------------------------------
+   The schedule's D: a day with a project's deadline on it. Purple, round, and
+   a button - it opens the list of what is due that day (deadline-days.js),
+   which floats in a panel of its own because a sheet clips what sticks out.
+   --------------------------------------------------------------------------- */
+.day-deadline-marker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--deadline-mark);
+    color: var(--deadline-mark-foreground);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    align-self: center;
+}
+
+.day-deadline-marker:hover,
+.day-deadline-marker[aria-expanded="true"] {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--deadline-mark) 30%, transparent);
+}
+
+.day-deadline-marker:focus-visible {
+    outline: 2px solid var(--deadline-mark);
+    outline-offset: 2px;
+}
+
+/* "Today" follows the D and stops pushing itself to the right edge. */
+.day-deadline-marker + .day-sheet-tag {
+    margin-left: 0;
+}
+
+:root[data-schedule-view="calendar"] .schedule-page .day-deadline-marker {
+    margin-left: 0;
+    align-self: center;
+}
+
+.day-deadline-panel {
+    position: fixed;
+    z-index: 1080;
+    width: max-content;
+    min-width: 12rem;
+    max-width: min(20rem, calc(100vw - 32px));
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--deadline-mark);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-lg);
+}
+
+.day-deadline-panel[hidden] {
+    display: none;
+}
+
+.day-deadline-heading {
+    margin: 0 0 0.35rem;
+    color: var(--deadline-mark);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.day-deadline-list {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.day-deadline-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.day-deadline-project {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.day-deadline-project:hover {
+    text-decoration: underline;
+}
+
+.day-deadline-meta {
+    color: var(--muted-foreground);
+    font-size: 0.78rem;
+}

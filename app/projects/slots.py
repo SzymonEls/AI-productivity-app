@@ -106,22 +106,62 @@ def deadline_time_label(project):
     return project.session_deadline_time.strftime("%H:%M")
 
 
+def last_session_day(project):
+    """The last day the project's next session may happen on, or None.
+
+    The deadline itself, or the day before it when the project asks for its
+    session "at least a day before". Everything that decides whether a session
+    is late asks this rather than reading the deadline.
+    """
+    if project is None or project.session_deadline is None:
+        return None
+    if project.session_deadline_day_before:
+        return project.session_deadline - timedelta(days=1)
+    return project.session_deadline
+
+
+# What the select on the project page offers, and how each choice is spelled
+# out after the deadline wherever it is named.
+DEADLINE_RULE_SAME_DAY = "same_day"
+DEADLINE_RULE_DAY_BEFORE = "day_before"
+DEADLINE_RULE_LABELS = {
+    DEADLINE_RULE_SAME_DAY: "On the deadline day at the latest",
+    DEADLINE_RULE_DAY_BEFORE: "At least a day before",
+}
+
+
+def deadline_rule_note(project):
+    """"session a day before" for a project that asks for it, otherwise ""."""
+    if project is None or not project.session_deadline_day_before:
+        return ""
+    return "session at least a day before"
+
+
 def project_deadline_label(project):
-    """A project's deadline in words: "14 Oct", or "14 Oct 14:30" with an hour."""
+    """A project's deadline in words: "14 Oct", or "14 Oct 14:30" with an hour.
+
+    A deadline that wants its session a day early says so after the date -
+    "14 Oct, session at least a day before" - since every place that names it
+    (a tooltip, a warning, the question before a late booking) is also saying
+    why a day counts as late.
+    """
     if project is None or project.session_deadline is None:
         return ""
     time_label = deadline_time_label(project)
     label = deadline_label(project.session_deadline)
-    return f"{label} {time_label}" if time_label else label
+    label = f"{label} {time_label}" if time_label else label
+    note = deadline_rule_note(project)
+    return f"{label}, {note}" if note else label
 
 
 def is_after_deadline(project, day):
     """Whether a session of ``project`` on ``day`` would come too late.
 
-    The deadline is the last day the session may happen on, so the day itself
-    is still in time.
+    Late means after ``last_session_day``: on the deadline day itself for a
+    project that wants its session a day before, and only past it otherwise.
     """
-    return project is not None and project.session_deadline is not None and day > project.session_deadline
+    last_day = last_session_day(project)
+    return last_day is not None and day > last_day
 
 
 def deadline_warning(project, day):
@@ -138,6 +178,30 @@ def deadline_warning(project, day):
     )
 
 
+def deadlines_by_day(user_id, first_day, last_day):
+    """``{day: [project, ...]}`` for the deadlines from ``first_day`` to ``last_day``.
+
+    Keyed by the deadline itself rather than by the last session day: the
+    schedule's D marks the day something is due. Archived projects are left
+    out, the way they are out of every list of what is still to be done.
+    """
+    projects = (
+        Project.query.filter(
+            Project.user_id == user_id,
+            Project.is_archived.is_(False),
+            Project.session_deadline.isnot(None),
+            Project.session_deadline >= first_day,
+            Project.session_deadline <= last_day,
+        )
+        .order_by(func.lower(Project.title).asc())
+        .all()
+    )
+    found = {}
+    for project in projects:
+        found.setdefault(project.session_deadline, []).append(project)
+    return found
+
+
 def meet_deadline(booking):
     """A session ticked done meets its project's deadline, which then goes.
 
@@ -150,6 +214,7 @@ def meet_deadline(booking):
     if booking.is_done and booking.project is not None:
         booking.project.session_deadline = None
         booking.project.session_deadline_time = None
+        booking.project.session_deadline_day_before = False
         booking.project.is_problematic = False
 
 

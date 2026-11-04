@@ -73,9 +73,10 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   the page all along — nothing is withheld from the browser, and nothing about it is enforced
   server-side.
   `waiting_for_project_id` (with `waiting_for_note`, the milestone) puts the project on hold
-  until something in another project is reached — see point 23. `session_deadline` is the last
-  day its next session should happen on, `session_deadline_time` an optional hour on it — see
-  point 24. `is_problematic` flags every session still to come with "!!" — see point 25.
+  until something in another project is reached — see point 23. `session_deadline` is the
+  project's deadline, `session_deadline_time` an optional hour on it, and
+  `session_deadline_day_before` whether the next session has to come a day before it rather than
+  on the day at the latest — see point 24. `is_problematic` flags every session still to come with "!!" — see point 25.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -602,8 +603,14 @@ The schema in the code matches the latest migration (`20261027_0034`).
 
 24. **A session deadline asks, it never refuses.** `session_deadline` on `Project` (⋯ →
     "Session deadline…" on the project page, `set_session_deadline` / `clear_session_deadline`)
-    is the last day the project's next session should happen on, the day itself still in time.
-    It belongs to the project rather than to a booking because it is set before anything is
+    is the project's deadline, and `session_deadline_day_before` says how long before it the
+    next session has to happen: off ("On the deadline day at the latest", the default and how
+    every deadline set before the choice existed reads), the deadline day is still in time; on
+    ("At least a day before", the select in the dialog), the day before is the last one.
+    `last_session_day()` turns the two into one day, and everything that decides lateness —
+    `is_after_deadline()` on the server, `data-deadline-last` on the board — compares against
+    that day, never the deadline itself. With "a day before", the deadline has to be tomorrow
+    or later. It belongs to the project rather than to a booking because it is set before anything is
     booked. Booking or moving a session past it pops up a `confirm()` **before** anything is
     sent — the planner dialog (`confirmLate` in
     [day-planner.js](../app/static/js/day-planner.js), on `after_deadline` per day and on the
@@ -635,7 +642,20 @@ The schema in the code matches the latest migration (`20261027_0034`).
     dialog). The slots have no clock time, so being late is still decided by the day alone; the
     hour is printed beside the day as a second, smaller column ("17 14:30"), rides on the
     content as `data-deadline-time`, and is part of `project_deadline_label()` wherever the
-    deadline is named in words. Clearing or meeting the deadline clears the hour with it.
+    deadline is named in words. Clearing or meeting the deadline clears the hour with it, and
+    the "day before" choice too. A deadline wanting its session a day early is named as
+    "14 Oct, session at least a day before", since every place that names it is also saying why
+    a day counts as late; the project page's badge leads with the day to plan for instead
+    ("Session by 13 Oct · deadline 14 Oct").
+
+    The schedule marks every day a deadline falls on (the deadline day, not the last session
+    day) with a purple **D** in the sheet's header (`deadlines_by_day`, archived projects left
+    out). Its list of projects — each with its hour and "session at least a day before" where
+    they apply — is rendered into a `<template>` beside it and shown by
+    [deadline-days.js](../app/static/js/deadline-days.js) in one panel fixed to the viewport,
+    since a sheet clips anything that sticks out of it. The clicks are caught on the document,
+    so the weeks the calendar view loads as it scrolls get a working D unbound. The archive
+    renders no D: its days are past.
 
 25. **A failed session makes its project problematic.** The ⋯ menu on the project page offers
     "Mark session failed" beside the "Mark done" button whenever the project has a session today

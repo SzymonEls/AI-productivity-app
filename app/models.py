@@ -165,10 +165,16 @@ class Project(db.Model):
     # (``delete_project``).
     waiting_for_project_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
     waiting_for_note = db.Column(db.String(200), nullable=False, default="")
-    # The last day the next session should happen on (a day in
-    # CALENDAR_TIMEZONE, like a slot's). Booking past it is allowed with a
+    # The project's deadline (a day in CALENDAR_TIMEZONE, like a slot's), which
+    # the next session has to come before. Booking too late is allowed with a
     # warning; ticking a session done meets it, and clears it.
     session_deadline = db.Column(db.Date, nullable=True)
+    # How long before the deadline the session has to be: off, it may still
+    # happen on the deadline day itself; on, the day before at the latest.
+    # ``last_session_day`` in projects/slots.py turns the two into one day.
+    session_deadline_day_before = db.Column(
+        db.Boolean, nullable=False, default=False, server_default=db.false()
+    )
     # An optional hour on that day, for the blocks to print next to it. Only
     # ever set together with the date; the slots carry no clock time, so being
     # late is still decided by the day alone.
