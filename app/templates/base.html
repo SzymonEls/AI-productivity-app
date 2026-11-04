@@ -30,9 +30,8 @@
                 // Before first paint, like the theme: a private project's plan must
                 // not be on screen for a frame before safe mode hides it.
                 root.setAttribute("data-safe-mode", localStorage.getItem("app-safe-mode") === "on" ? "on" : "off");
-                // And so must a grouped calendar's line, or the schedule would
-                // show it for a frame before swapping in the events under it.
-                root.setAttribute("data-ungroup-calendars", localStorage.getItem("app-ungroup-calendars") === "on" ? "on" : "off");
+                // "Ungroup calendars" is never remembered: every load starts grouped.
+                root.setAttribute("data-ungroup-calendars", "off");
             } catch (error) {
                 root.setAttribute("data-ui", "modern");
                 root.setAttribute("data-bs-theme", "light");
@@ -376,8 +375,11 @@
             const safeModeSetting = () => (read("app-safe-mode") === "on" ? "on" : "off");
             // Off too: a calendar is grouped because that is how it is meant to
             // be read, so seeing every event is the exception, asked for on the
-            // schedule page itself.
-            const ungroupCalendarsSetting = () => (read("app-ungroup-calendars") === "on" ? "on" : "off");
+            // schedule page itself. It lives only as long as the page does, so a
+            // reload or a trip to another page and back finds it grouped again.
+            let ungroupCalendars = "off";
+            clear("app-ungroup-calendars");
+            const ungroupCalendarsSetting = () => ungroupCalendars;
 
             const effectiveTheme = () => {
                 if (uiSetting() === "classic") { return "light"; }
@@ -476,9 +478,17 @@
 
             document.querySelectorAll("[data-ungroup-calendars-toggle]").forEach((button) => {
                 button.addEventListener("click", () => {
-                    store("app-ungroup-calendars", ungroupCalendarsSetting() === "on" ? "off" : "on");
+                    ungroupCalendars = ungroupCalendars === "on" ? "off" : "on";
                     applyAll();
                 });
+            });
+            // Back/forward can restore the page from the bfcache with the switch
+            // still on; coming back counts as a fresh visit, so fold it again.
+            window.addEventListener("pageshow", (event) => {
+                if (event.persisted && ungroupCalendars === "on") {
+                    ungroupCalendars = "off";
+                    applyAll();
+                }
             });
 
             document.querySelectorAll('[data-setting="ui"] .settings-segment').forEach((btn) => {

@@ -305,9 +305,9 @@ The schema in the code matches the latest migration (`20261027_0034`).
     events folded into it (`group_role` "part"), rendered as `data-group-role` on the `<li>`. The
     stylesheet hides the parts everywhere; on the schedule page, "Ungroup calendars" (shown only
     when `has_grouped_feeds` finds a switched-on grouped calendar) swaps the two by setting
-    `data-ungroup-calendars="on"` on `<html>`. It is a per-browser setting in `localStorage`
-    (`app-ungroup-calendars`), off by default and applied before first paint like the theme, kept
-    in `base.html` with the others. Swapping is CSS only — no request, and the weeks the calendar
+    `data-ungroup-calendars="on"` on `<html>`. It is not saved anywhere: it lives in a variable
+    in `base.html` for as long as the page does, so a reload, another page, or a back/forward
+    restore from the bfcache (`pageshow` with `persisted`) brings the schedule back grouped. Swapping is CSS only — no request, and the weeks the calendar
     view loads as it scrolls and the lines the refresh redraws carry both versions already.
 
     **The expansion is cached per version of the calendar** (`_expanded` in
