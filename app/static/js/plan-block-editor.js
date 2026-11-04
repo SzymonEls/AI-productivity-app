@@ -289,6 +289,14 @@
             this._lastCommitTime = 0;
 
             this.supportsPlaintextOnly = this._detectPlaintextOnly();
+            // A touch screen as the main pointer (phones, tablets): the editor then
+            // places the caret on a tap anywhere in a row, shows its handles, and
+            // brings up the toolbar above the on-screen keyboard. A mouse or a
+            // trackpad on the same device still gets the desktop behaviour per
+            // gesture, since every pointer handler checks the pointer's own type.
+            this.touchQuery = window.matchMedia ? window.matchMedia("(pointer: coarse)") : null;
+            this._lastPointerType = "mouse";
+            this.touchbar = null;
 
             this.root = document.createElement("div");
             this.root.className = "pbe";
@@ -323,7 +331,17 @@
             this._onChange = this._onChange.bind(this);
             this._onPaste = this._onPaste.bind(this);
             this._onPointerDown = this._onPointerDown.bind(this);
+            this._onBeforeInput = this._onBeforeInput.bind(this);
+            this._positionTouchbar = this._positionTouchbar.bind(this);
+            // Once a handle has been held long enough to drag, the finger moving
+            // must drag the block rather than scroll the page. Only a non-passive
+            // touchmove can say so; the handle lets the page pan until then.
+            this._onTouchMove = (event) => {
+                if (this._touchDragArmed) event.preventDefault();
+            };
 
+            this.list.addEventListener("beforeinput", this._onBeforeInput);
+            this.list.addEventListener("touchmove", this._onTouchMove, { passive: false });
             this.list.addEventListener("input", this._onInput);
             this.list.addEventListener("keydown", this._onKeydown);
             this.list.addEventListener("focusin", this._onFocusIn);
@@ -354,7 +372,7 @@
             this._onDocPointerDown = (event) => {
                 if (this.blockMenu.classList.contains("d-none")) return;
                 if (this.blockMenu.contains(event.target)) return;
-                if (event.target.closest && event.target.closest(".pbe-handle")) return;
+                if (event.target.closest && event.target.closest(".pbe-handle, .pbe-touchbar")) return;
                 this._closeBlockMenu();
             };
             document.addEventListener("pointerdown", this._onDocPointerDown, true);
@@ -396,6 +414,10 @@
             document.addEventListener("copy", this._onCopy);
             document.addEventListener("cut", this._onCut);
             document.addEventListener("keydown", this._onDocKeydown);
+            // The toolbar rides on top of the on-screen keyboard, whose height only
+            // the visual viewport knows.
+            window.visualViewport?.addEventListener("resize", this._positionTouchbar);
+            window.visualViewport?.addEventListener("scroll", this._positionTouchbar);
             // Note: persisting on page unload is the host's responsibility (it can
             // use a keepalive request that survives the page being torn down).
         }
@@ -410,6 +432,12 @@
             this.list.removeEventListener("change", this._onChange);
             this.list.removeEventListener("paste", this._onPaste);
             this.list.removeEventListener("pointerdown", this._onPointerDown);
+            this.list.removeEventListener("beforeinput", this._onBeforeInput);
+            this.list.removeEventListener("touchmove", this._onTouchMove);
+            window.visualViewport?.removeEventListener("resize", this._positionTouchbar);
+            window.visualViewport?.removeEventListener("scroll", this._positionTouchbar);
+            this.touchbar?.remove();
+            document.body.classList.remove("pbe-touchbar-open");
             document.removeEventListener("pointerdown", this._onDocPointerDown, true);
             document.removeEventListener("copy", this._onCopy);
             document.removeEventListener("cut", this._onCut);
@@ -706,6 +734,9 @@
         }
 
         _onKeydown(event) {
+            // A Shift+Enter arrives as an insertLineBreak in beforeinput, which an
+            // on-screen keyboard's plain Enter can arrive as too; this tells them apart.
+            this._shiftEnter = event.key === "Enter" && event.shiftKey;
             if (this.slash && this._slashKeydown(event)) return;
 
             const ctx = this.blockFromEvent(event);
@@ -745,6 +776,55 @@
             } else if (event.key === "ArrowDown" && content && getCaretOffset(content) === content.textContent.length) {
                 const next = this.blocks[this.indexOf(block.id) + 1];
                 if (next && next.type !== "divider") { event.preventDefault(); this.focusBlock(next.id, 0); }
+            }
+        }
+
+        /**
+         * Enter and Backspace for keyboards that do not send usable keydowns.
+         *
+         * On-screen keyboards - Gboard above all - often report keys as
+         * "Unidentified" or skip the keydown while a word is being composed, so
+         * the keydown handler above never sees them: Enter put a line break into
+         * the block instead of starting a new one, and Backspace at the start of a
+         * line did nothing. beforeinput says what the key is about to do whatever
+         * the keyboard, so the same splitting and merging happens here. A key the
+         * keydown handler already took is cancelled there and never reaches this.
+         */
+        _onBeforeInput(event) {
+            const ctx = this.blockFromEvent(event);
+            if (!ctx || !ctx.content) return;
+            const { block, content } = ctx;
+            const type = event.inputType;
+            const isEnter =
+                type === "insertParagraph" ||
+                (type === "insertLineBreak" && !this._shiftEnter) ||
+                ((type === "insertText" || type === "insertReplacementText") && event.data === "\n");
+            this._shiftEnter = false;
+
+            if (isEnter) {
+                event.preventDefault();
+                // What a composing keyboard has typed so far is in the line, but
+                // maybe not yet in the model.
+                block.text = content.textContent;
+                if (this.slash) {
+                    const commands = this._filteredCommands();
+                    if (commands.length) {
+                        this._applySlashCommand(commands[this.slash.index] || commands[0]);
+                        return;
+                    }
+                }
+                this._handleEnter(block, content);
+                return;
+            }
+
+            if (!this._selectionCollapsed()) return;
+            if (type === "deleteContentBackward" && getCaretOffset(content) === 0) {
+                event.preventDefault();
+                block.text = content.textContent;
+                this._handleBackspaceAtStart(block, content);
+            } else if (type === "deleteContentForward" && getCaretOffset(content) === content.textContent.length) {
+                block.text = content.textContent;
+                if (this._handleDeleteAtEnd(block)) event.preventDefault();
             }
         }
 
@@ -886,10 +966,40 @@
             `).join("");
             this.menu.classList.remove("d-none");
 
-            const blockRect = blockEl.getBoundingClientRect();
+            this._placeMenu(this.menu, blockEl.getBoundingClientRect());
+        }
+
+        /**
+         * Put a menu under its anchor - or above it, when the space below is
+         * hidden by the on-screen keyboard and the toolbar on top of it.
+         *
+         * The menus live inside the editor (absolutely placed), so the viewport
+         * rectangles are turned into offsets from it. Whatever room there is
+         * becomes the menu's height, and the rest scrolls.
+         */
+        _placeMenu(menu, anchorRect) {
             const rootRect = this.root.getBoundingClientRect();
-            this.menu.style.top = `${blockRect.bottom - rootRect.top + 4}px`;
-            this.menu.style.left = `${Math.max(blockRect.left - rootRect.left, 0)}px`;
+            const viewport = window.visualViewport;
+            const visibleTop = viewport ? viewport.offsetTop : 0;
+            let visibleBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+            if (this.touchbar && !this.touchbar.hidden) {
+                visibleBottom = Math.min(visibleBottom, this.touchbar.getBoundingClientRect().top);
+            }
+
+            menu.style.maxHeight = "";
+            const natural = menu.offsetHeight;
+            const below = visibleBottom - anchorRect.bottom - 8;
+            const above = anchorRect.top - visibleTop - 8;
+            const placeAbove = natural > below && above > below;
+            const room = Math.max(placeAbove ? above : below, 120);
+            if (natural > room) menu.style.maxHeight = `${room}px`;
+            const height = Math.min(natural, room);
+
+            const top = placeAbove ? anchorRect.top - height - 4 : anchorRect.bottom + 4;
+            const maxLeft = Math.max((viewport ? viewport.width : window.innerWidth) - menu.offsetWidth - 8, 0);
+            const left = Math.min(Math.max(anchorRect.left, 8), maxLeft);
+            menu.style.top = `${top - rootRect.top}px`;
+            menu.style.left = `${left - rootRect.left}px`;
         }
 
         _slashKeydown(event) {
@@ -976,7 +1086,73 @@
                 this.options.onArchiveSection?.(Number(archiveBtn.dataset.archiveSection));
                 return;
             }
+            this._focusFromTap(event);
+        }
 
+        /**
+         * Start editing wherever a row is tapped, not only on its letters.
+         *
+         * An iPad only puts the caret into a line when the tap lands on its text:
+         * a tap past the end of the line, between two lines or on a bullet did
+         * nothing. On a touch tap the editor checks whether the line it landed in
+         * - or the nearest one, for a tap in the gap between two - did get the
+         * caret, and if not puts it there itself: at the letter under the finger,
+         * or at the end of the line. It happens inside the tap, which is what lets
+         * iOS bring the keyboard up for it.
+         */
+        _focusFromTap(event) {
+            if (this._lastPointerType === "mouse" || this.drag || this.selectedIds.length) return;
+            const target = event.target;
+            if (target.closest("a, button, input, label, .pbe-handle, .pbe-check")) return;
+
+            let el = target.closest(".pbe-block");
+            if (!el || !this.list.contains(el)) el = this._nearestBlockEl(event.clientY);
+            const content = el?.querySelector(".pbe-content");
+            if (!content) return;
+
+            const selection = window.getSelection();
+            const caretHere = document.activeElement === content
+                && selection && selection.rangeCount && content.contains(selection.anchorNode);
+            // The browser placed the caret itself: leave its choice alone.
+            if (caretHere && target.closest(".pbe-content") === content) return;
+
+            const offset = this._offsetFromPoint(content, event.clientX, event.clientY);
+            setCaretOffset(content, offset ?? content.textContent.length);
+        }
+
+        // The row a tap between rows belongs to: the closest one within a finger's
+        // width of it, or none.
+        _nearestBlockEl(y) {
+            let best = null;
+            let bestDistance = 14;
+            this._blockEls().forEach((row) => {
+                const rect = row.getBoundingClientRect();
+                const distance = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
+                if (distance < bestDistance) {
+                    best = row;
+                    bestDistance = distance;
+                }
+            });
+            return best;
+        }
+
+        // The character offset under a point, or null when the point is not over
+        // the line's text.
+        _offsetFromPoint(content, x, y) {
+            let node = null;
+            let offset = 0;
+            if (document.caretRangeFromPoint) {
+                const range = document.caretRangeFromPoint(x, y);
+                if (range) { node = range.startContainer; offset = range.startOffset; }
+            } else if (document.caretPositionFromPoint) {
+                const position = document.caretPositionFromPoint(x, y);
+                if (position) { node = position.offsetNode; offset = position.offset; }
+            }
+            if (!node || !content.contains(node)) return null;
+            const range = document.createRange();
+            range.selectNodeContents(content);
+            range.setEnd(node, offset);
+            return range.toString().length;
         }
 
         // --- block menu (change type / add / duplicate / delete) ---
@@ -1025,12 +1201,9 @@
                 <button type="button" class="pbe-menu-item pbe-menu-danger" data-action="delete"><span class="pbe-menu-label">Delete</span></button>
             `;
             this.blockMenu.classList.remove("d-none");
-            anchorEl.closest(".pbe-block")?.classList.add("pbe-menu-open");
+            (anchorEl.closest(".pbe-block") || this.list.querySelector(`[data-id="${blockId}"]`))?.classList.add("pbe-menu-open");
 
-            const anchorRect = anchorEl.getBoundingClientRect();
-            const rootRect = this.root.getBoundingClientRect();
-            this.blockMenu.style.top = `${anchorRect.bottom - rootRect.top + 4}px`;
-            this.blockMenu.style.left = `${Math.max(anchorRect.left - rootRect.left, 0)}px`;
+            this._placeMenu(this.blockMenu, anchorEl.getBoundingClientRect());
         }
 
         _closeBlockMenu() {
@@ -1179,11 +1352,22 @@
         _onFocusIn(event) {
             const el = event.target.closest(".pbe-block");
             if (el) el.classList.add("is-focused");
+            if (el && event.target.closest(".pbe-content") && this.touchQuery?.matches) {
+                this._showTouchbar(el.dataset.id);
+            }
         }
 
         _onFocusOut(event) {
             const el = event.target.closest(".pbe-block");
             if (el) el.classList.remove("is-focused");
+            // A re-render drops the focused line and focuses its replacement in the
+            // same turn, so whether the editing really ended is asked afterwards.
+            window.setTimeout(() => {
+                const active = document.activeElement;
+                if (!active || !active.closest || !active.closest(".pbe-content") || !this.root.contains(active)) {
+                    this._hideTouchbar();
+                }
+            }, 0);
             // Close the slash menu unless focus moved into the menu itself.
             if (this.slash && !this.root.contains(event.relatedTarget)) {
                 this._closeSlash();
@@ -1221,12 +1405,174 @@
             this.scheduleSave();
         }
 
+        // --- toolbar above the on-screen keyboard (touch screens) ---
+
+        /**
+         * What a phone keyboard has no keys for, in a strip on top of it.
+         *
+         * There is no Tab to indent with, no mouse to drag a block with, and the
+         * handle's menu is a long reach on a small screen, so while a line is
+         * being edited on a touch screen this offers the same things as buttons:
+         * a to-do, a bullet or a section heading (a second tap turns the line back
+         * into text), indenting, moving the line up or down, the block menu, and
+         * putting the keyboard away. The buttons never take the focus, so the
+         * keyboard stays up between taps.
+         */
+        _buildTouchbar() {
+            const bar = document.createElement("div");
+            bar.className = "pbe-touchbar";
+            bar.hidden = true;
+            bar.setAttribute("role", "toolbar");
+            bar.setAttribute("aria-label", "Line tools");
+            const buttons = [
+                { action: "todo", icon: "fa-regular fa-square-check", label: "To-do" },
+                { action: "bulleted", icon: "fa-solid fa-list-ul", label: "Bulleted list" },
+                { action: "h1", icon: "fa-solid fa-heading", label: "Section heading" },
+                { action: "outdent", icon: "fa-solid fa-outdent", label: "Outdent" },
+                { action: "indent", icon: "fa-solid fa-indent", label: "Indent" },
+                { action: "up", icon: "fa-solid fa-arrow-up", label: "Move line up" },
+                { action: "down", icon: "fa-solid fa-arrow-down", label: "Move line down" },
+                { action: "menu", icon: "fa-solid fa-ellipsis", label: "More" },
+            ];
+            bar.innerHTML = buttons.map((button) => `
+                <button type="button" class="pbe-touchbar-button" data-touch-action="${button.action}" title="${button.label}" aria-label="${button.label}">
+                    <i class="${button.icon}" aria-hidden="true"></i>
+                </button>`).join("") + `
+                <button type="button" class="pbe-touchbar-button pbe-touchbar-done" data-touch-action="done" title="Done — put the keyboard away" aria-label="Done">
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                </button>`;
+
+            // Keep the caret - and the keyboard - where they are.
+            bar.addEventListener("pointerdown", (event) => event.preventDefault());
+            bar.addEventListener("mousedown", (event) => event.preventDefault());
+            bar.addEventListener("click", (event) => {
+                event.stopPropagation();
+                const button = event.target.closest("[data-touch-action]");
+                if (button && !button.disabled) this._onTouchbarAction(button.dataset.touchAction);
+            });
+            document.body.appendChild(bar);
+            return bar;
+        }
+
+        _showTouchbar(blockId) {
+            if (!this.touchbar) this.touchbar = this._buildTouchbar();
+            this._touchBlockId = blockId;
+            this.touchbar.hidden = false;
+            document.body.classList.add("pbe-touchbar-open");
+            this._syncTouchbar();
+            this._positionTouchbar();
+        }
+
+        _hideTouchbar() {
+            if (!this.touchbar || this.touchbar.hidden) return;
+            this.touchbar.hidden = true;
+            document.body.classList.remove("pbe-touchbar-open");
+            if (this.blockMenuFor) this._closeBlockMenu();
+        }
+
+        // Which buttons apply to the line being edited, and which type it already is.
+        _syncTouchbar() {
+            const block = this.byId(this._touchBlockId);
+            if (!this.touchbar || !block) return;
+            const index = this.indexOf(block.id);
+            const states = {
+                outdent: isListType(block.type) && (block.level || 0) > 0,
+                indent: isListType(block.type) && (block.level || 0) < MAX_LEVEL,
+                up: index > 0,
+                down: index < this.blocks.length - 1,
+            };
+            this.touchbar.querySelectorAll("[data-touch-action]").forEach((button) => {
+                const action = button.dataset.touchAction;
+                if (action in states) button.disabled = !states[action];
+                const isType = action === "todo" || action === "bulleted" || action === "h1";
+                button.classList.toggle("is-active", isType && block.type === action);
+                if (isType) button.setAttribute("aria-pressed", block.type === action ? "true" : "false");
+            });
+        }
+
+        /**
+         * Sit on top of the keyboard. A fixed element is laid out against the
+         * layout viewport, which the keyboard does not shrink on iOS, so the bar
+         * is moved to the bottom of the visual viewport - what is actually left
+         * on screen - and the line being edited is scrolled out from under it.
+         */
+        _positionTouchbar() {
+            const bar = this.touchbar;
+            if (!bar || bar.hidden) return;
+            const viewport = window.visualViewport;
+            const bottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+            bar.style.left = `${viewport ? viewport.offsetLeft : 0}px`;
+            bar.style.width = `${viewport ? viewport.width : window.innerWidth}px`;
+            const top = bottom - bar.offsetHeight;
+            bar.style.top = `${top}px`;
+
+            const content = document.activeElement?.closest?.(".pbe-content");
+            if (content && this.root.contains(content)) {
+                const rect = content.getBoundingClientRect();
+                if (rect.bottom > top - 8) window.scrollBy(0, rect.bottom - top + 16);
+            }
+        }
+
+        _onTouchbarAction(action) {
+            const block = this.byId(this._touchBlockId);
+            if (action === "done") {
+                document.activeElement?.blur?.();
+                this._hideTouchbar();
+                return;
+            }
+            if (!block) return;
+            if (action === "menu") {
+                // Anchored on the whole bar, so the menu opens clear above it.
+                this._openBlockMenu(block.id, this.touchbar);
+                return;
+            }
+            if (this.blockMenuFor) this._closeBlockMenu();
+
+            const content = this.list.querySelector(`[data-id="${block.id}"] .pbe-content`);
+            const offset = content ? (getCaretOffset(content) ?? (block.text || "").length) : 0;
+            if (content) block.text = content.textContent;
+
+            if (action === "todo" || action === "bulleted" || action === "h1") {
+                // A second tap on the type the line already has turns it back into text.
+                const command = SLASH_COMMANDS.find((cmd) => cmd.key === (block.type === action ? "text" : action));
+                command.apply(block);
+                if (!isListType(block.type)) block.level = 0;
+            } else if (action === "indent" || action === "outdent") {
+                if (!isListType(block.type)) return;
+                block.level = action === "indent"
+                    ? Math.min((block.level || 0) + 1, MAX_LEVEL)
+                    : Math.max((block.level || 0) - 1, 0);
+            } else if (action === "up" || action === "down") {
+                const index = this.indexOf(block.id);
+                const target = action === "up" ? index - 1 : index + 1;
+                if (target < 0 || target >= this.blocks.length) return;
+                [this.blocks[index], this.blocks[target]] = [this.blocks[target], this.blocks[index]];
+            } else {
+                return;
+            }
+            this.renderAll();
+            this.focusBlock(block.id, offset);
+            this._syncTouchbar();
+            if (action === "up" || action === "down") {
+                this.list.querySelector(`[data-id="${block.id}"]`)?.scrollIntoView({ block: "nearest" });
+                this._positionTouchbar();
+            }
+            this.scheduleSave();
+        }
+
         // --- drag to reorder (pointer based, works with mouse and touch) ---
 
         _onPointerDown(event) {
+            this._lastPointerType = event.pointerType || "mouse";
             const handle = event.target.closest(".pbe-handle");
             if (!handle) {
-                this._maybeStartBlockSelection(event);
+                // Selecting several blocks by dragging across them is a mouse
+                // gesture: with a finger the same movement is a scroll.
+                if (this._lastPointerType === "mouse") {
+                    this._maybeStartBlockSelection(event);
+                } else if (this.selectedIds.length) {
+                    this._clearBlockSelection();
+                }
                 return;
             }
             const el = handle.closest(".pbe-block");
@@ -1240,14 +1586,43 @@
             if (!dragMultiple) this._clearBlockSelection();
             const idSet = new Set(dragIds);
 
+            // A mouse drags as soon as it moves. A finger has to hold the handle
+            // first, so that a swipe starting on it still scrolls the page: moving
+            // before the hold is up lets the page take the gesture.
+            const isTouch = this._lastPointerType !== "mouse";
             const startX = event.clientX;
             const startY = event.clientY;
             let started = false;
+            let armed = !isTouch;
+            let holdTimer = null;
             handle.setPointerCapture?.(event.pointerId);
 
+            const cleanup = () => {
+                window.clearTimeout(holdTimer);
+                this._touchDragArmed = false;
+                el.classList.remove("pbe-drag-armed");
+                document.removeEventListener("pointermove", move);
+                document.removeEventListener("pointerup", up);
+                document.removeEventListener("pointercancel", cancel);
+            };
+            if (isTouch) {
+                holdTimer = window.setTimeout(() => {
+                    armed = true;
+                    this._touchDragArmed = true;
+                    el.classList.add("pbe-drag-armed");
+                    navigator.vibrate?.(10);
+                }, 300);
+            }
+
             const move = (moveEvent) => {
+                const distance = Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY);
                 if (!started) {
-                    if (Math.abs(moveEvent.clientX - startX) + Math.abs(moveEvent.clientY - startY) < 5) {
+                    if (!armed) {
+                        // Moved before the hold was up: a scroll, not a drag.
+                        if (distance > 8) cleanup();
+                        return;
+                    }
+                    if (!isTouch && distance < 5) {
                         return; // below the drag threshold: still a potential click
                     }
                     started = true;
@@ -1258,8 +1633,7 @@
                 this._dragMove(moveEvent);
             };
             const up = (upEvent) => {
-                document.removeEventListener("pointermove", move);
-                document.removeEventListener("pointerup", up);
+                cleanup();
                 if (started) {
                     this._dragEnd(upEvent);
                 } else {
@@ -1267,8 +1641,17 @@
                     this._openBlockMenu(blockId, handle);
                 }
             };
+            // The browser took the gesture (a scroll, a system swipe): nothing moves.
+            const cancel = () => {
+                cleanup();
+                if (started) {
+                    this._blockEls().forEach((row) => row.classList.remove("pbe-drop-before", "pbe-drop-after", "pbe-dragging"));
+                    this.drag = null;
+                }
+            };
             document.addEventListener("pointermove", move);
             document.addEventListener("pointerup", up);
+            document.addEventListener("pointercancel", cancel);
         }
 
         _dragMove(event) {
@@ -1351,6 +1734,7 @@
             const onUp = () => {
                 document.removeEventListener("pointermove", onMove);
                 document.removeEventListener("pointerup", onUp);
+                document.removeEventListener("pointercancel", onUp);
                 this.list.classList.remove("pbe-selecting");
                 if (selecting) {
                     // Drop the caret so the block selection is the only visible one.
@@ -1359,6 +1743,7 @@
             };
             document.addEventListener("pointermove", onMove);
             document.addEventListener("pointerup", onUp);
+            document.addEventListener("pointercancel", onUp);
         }
 
         _selectBlockRange(idA, idB) {

@@ -715,6 +715,35 @@ The schema in the code matches the latest migration (`20261027_0034`).
   naive as UTC and converted only at display time. Keep this pattern (`ensure_utc`); don't mix
   timezones in the database.
 
+27. **The plan's block editor is fitted to touch screens.** Everything here is switched on by
+    `(pointer: coarse)` — a phone or a tablet — and each gesture also checks its own
+    `pointerType`, so a mouse or trackpad on the same device keeps the desktop behaviour; on a
+    desktop nothing changes. In [plan-block-editor.js](../app/static/js/plan-block-editor.js):
+
+    - **A tap anywhere in a row starts editing it** (`_focusFromTap`): an iPad only placed the
+      caret on a tap that hit the letters. On a touch tap the editor checks whether the line
+      under the finger — or the nearest one, for a tap between lines — got the caret, and if
+      not puts it there itself, at the letter under the finger (`caretRangeFromPoint`) or at the
+      end of the line, inside the tap so iOS raises the keyboard.
+    - **Enter and Backspace also go through `beforeinput`** (`_onBeforeInput`):
+      on-screen keyboards often send "Unidentified" or no keydown at all, so a line was not
+      split or merged. `insertParagraph` (and an `insertLineBreak` that was not Shift+Enter)
+      splits, `deleteContentBackward` at the start merges; a key the keydown handler already
+      took never gets here.
+    - **Dragging across lines to select several is mouse-only**, and every pointer gesture ends
+      on `pointercancel`, so a scroll no longer selects blocks or drops the caret.
+    - **A toolbar sits on top of the keyboard** while a line is edited (`_buildTouchbar`): to-do,
+      bullet and section heading (a second tap turns the line back into text), outdent and
+      indent, move up and down, the block menu, and ✓ to put the keyboard away. It follows the
+      visual viewport, which is what the keyboard shrinks, and its buttons never take the focus.
+    - **The handle is always shown, inside the row**, and dragging by it starts after a 300 ms
+      hold — moving sooner lets the page scroll (`touch-action: pan-y`, then a non-passive
+      `touchmove` once armed). A short tap opens the block menu as before.
+    - **Menus open where they can be seen** (`_placeMenu`): above their anchor when the keyboard
+      and the toolbar hide the space below, as tall as the room left, and scrolling past that.
+    - The gap between lines is padding of the line below rather than margin, lines are a little
+      taller, and the checkbox and menu items are bigger (styles.css, `@media (pointer: coarse)`).
+
 Things not determined (literally "I don't know"):
 - [app/templates/icons.html](../app/templates/icons.html) is not rendered by anything — purpose unknown.
 - `app.config.get("SKIP_DB_BOOTSTRAP")` in [app/__init__.py:221](../app/__init__.py#L221) references a key

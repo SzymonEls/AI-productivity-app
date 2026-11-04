@@ -4438,3 +4438,132 @@ button.picker-row:hover {
     justify-content: flex-end;
     gap: 0.5rem;
 }
+
+/* ---------------------------------------------------------------------------
+   The plan's block editor on a touch screen (phones, tablets).
+
+   A finger needs bigger targets than a mouse and has no hover to reveal
+   anything: the gap between lines belongs to the line below it (padding rather
+   than margin, so a tap there lands in a row), lines are a little taller, the
+   handle is always shown and sits inside the row instead of out in the margin,
+   and the checkbox is bigger. The toolbar above the keyboard comes from
+   plan-block-editor.js (_buildTouchbar).
+   --------------------------------------------------------------------------- */
+@media (pointer: coarse) {
+    .pbe-flat {
+        padding-left: 0;
+    }
+
+    .pbe-block {
+        margin-top: 0;
+        padding-top: 0.4rem;
+    }
+
+    .pbe-flat > .pbe-block:first-child,
+    .project-section-preface > .pbe-block:first-child,
+    .project-markdown-section-card > .pbe-block:first-child {
+        padding-top: 0;
+    }
+
+    .pbe-content {
+        padding-block: 0.15rem;
+    }
+
+    .pbe-marker {
+        padding-top: 0.2rem;
+    }
+
+    .pbe-controls {
+        position: static;
+        flex: 0 0 auto;
+        opacity: 0.5;
+    }
+
+    .pbe-block.is-focused > .pbe-controls,
+    .pbe-block.pbe-menu-open > .pbe-controls {
+        opacity: 1;
+    }
+
+    .pbe-handle {
+        width: 1.6rem;
+        height: 1.8rem;
+        margin-left: -0.35rem;
+        font-size: 0.95rem;
+        /* The page may still scroll from the handle until it has been held -
+           see _onPointerDown. */
+        touch-action: pan-y;
+    }
+
+    .pbe-check {
+        height: 1.8rem;
+        padding: 0 0.1rem;
+    }
+
+    .pbe-check input {
+        width: 1.25rem;
+        height: 1.25rem;
+    }
+
+    .pbe-slash-item,
+    .pbe-menu-item {
+        padding: 0.6rem 0.65rem;
+    }
+
+    /* Held long enough to drag. */
+    .pbe-block.pbe-drag-armed {
+        background: var(--surface-hover);
+    }
+}
+
+.pbe-touchbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1060;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 0.3rem max(0.5rem, env(safe-area-inset-left)) 0.3rem max(0.5rem, env(safe-area-inset-right));
+    overflow-x: auto;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 14px rgba(0, 0, 0, 0.08);
+}
+
+.pbe-touchbar[hidden] {
+    display: none;
+}
+
+/* The buttons share the width, down to 2rem each, so the whole bar - Done
+   included - fits a 320px phone without scrolling sideways. */
+.pbe-touchbar-button {
+    flex: 1 0 2rem;
+    min-width: 2rem;
+    max-width: 3rem;
+    height: 2.6rem;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 1.05rem;
+}
+
+.pbe-touchbar-button.is-active {
+    background: var(--primary-soft);
+    color: var(--primary);
+}
+
+.pbe-touchbar-button:disabled {
+    opacity: 0.3;
+}
+
+.pbe-touchbar-done {
+    margin-left: auto;
+    color: var(--primary);
+}
+
+/* Room under the plan, so its last line can be scrolled out from under the bar. */
+body.pbe-touchbar-open {
+    padding-bottom: 3.6rem;
+}
