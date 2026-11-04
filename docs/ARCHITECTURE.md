@@ -679,8 +679,8 @@ The schema in the code matches the latest migration (`20261027_0034`).
     "Skip planning" sends it again with `skip_next`; Cancel leaves the session as it was.
     Reopening a session or taking a failure back needs nothing. The project page's plan button
     says which state the project is in (`_next_session_label`): green with the next session's
-    day and block ("Next: Thu 6 Nov · A", or "Today · B" while today's is still to happen), amber
-    with "Not planned" while there is none.
+    day and block ("Next: Thu 6 Nov · A"), amber with "Not planned" while there is none after
+    today - today's own session is the one being worked on, not the next.
 
 26. **Mood is rated once a day and read as a week.** The button left of **Inbox** on the home
     page opens a dialog of five numbers; picking one posts it to `POST /mood`

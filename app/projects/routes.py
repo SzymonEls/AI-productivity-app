@@ -801,23 +801,18 @@ def _needs_next_session(project, payload):
     )
 
 
-def _next_session_label(project, today_booking):
-    """``(label, is_planned)`` for the project page's plan button.
+def _next_session_label(project):
+    """What the project page's plan button names: "Thu 6 Nov · A", or "" for none.
 
-    The next session is today's while it is still to happen, and otherwise the
-    one booked after today. "Thu 6 Nov · A", or "Today · B".
+    Only a session booked after today counts as the next one. Today's is the
+    session being worked on, not the next, so a project with nothing after it
+    reads as "Not planned" - the same thing ending today's session asks about.
     """
-    upcoming = None
-    if today_booking is not None and not today_booking.is_done and not today_booking.is_failed:
-        upcoming = today_booking
-    else:
-        _, upcoming = project_bookings(current_user.id, project.id)
+    _, upcoming = project_bookings(current_user.id, project.id)
     if upcoming is None:
-        return "", False
-    if upcoming.slot_date == today_local():
-        return f"Today · {upcoming.slot}", True
+        return ""
     day = upcoming.slot_date
-    return f"{day.strftime('%a')} {day.day} {day.strftime('%b')} · {upcoming.slot}", True
+    return f"{day.strftime('%a')} {day.day} {day.strftime('%b')} · {upcoming.slot}"
 
 
 @projects_bp.route("/<int:project_id>/session-done", methods=["POST"])
@@ -1486,7 +1481,7 @@ def project_detail(project_id):
         today_session_failed=bool(today_booking and today_booking.is_failed),
         # What the plan button says: the next session's day and block, or that
         # there is none planned.
-        next_session_label=_next_session_label(project, today_booking)[0],
+        next_session_label=_next_session_label(project),
         # What archiving left standing, for the banner to name. Only asked for
         # when there is a banner to put it in.
         planned_sessions=planned_session_labels(current_user.id, project.id)
