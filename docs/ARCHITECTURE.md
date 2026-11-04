@@ -29,7 +29,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
 | [app/mood/](../app/mood/) | The daily mood: rating today from 1 to 5 (`POST /mood`, one row per day, rewritten when rated again), and the 7-day average the home page and the health chart read - see point 26. |
-| [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's thoughts. Also the one-box page the PWA shortcut opens - see point 19. |
+| [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's plan as a to-do. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
 | [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score and mood average, the inbox widget) + PWA files (manifest, service worker). |
@@ -98,8 +98,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 
 - **InboxItem** — one thought captured before it was decided where it belongs: a `body` and
   nothing else. It has no `project_id`, and that absence *is* the state - an item exists precisely
-  for as long as no project has been chosen for it. Filing one appends its text to that project's
-  `short_goal` and deletes the row in the same transaction, so the inbox is a queue rather than a
+  for as long as no project has been chosen for it. Filing one adds its text to that project's
+  `long_goal` as a `- [ ]` to-do and deletes the row in the same transaction, so the inbox is a queue rather than a
   second copy of anything; the × is the other way out, and deletes without filing. Like a DayNote
   it is the user's, never a project's, so no project deletion cascades one away; unlike a DayNote
   it belongs to no date either, because when a thought was had says nothing about where it goes.
@@ -428,9 +428,11 @@ The schema in the code matches the latest migration (`20261027_0034`).
     launcher.
 
     Filing is the ordinary half: the picker on the home page posts to `/inbox/<id>/file`, which
-    appends the text to `Project.short_goal` behind a blank line and deletes the row in one
-    transaction. It stays plain text - no date stamp, no bullet - because `short_goal` has no
-    structure to respect and inventing one would only have to be parsed back out later. The
+    adds the text to `Project.long_goal` as a `- [ ]` to-do and deletes the row in one
+    transaction (`add_loose_todo`). The to-do goes loose above the first `# ` section, after
+    whatever is already loose there, or at the end of a plan with no sections, so the first
+    section - whose title the schedule, the timer and the API read - is left as it was. The text is
+    folded onto one line, since a newline would end the item and a `# ` line would start a section. The
     widget is rendered `hidden` rather than omitted when the inbox is empty: the + has to be able
     to fill it without a reload, and the row markup and project list it clones come from the
     `<template>` that section carries.

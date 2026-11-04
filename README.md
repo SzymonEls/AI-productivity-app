@@ -78,8 +78,8 @@ container, no external services.
   onto a box: type it, or dictate it with the mic on the keyboard, and it is saved without today's
   plan ever coming up to argue with it. There is a + beside "Today" for the same thing at a desk.
   What is waiting shows up in a list on the home page, each line with a project picker; choosing
-  one appends the text to that project's thoughts, a blank line below whatever was already there,
-  and takes the line off the list. A × throws one away instead — something captured by accident
+  one adds it to that project's plan as an open to-do, loose above the first section (or at the
+  end of a plan with no sections), and takes the line off the list. A × throws one away instead — something captured by accident
   should not have to be filed somewhere real to be got rid of. An empty inbox shows nothing at
   all.
 - **Calendars** — paste a calendar's address in iCal format on the **Integrations** page (under

@@ -4,9 +4,9 @@ The inbox: thoughts captured before it was decided where they belong.
 Capturing and filing are two moments, and the app now keeps them apart. An item
 arrives with nothing but its text - from the box the PWA shortcut opens, or from
 the + beside "Today" - and waits on the home page until a project is chosen for
-it. Choosing appends the text to that project's thoughts
-and deletes the row, so the inbox is a queue rather than a second copy of
-anything.
+it. Choosing puts the text in that project's plan as an open to-do, loose
+above the first section, and deletes the row, so the inbox is a queue rather
+than a second copy of anything.
 
 The other way out is the ×, which throws the item away without filing it. It is
 not a nicety: capture is deliberately careless - one tap and a sentence, with
@@ -21,6 +21,8 @@ the field rather than on the home page is the whole of what it buys. See point
 19 in ARCHITECTURE.md.
 """
 
+import re
+
 from flask import Blueprint, jsonify, render_template, request
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
@@ -30,6 +32,10 @@ from ..models import INBOX_ITEM_MAX_LENGTH, InboxItem, Project
 
 
 inbox_bp = Blueprint("inbox", __name__, url_prefix="/inbox")
+
+# A list item as the plan writes one, to tell whether a filed to-do can join the
+# loose list right above it or needs a blank line to start one.
+LIST_LINE_PATTERN = re.compile(r"^\s*(?:[-*+]\s|\d+\.\s)")
 
 
 def _get_user_item_or_404(item_id):
@@ -81,6 +87,55 @@ def filing_projects(user_id):
     )
 
 
+def _first_section_offset(markdown):
+    """Where the plan's first section starts, or None when it has none.
+
+    Uses the rule every other reader of the plan does - a "# " line with text
+    after it (``first_plan_section_title``, the archive's section numbering) -
+    so the to-do lands above the very heading those name as the first section.
+    """
+    offset = 0
+    for line in markdown.splitlines(keepends=True):
+        if line.startswith("# ") and line.strip()[2:].strip():
+            return offset
+        offset += len(line)
+    return None
+
+
+def add_loose_todo(plan, text):
+    """The plan with ``- [ ] text`` added to the loose items above its first section.
+
+    Loose items sit outside every section, so the first section - and its
+    title, which the schedule, the timer and the API read - stays as it was. The
+    to-do goes after whatever is already loose there, so a few filed in a row
+    keep the order they were filed in, and with no sections at all it simply
+    goes at the end of the plan.
+
+    The thought is folded onto one line: a newline in it would end the list item,
+    and a line of it beginning with "# " would turn into a new first section.
+    """
+    text = " ".join((text or "").split())
+    todo = f"- [ ] {text}"
+    plan = plan or ""
+    # A lone "-" is the placeholder a project made from a day note starts with.
+    if not plan.strip() or plan.strip() == "-":
+        return todo
+
+    split = _first_section_offset(plan)
+    before = plan[:split] if split is not None else plan
+    after = plan[split:] if split is not None else ""
+
+    before = before.rstrip()
+    if not before:
+        joined = todo
+    else:
+        last_line = before.splitlines()[-1]
+        separator = "\n" if LIST_LINE_PATTERN.match(last_line) else "\n\n"
+        joined = f"{before}{separator}{todo}"
+
+    return f"{joined}\n\n{after.lstrip()}" if after else joined
+
+
 @inbox_bp.route("/capture")
 @login_required
 def capture_page():
@@ -130,17 +185,16 @@ def add_item():
 @inbox_bp.route("/<int:item_id>/file", methods=["POST"])
 @login_required
 def file_item(item_id):
-    """Append one inbox item to a project's thoughts and drop it from the inbox.
+    """Put one inbox item in a project's plan as a to-do and drop it from the inbox.
 
-    A blank line goes in between, so a filed thought reads as its own paragraph
-    rather than running into the last sentence of whatever was there. It is
-    still only text: ``short_goal`` has no structure to respect, and this
-    deliberately does not invent one - no date stamp, no bullet, nothing that
-    would have to be parsed back out later.
+    It goes loose above the first section (``add_loose_todo``) rather than into
+    the thoughts: a captured thought is nearly always something to do, and
+    there it is ticked off like the rest of the plan without having become part
+    of the step being worked on.
 
-    The row goes in the same transaction as the append. Filing is a move, and
-    the one outcome worth ruling out is a thought that is in a project and still
-    in the inbox - or in neither.
+    The row goes in the same transaction as the edit. Filing is a move, and the
+    one outcome worth ruling out is a thought that is in a project and still in
+    the inbox - or in neither.
     """
     item = _get_user_item_or_404(item_id)
 
@@ -154,8 +208,7 @@ def file_item(item_id):
     if project is None:
         return jsonify({"ok": False, "message": "Unknown project."}), 404
 
-    existing = (project.short_goal or "").rstrip()
-    project.short_goal = f"{existing}\n\n{item.body}" if existing else item.body
+    project.long_goal = add_loose_todo(project.long_goal, item.body)
     db.session.delete(item)
 
     try:

@@ -4,7 +4,7 @@
  *
  * Two halves that only share this script because they share the page. The +
  * beside "Today" puts something in the inbox; the widget in the sidebar takes
- * things out of it, either by appending the text to a project's thoughts or by
+ * things out of it, either by adding the text to a project's plan as a to-do or by
  * throwing it away with the ×. Everything here applies the change to the page
  * before the server has answered and puts it back if the answer says no, the
  * way the schedule board does with a move.

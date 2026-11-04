@@ -209,7 +209,7 @@
                project list this section carries. #}
             <div class="dashboard-section inbox-widget" data-inbox {% if not inbox_items %}hidden{% endif %}>
                 <h2 class="h6 mb-1">Inbox <span class="text-muted fw-normal" data-inbox-count>({{ inbox_items|length }})</span></h2>
-                <p class="text-muted small mb-3">Captured without a project. Pick where each one belongs and it is appended to that project's thoughts.</p>
+                <p class="text-muted small mb-3">Captured without a project. Pick where each one belongs and it becomes a to-do in that project's plan, above the first section.</p>
                 <p class="inbox-status" data-inbox-status role="status"></p>
                 <ul class="inbox-list" data-inbox-list>
                     {% for item in inbox_items %}{{ inbox_row(item) }}{% endfor %}

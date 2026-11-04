@@ -411,8 +411,8 @@ class InboxItem(db.Model):
 
     Deliberately not a project's field and not a DayNote: it belongs to no
     project yet - that is its defining state - and to no day either, since when
-    a thought was had says nothing about where it goes. Filing one appends the
-    text to ``Project.short_goal`` and deletes the row, so the inbox is only
+    a thought was had says nothing about where it goes. Filing one adds the
+    text to ``Project.long_goal`` as a to-do and deletes the row, so the inbox is only
     ever a queue: nothing that has been filed is kept here as well.
     """
 
