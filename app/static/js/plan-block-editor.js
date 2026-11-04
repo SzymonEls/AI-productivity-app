@@ -332,16 +332,27 @@
             this._onPaste = this._onPaste.bind(this);
             this._onPointerDown = this._onPointerDown.bind(this);
             this._onBeforeInput = this._onBeforeInput.bind(this);
-            this._positionTouchbar = this._positionTouchbar.bind(this);
             // Once a handle has been held long enough to drag, the finger moving
             // must drag the block rather than scroll the page. Only a non-passive
-            // touchmove can say so; the handle lets the page pan until then.
+            // touchmove can say so; the handle lets the page pan until then. It is
+            // bound to each handle (in _createBlockEl), never to the whole list: a
+            // blocking touch listener makes the browser wait for the page before
+            // every scroll that starts over it, and the plan is most of the page.
             this._onTouchMove = (event) => {
                 if (this._touchDragArmed) event.preventDefault();
             };
+            this._onViewportResize = () => this._positionTouchbar(true);
+            this._onViewportScroll = () => {
+                // One reposition per frame, and no scrolling of the page from
+                // here: the reader is the one scrolling.
+                if (this._touchbarFrame) return;
+                this._touchbarFrame = window.requestAnimationFrame(() => {
+                    this._touchbarFrame = null;
+                    this._positionTouchbar(false);
+                });
+            };
 
             this.list.addEventListener("beforeinput", this._onBeforeInput);
-            this.list.addEventListener("touchmove", this._onTouchMove, { passive: false });
             this.list.addEventListener("input", this._onInput);
             this.list.addEventListener("keydown", this._onKeydown);
             this.list.addEventListener("focusin", this._onFocusIn);
@@ -416,8 +427,8 @@
             document.addEventListener("keydown", this._onDocKeydown);
             // The toolbar rides on top of the on-screen keyboard, whose height only
             // the visual viewport knows.
-            window.visualViewport?.addEventListener("resize", this._positionTouchbar);
-            window.visualViewport?.addEventListener("scroll", this._positionTouchbar);
+            window.visualViewport?.addEventListener("resize", this._onViewportResize);
+            window.visualViewport?.addEventListener("scroll", this._onViewportScroll, { passive: true });
             // Note: persisting on page unload is the host's responsibility (it can
             // use a keepalive request that survives the page being torn down).
         }
@@ -433,9 +444,8 @@
             this.list.removeEventListener("paste", this._onPaste);
             this.list.removeEventListener("pointerdown", this._onPointerDown);
             this.list.removeEventListener("beforeinput", this._onBeforeInput);
-            this.list.removeEventListener("touchmove", this._onTouchMove);
-            window.visualViewport?.removeEventListener("resize", this._positionTouchbar);
-            window.visualViewport?.removeEventListener("scroll", this._positionTouchbar);
+            window.visualViewport?.removeEventListener("resize", this._onViewportResize);
+            window.visualViewport?.removeEventListener("scroll", this._onViewportScroll);
             this.touchbar?.remove();
             document.body.classList.remove("pbe-touchbar-open");
             document.removeEventListener("pointerdown", this._onDocPointerDown, true);
@@ -578,6 +588,9 @@
             handle.title = "Drag to move · click to change type";
             handle.setAttribute("aria-label", "Move block or change its type");
             handle.textContent = "⋮⋮";
+            if (this.touchQuery?.matches) {
+                handle.addEventListener("touchmove", this._onTouchMove, { passive: false });
+            }
             controls.append(handle);
             el.appendChild(controls);
 
@@ -1492,7 +1505,7 @@
          * is moved to the bottom of the visual viewport - what is actually left
          * on screen - and the line being edited is scrolled out from under it.
          */
-        _positionTouchbar() {
+        _positionTouchbar(revealLine = true) {
             const bar = this.touchbar;
             if (!bar || bar.hidden) return;
             const viewport = window.visualViewport;
@@ -1502,7 +1515,9 @@
             const top = bottom - bar.offsetHeight;
             bar.style.top = `${top}px`;
 
-            const content = document.activeElement?.closest?.(".pbe-content");
+            // Only when the keyboard opens or resizes, or a line is moved: while
+            // the reader scrolls, pulling the line back into view would fight them.
+            const content = revealLine ? document.activeElement?.closest?.(".pbe-content") : null;
             if (content && this.root.contains(content)) {
                 const rect = content.getBoundingClientRect();
                 if (rect.bottom > top - 8) window.scrollBy(0, rect.bottom - top + 16);

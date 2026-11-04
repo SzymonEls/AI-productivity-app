@@ -381,9 +381,11 @@ The schema in the code matches the latest migration (`20261027_0034`).
     a session: a done one, or one still to come (today or later, not failed) — a session planned
     for today is what next week's is measured from. A past one never ticked off does not count; as
     far as the app knows it did not happen. A project with none is measured from the day it was
-    created, so a new project's first session is held to the same rhythm. Every booking of the
-    user is read once per request (`_session_history`, kept on `g`), so a page of blocks is one
-    query, not one per block.
+    created, so a new project's first session is held to the same rhythm. The days that count are
+    read once per request — only those rows, only project and day (`_session_days`, kept on
+    `g`) — and kept sorted per project, so finding a block's session before is a binary search
+    (`_latest_before`) rather than a pass over the history: a page of blocks is one query and
+    stays cheap however many years of sessions there are.
 
     Moving a session is therefore free until it crosses the line. The board applies a move before
     the server answers, so [schedule-board.js](../app/static/js/schedule-board.js) works the same
@@ -392,7 +394,10 @@ The schema in the code matches the latest migration (`20261027_0034`).
     before today (`data-session-before`, with `data-session-before-creation` when that is the
     creation day), and the script adds the project's other sessions it can see on the board, all of
     which are today or later. A move can change what the project's other session is measured from,
-    so every block is redrawn after one (`refreshAll`).
+    so after one the moved blocks and every block of the projects in it are redrawn
+    (`refreshBlocks`), with the board's sessions indexed by project once per pass — never a
+    search of the whole board per block, which with a year of weeks scrolled in would grow with
+    the square of the board.
 
     `postponed_count` on `ProjectDaySlot` is still kept by `move_booking` and
     `shift_bookings_forward` (`postponement_after`: a later day is one step on, an earlier one a
@@ -737,10 +742,14 @@ The schema in the code matches the latest migration (`20261027_0034`).
     - **A toolbar sits on top of the keyboard** while a line is edited (`_buildTouchbar`): to-do,
       bullet and section heading (a second tap turns the line back into text), outdent and
       indent, move up and down, the block menu, and ✓ to put the keyboard away. It follows the
-      visual viewport, which is what the keyboard shrinks, and its buttons never take the focus.
+      visual viewport, which is what the keyboard shrinks, repositioned at most once a frame while
+      the page scrolls; it scrolls the edited line into view only when the keyboard opens or the
+      line moves, never against the reader's own scroll. Its buttons never take the focus.
     - **The handle is always shown, inside the row**, and dragging by it starts after a 300 ms
       hold — moving sooner lets the page scroll (`touch-action: pan-y`, then a non-passive
-      `touchmove` once armed). A short tap opens the block menu as before.
+      `touchmove` once armed). That listener is bound to each handle only, never to the list: a
+      blocking touch listener makes the browser wait for the page before any scroll that starts
+      over it. A short tap opens the block menu as before.
     - **Menus open where they can be seen** (`_placeMenu`): above their anchor when the keyboard
       and the toolbar hide the space below, as tall as the room left, and scrolling past that.
     - The gap between lines is padding of the line below rather than margin, lines are a little

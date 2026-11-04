@@ -83,6 +83,28 @@
         return content.closest("[data-slot-cell]");
     }
 
+    /* Where each project's sessions sit on the board: { projectId: [[day,
+       content], ...] }, failed ones left out. Built once per redraw, so working
+       out a block's session before is a look at its own project's few blocks
+       rather than a search of the whole board for every block - which, with a
+       year of weeks scrolled in, would grow with the square of the board. */
+    let sessionIndex = null;
+
+    function buildSessionIndex() {
+        const index = {};
+        root.querySelectorAll("[data-slot-content]").forEach((content) => {
+            const projectId = content.dataset.projectId;
+            if (!projectId || content.dataset.failed === "1") {
+                return;
+            }
+            const day = cellOf(content)?.dataset.date;
+            if (day) {
+                (index[projectId] ||= []).push([day, content]);
+            }
+        });
+        return index;
+    }
+
     /* previous_session() in slots.py, for a session on ``day``: the latest of
        the last session before today (rendered onto the content) and the
        project's other sessions on the board before that day - every block on
@@ -91,12 +113,9 @@
     function previousSession(content, day) {
         let best = content.dataset.sessionBefore || "";
         let isCreation = content.dataset.sessionBeforeCreation === "1";
-        root.querySelectorAll(`[data-slot-content][data-project-id="${content.dataset.projectId}"]`).forEach((other) => {
-            if (other === content || other.dataset.failed === "1") {
-                return;
-            }
-            const otherDay = cellOf(other)?.dataset.date;
-            if (otherDay && otherDay < day && otherDay > best) {
+        const index = sessionIndex || buildSessionIndex();
+        (index[content.dataset.projectId] || []).forEach(([otherDay, other]) => {
+            if (other !== content && otherDay < day && otherDay > best) {
                 best = otherDay;
                 isCreation = false;
             }
@@ -230,10 +249,30 @@
         content.draggable = booked;
     }
 
-    /* Every block, not just the two a move touched: a session moved or freed
-       changes what the project's other session is measured from. */
-    function refreshAll() {
-        cells().forEach(refreshCell);
+    /* Redraw blocks with the board's session index built once for the pass.
+       With no arguments every block (the page's first pass); otherwise the
+       blocks a change touched and every block of the projects in it - a session
+       moved or freed changes what its project's other sessions are measured
+       from, and nothing else on the board. Keeps a move as cheap as before the
+       frequency rule however many weeks are scrolled in. */
+    function refreshBlocks(touchedCells, projectIds) {
+        sessionIndex = buildSessionIndex();
+        try {
+            if (!touchedCells) {
+                cells().forEach(refreshCell);
+                return;
+            }
+            const targets = new Set(touchedCells);
+            projectIds.filter(Boolean).forEach((projectId) => {
+                (sessionIndex[projectId] || []).forEach(([, content]) => {
+                    const cell = cellOf(content);
+                    if (cell) targets.add(cell);
+                });
+            });
+            targets.forEach(refreshCell);
+        } finally {
+            sessionIndex = null;
+        }
     }
 
     function setDone(content, done) {
@@ -292,7 +331,7 @@
      * applies, kept in step here so the page does not lie until the next reload.
      *
      * Whether a block is red is worked out afresh for every block afterwards
-     * (refreshAll): moving a session is free until it lands too long after the
+     * (refreshBlocks): moving a session is free until it lands too long after the
      * one before, and a move can change that for the project's other session
      * too. Dates are ISO strings, which sort as the days they name.
      */
@@ -311,7 +350,8 @@
         setDone(toContent, wasDone[1] && sameDay);
         setFailed(fromContent, wasFailed[0] && sameDay);
         setFailed(toContent, wasFailed[1] && sameDay);
-        refreshAll();
+        const moved = [fromContent.dataset.projectId, toContent.dataset.projectId];
+        refreshBlocks([fromCell, toCell], moved);
 
         return function undo() {
             moveContentInto(fromCell, fromContent);
@@ -320,7 +360,7 @@
             setDone(toContent, wasDone[1]);
             restoreFailed(fromContent, wasFailed[0]);
             restoreFailed(toContent, wasFailed[1]);
-            refreshAll();
+            refreshBlocks([fromCell, toCell], moved);
         };
     }
 
@@ -429,7 +469,7 @@
         content.dataset.deadlineLabel = "";
         content.dataset.deadlineTime = "";
         content.replaceChildren(free);
-        refreshAll();
+        refreshBlocks([cell], [previous.projectId]);
 
         return function undo() {
             content.dataset.projectId = previous.projectId;
@@ -445,7 +485,7 @@
             content.dataset.deadlineLabel = previous.deadlineLabel;
             content.dataset.deadlineTime = previous.deadlineTime;
             content.replaceChildren(...previous.nodes);
-            refreshAll();
+            refreshBlocks([cell], [previous.projectId]);
         };
     }
 
@@ -494,7 +534,7 @@
 
     // The template renders every block in its final state; only "draggable"
     // belongs to the script, so the board is set up in one pass.
-    cells().forEach(refreshCell);
+    refreshBlocks();
 
     // Pick up what the day off had to say before it reloaded the page. It is
     // worth carrying: "1 stayed put" is the answer to why the day you took off
