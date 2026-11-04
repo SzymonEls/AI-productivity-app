@@ -15,22 +15,17 @@
 {% from "icons.html" import icon %}
 {% from "tasks/_tasks.html" import day_tasks %}
 
-{# Why the block is tinted and carries its !, spelled out on hover. Both the
-   colour and the number of marks stop at two moves, the count does not, so this
-   says the number: a block put off four times looks the same as one put off
-   twice, and this is where the difference - three more moves back to clear it -
-   can be read. #}
-
 {# What a deadline printed in place of the letter says on hover. #}
 {% macro deadline_title(entry) %}Session deadline {{ entry.deadline_label }}{% if entry.after_deadline %} — this session is after it{% endif %}{% endmacro %}
 
 {% macro slot_cell(day, entry, readonly=False) %}
     {# The letter and the two buttons belong to the position and stay put; only
-       [data-slot-content] travels when a project is dragged - which is why how
-       often the session has been put off is carried on the content rather than
-       on the block, even though it is the block that gets tinted. #}
+       [data-slot-content] travels when a project is dragged - which is why what
+       the red ! is worked out from (the project's allowed gap and its last
+       session before today) is carried on the content rather than on the
+       block, even though it is the block that gets tinted. #}
     <li
-        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}{% if entry.is_failed %} is-failed{% endif %}{% if entry.project and entry.warn_level %} is-postponed-{{ entry.warn_level }}{% endif %}"
+        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}{% if entry.is_failed %} is-failed{% endif %}{% if entry.project and entry.warn_level %} is-warned{% endif %}"
         {% if not readonly %}data-slot-cell data-date="{{ day.date.isoformat() }}" data-slot="{{ entry.slot }}"{% endif %}
     >
         {# A session with a deadline shows that day instead of the letter. The
@@ -48,7 +43,7 @@
         {% endif %}
         <div
             class="day-slot-content"
-            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-postponed="{{ entry.postponed }}" data-failed="{{ 1 if entry.is_failed else 0 }}" data-problematic="{{ 1 if entry.is_problematic else 0 }}" data-deadline="{{ entry.deadline.isoformat() if entry.deadline else '' }}" data-deadline-last="{{ entry.deadline_last.isoformat() if entry.deadline_last else '' }}" data-deadline-label="{{ entry.deadline_label }}" data-deadline-time="{{ entry.deadline_time }}"{% endif %}
+            {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-session-gap="{{ entry.session_gap }}" data-sessions-per-week="{{ entry.sessions_per_week }}" data-session-before="{{ entry.session_before.isoformat() if entry.session_before else '' }}" data-session-before-creation="{{ 1 if entry.session_before_is_creation else 0 }}" data-failed="{{ 1 if entry.is_failed else 0 }}" data-problematic="{{ 1 if entry.is_problematic else 0 }}" data-deadline="{{ entry.deadline.isoformat() if entry.deadline else '' }}" data-deadline-last="{{ entry.deadline_last.isoformat() if entry.deadline_last else '' }}" data-deadline-label="{{ entry.deadline_label }}" data-deadline-time="{{ entry.deadline_time }}"{% endif %}
         >
             {% if entry.project %}
                 <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
@@ -59,16 +54,14 @@
                 <span class="day-slot-free">Free</span>
             {% endif %}
         </div>
-        {# The tint on its own is a colour, and a colour is not something every
-           reader can tell apart. The ! says the same thing in a shape, and it
-           climbs with the tint: one mark for the first move onto a later day,
-           two for the second and every one after it, so the two stages can be
-           told apart without the colour. A problematic project skips the count
-           and gets the two straight away. The tooltip says which it is, and
-           spells out the number the marks have stopped counting. It goes with
-           the session rather than with the position, so the board's script
-           redraws it after a move; warn_level is 0 once the session is done or
-           failed, when nothing about it is late any more. #}
+        {# One red ! beside the red tint, so the warning is a shape as well as a
+           colour. Two things put it there: the project is problematic (a
+           session of it failed), or the session comes so long after the one
+           before that the project falls below its sessions a week - the
+           tooltip says which. Moving a session is free until it crosses that
+           line. It goes with the session rather than the position, so the
+           board's script redraws it after a move; warn_level is 0 once the
+           session is done or failed. #}
         {% if entry.project and entry.warn_level %}
             <span
                 class="day-slot-warn"
@@ -76,7 +69,7 @@
                 role="img"
                 title="{{ entry.warn_title }}"
                 aria-label="{{ entry.warn_title }}"
-            >{{ "!" * entry.warn_level }}</span>
+            >!</span>
         {% endif %}
         {% if readonly and entry.project %}
             {# The one thing a past block can still be told: that the session did

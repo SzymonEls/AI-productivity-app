@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), counting how often a session has been put off, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its two weeks of history, and the three-week figures behind the Statistics card on a project page. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), whether a session is behind its project's sessions a week, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its two weeks of history, and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
@@ -76,7 +76,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   until something in another project is reached — see point 23. `session_deadline` is the
   project's deadline, `session_deadline_time` an optional hour on it, and
   `session_deadline_day_before` whether the next session has to come a day before it rather than
-  on the day at the latest — see point 24. `is_problematic` flags every session still to come with "!!" — see point 25.
+  on the day at the latest — see point 24. `is_problematic` flags every session still to come red with a "!" — see point 25.
+  `sessions_per_week` (1–7, default 1) is the fewest sessions a week it should get — see point 18.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -85,8 +86,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **ProjectDaySlot** — one project booked into one of a day's slots (`slot` = `"A"`/`"B"`/`"C"`).
   `is_done` marks that day's session finished - it lives on the slot, so it clears itself tomorrow.
   `is_failed` is the other way it can end (see point 25); the two are never set together.
-  `postponed_count` is how often the session has been pushed onto a later day, which is what
-  colours its block on the schedule - see point 18.
+  `postponed_count` is how often the session has been pushed onto a later day - a record only;
+  it no longer colours anything (see point 18).
   Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
   `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
   empty booking, not history. The rule "one slot today plus one in the future" is enforced in
@@ -364,39 +365,35 @@ The schema in the code matches the latest migration (`20261027_0034`).
     or loopback address: registration can be open, and without that check the app would be an
     open proxy into whatever network it is deployed in.
 
-18. **A session's colour is counted, not worked out.** `postponed_count` on `ProjectDaySlot` is a
-    running tally kept by `move_booking` and `shift_bookings_forward`
-    ([app/projects/slots.py](../app/projects/slots.py)), not something derived from the dates: a
-    booking's history is a single row that gets updated, so by the time it sits on a later day
-    there is nothing left to compare it with.
+18. **A session goes red when its project falls behind, not when it is moved.** Each project has
+    `sessions_per_week` (1–7, default 1, in the project's settings), and `allowed_gap_days()` turns
+    it into the longest a session may come after the one before: 7 / sessions a week, a float, so
+    twice a week allows 3.5 days. `warn_level()` in [app/projects/slots.py](../app/projects/slots.py)
+    gives an open session (not done, not failed) a red tint and one "!" when its project is
+    problematic (point 25) or when `is_behind_frequency()` says it comes more than that many days
+    after `previous_session()`. A done or failed session is never flagged; `warn_title()` is the
+    tooltip ("Below 1 session a week — 8 days after the session before (30 Oct)").
 
-    `postponement_after` is the whole rule. Landing on a later day is one step on, an earlier day
-    one step back, and a move inside one sheet — A to B on the same date — is not a move in time
-    and counts nothing. **Nothing caps it on the way up**, and that is deliberate: a session pushed
-    four times has to be pulled back four times to come off red, because anything else would let
-    four postponements be undone by one and the block would go quiet while the plan was still three
-    days behind. The floor at zero is the one bound.
+    The session before is the latest booking of the project before this one's day that counts as
+    a session: a done one, or one still to come (today or later, not failed) — a session planned
+    for today is what next week's is measured from. A past one never ticked off does not count; as
+    far as the app knows it did not happen. A project with none is measured from the day it was
+    created, so a new project's first session is held to the same rhythm. Every booking of the
+    user is read once per request (`_session_history`, kept on `g`), so a page of blocks is one
+    query, not one per block.
 
-    **`MAX_POSTPONED_LEVEL` (2) caps the colour, not the count.** `postponed_level()` is the whole
-    of that: 0, 1 or 2, and the class rendered is the level, so the stylesheet always has a colour
-    for it however high the count has run. Past two the extra moves are invisible on the block and
-    readable in the tooltip, which says the number — that is where "four times" and "twice", which
-    look identical, differ. What a block is actually given is `warn_level()`, which puts a
-    problematic project ahead of the count (point 25) and gives a done or failed session nothing.
+    Moving a session is therefore free until it crosses the line. The board applies a move before
+    the server answers, so [schedule-board.js](../app/static/js/schedule-board.js) works the same
+    rule out itself (`warnFor` / `previousSession`): each block's content carries the project's
+    allowed gap (`data-session-gap`), its sessions a week (for the tooltip) and its last session
+    before today (`data-session-before`, with `data-session-before-creation` when that is the
+    creation day), and the script adds the project's other sessions it can see on the board, all of
+    which are today or later. A move can change what the project's other session is measured from,
+    so every block is redrawn after one (`refreshAll`).
 
-    A swap moves both bookings, in opposite directions, and the displaced row is rebuilt only to
-    get past the unique constraint, so its count is carried across by hand — it was moved, not
-    rebooked.
-
-    A day off counts for every booking it moves, and nothing for one it holds back (see point 10).
-    Freeing the block throws the tally away with the row: booking the project again is a new plan,
-    and a new plan starts from nothing being late. This is the reason the count lives on the
-    booking rather than on the project.
-
-    The board applies a move to the page before the server has answered, so `refreshCell` in
-    [app/static/js/schedule-board.js](../app/static/js/schedule-board.js) keeps its own copy of the
-    same arithmetic, and the count rides on `[data-slot-content]` — the element that travels — the
-    way `data-done` does, even though it is the block around it that gets tinted.
+    `postponed_count` on `ProjectDaySlot` is still kept by `move_booking` and
+    `shift_bookings_forward` (`postponement_after`: a later day is one step on, an earlier one a
+    step back), but only as a record: it no longer colours or marks anything.
 
     The tint is backed by a **`!`** between the title and the block's buttons, because a colour on
     its own is not something every reader can tell apart; it takes the block's own accent rather
@@ -633,7 +630,7 @@ The schema in the code matches the latest migration (`20261027_0034`).
     of the month ("14") on end in place of its A/B/C letter, with the full date in the tooltip,
     in red when the block's own day is past it.
     The date rides on `[data-slot-content]` (`data-deadline`, `data-deadline-label`) like the
-    postponement count, because it belongs to the project and the letter belongs to the
+    frequency data, because it belongs to the project and the letter belongs to the
     position: `setLetter` in [schedule-board.js](../app/static/js/schedule-board.js) rewrites
     the letter after every move, and puts the plain letter back (`data-slot-letter`) when the
     block is freed or holds a finished session.
@@ -662,10 +659,10 @@ The schema in the code matches the latest migration (`20261027_0034`).
     (`toggle_session_failed` → `set_session_failed` in
     [app/projects/slots.py](../app/projects/slots.py)). It sets `is_failed` on the booking (and
     clears `is_done`) and `is_problematic` on the project, which then gets a red banner on its
-    page. While a project is problematic **every one of its open sessions carries the full "!!"
-    and the red tint, whatever its postponement count** — `warn_level()` asks about the project
-    first and the count second, and the board's `warnLevel` mirrors it from `data-problematic`.
-    The home page's cards carry the same marks and tint now, from either cause.
+    page. While a project is problematic **every one of its open sessions is red with a "!"**,
+    whatever its sessions a week — `warn_level()` asks about the project first and the frequency
+    second, and the board's `warnFor` mirrors it from `data-problematic`. The home page's cards
+    carry the same mark and tint, from either cause.
     **Any session of the project ticked done clears the flag** (`meet_deadline`, alongside the
     deadline); taking the failure back does not. The flag can also be switched by hand in the
     project's settings (`is_problematic` through `edit_project`). A failed session has ended:

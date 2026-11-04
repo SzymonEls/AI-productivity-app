@@ -1933,14 +1933,10 @@ button.picker-row:hover {
     --slot-card-accent: var(--slot-optional-accent);
 }
 
-/* The schedule's tint for a session put off - or for every session of a
-   problematic project, which goes straight to the red. After the optional
-   rule for the same reason as on the board: a late C is as late as an A. */
-.slot-card-warn-1:not(.slot-card-empty) {
-    --slot-card-accent: var(--slot-late-accent);
-}
-
-.slot-card-warn-2:not(.slot-card-empty) {
+/* The schedule's red for a session behind its project's sessions a week, or
+   of a problematic project. After the optional rule for the same reason as on
+   the board: a late C is as late as an A. */
+.slot-card-warned:not(.slot-card-empty) {
     --slot-card-accent: var(--slot-latest-accent);
 }
 
@@ -2757,16 +2753,12 @@ button.picker-row:hover {
     --slot-card-accent: var(--slot-optional-accent);
 }
 
-/* A session that has been put off walks from the amber towards the red - once
-   for the first move onto a later day, and the rest of the way for the second.
-   These come after the optional rule on purpose: a spare C block that keeps
-   being pushed is exactly as late as an A one, and its quiet grey would hide
-   that. Nothing is added to the block but its colour; the tooltip says why. */
-.day-slot.is-booked.is-postponed-1 {
-    --slot-card-accent: var(--slot-late-accent);
-}
-
-.day-slot.is-booked.is-postponed-2 {
+/* Red for a session that comes so long after the one before that its project
+   falls below its sessions a week - or for any session of a problematic
+   project. Moving a session tints nothing until it crosses that line. After the
+   optional rule on purpose: a spare C block that late is exactly as late as an
+   A one, and its quiet grey would hide that. The ! beside it says why. */
+.day-slot.is-booked.is-warned {
     --slot-card-accent: var(--slot-latest-accent);
 }
 
@@ -2780,12 +2772,9 @@ button.picker-row:hover {
     --slot-card-accent: var(--danger);
 }
 
-/* The ! on a block that has been put off, between the title and the block's own
-   buttons. It takes the accent the block has just been given, so it deepens with
-   the tint rather than repeating it in a third colour, and it doubles where the
-   tint deepens - one mark, then two - so the two stages can be counted as well
-   as seen. It is what carries the number, on hover, once both have stopped
-   rising. The letter-spacing is what keeps !! from reading as one wide mark. */
+/* The ! on a red block, between the title and the block's own buttons. It
+   takes the accent the block has just been given rather than a third colour;
+   the tooltip says whether the project is problematic or behind. */
 .day-slot-warn {
     flex: 0 0 auto;
     color: var(--slot-card-accent);

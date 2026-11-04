@@ -73,70 +73,78 @@
         return Boolean(contentOf(cell).dataset.projectId);
     }
 
-    // The same arithmetic slots.py does, kept in step here so the optimistic
-    // redraw below shows the colour and the marks the move is about to be given.
-    // The count runs on; only the level stops, at MAX_POSTPONED_LEVEL - which is
-    // why a block put off four times takes four moves back to come off red.
-    const MAX_POSTPONED_LEVEL = 2;
+    const DAY_MS = 24 * 60 * 60 * 1000;
 
-    function postponedOf(content) {
-        return Number(content.dataset.postponed) || 0;
+    function daysBetween(fromIso, toIso) {
+        return Math.round((Date.parse(toIso) - Date.parse(fromIso)) / DAY_MS);
     }
 
-    function postponedLevel(count) {
-        return Math.min(count, MAX_POSTPONED_LEVEL);
+    function cellOf(content) {
+        return content.closest("[data-slot-cell]");
     }
 
-    /* warn_level() in slots.py: a session that has ended carries no marks, a
-       problematic project's sessions carry the full two whatever their count,
-       and the rest go by how often they were put off. */
-    function warnLevel(content, ended) {
+    /* previous_session() in slots.py, for a session on ``day``: the latest of
+       the last session before today (rendered onto the content) and the
+       project's other sessions on the board before that day - every block on
+       the board is today or later, so any that is not failed counts, done or
+       still to come. Returns [isoDay, isCreation]. */
+    function previousSession(content, day) {
+        let best = content.dataset.sessionBefore || "";
+        let isCreation = content.dataset.sessionBeforeCreation === "1";
+        root.querySelectorAll(`[data-slot-content][data-project-id="${content.dataset.projectId}"]`).forEach((other) => {
+            if (other === content || other.dataset.failed === "1") {
+                return;
+            }
+            const otherDay = cellOf(other)?.dataset.date;
+            if (otherDay && otherDay < day && otherDay > best) {
+                best = otherDay;
+                isCreation = false;
+            }
+        });
+        return [best, isCreation];
+    }
+
+    function sessionsLabel(count) {
+        return count === 1 ? "1 session a week" : `${count} sessions a week`;
+    }
+
+    /* warn_level() and warn_title() in slots.py: a session that has ended is
+       never flagged; a problematic project's sessions always are; the rest are
+       flagged once they come more than 7 / sessions-a-week days after the
+       session before. Returns the tooltip, or "" for no flag. */
+    function warnFor(cell, ended) {
+        const content = contentOf(cell);
         if (ended) {
-            return 0;
+            return "";
         }
         if (content.dataset.problematic === "1") {
-            return MAX_POSTPONED_LEVEL;
+            return "Problematic project — a session of it failed";
         }
-        return postponedLevel(postponedOf(content));
-    }
-
-    function postponementAfter(count, fromDate, toDate) {
-        if (toDate > fromDate) {
-            return count + 1;
+        const gapAllowed = Number(content.dataset.sessionGap);
+        const day = cell.dataset.date;
+        const [previous, isCreation] = previousSession(content, day);
+        if (!gapAllowed || !previous) {
+            return "";
         }
-        if (toDate < fromDate) {
-            return Math.max(count - 1, 0);
+        const gap = daysBetween(previous, day);
+        if (gap <= gapAllowed) {
+            return "";
         }
-        return count;
+        const perWeek = Number(content.dataset.sessionsPerWeek) || 1;
+        const since = isCreation ? "the project was created" : "the session before";
+        return `Below ${sessionsLabel(perWeek)} — ${gap} days after ${since} (${shortDate(previous)})`;
     }
 
-    // Mirrors postponed_title() and PROBLEMATIC_TITLE in slots.py, down to the
-    // wording: the two read side by side on a page the board has only partly
-    // redrawn.
-    function postponedTitle(count) {
-        const times = count === 1 ? "once" : count === 2 ? "twice" : `${count} times`;
-        return `Put off ${times} — moved to a later day`;
-    }
-
-    function warnTitle(content) {
-        return content.dataset.problematic === "1"
-            ? "Problematic project — a session of it failed"
-            : postponedTitle(postponedOf(content));
-    }
-
-    /* The ! on a block that has been put off: added, updated or taken away to
-       match the count the block is now carrying. One mark or two, following the
-       tint stage for stage, so the marks are rewritten on every redraw and not
-       only when the ! first appears. It sits between the content and the block's
-       own buttons, which is where the template renders it. */
-    function setWarn(cell, level) {
+    /* The red block's !: added, retitled or taken away to match. It sits
+       between the content and the block's own buttons, which is where the
+       template renders it. */
+    function setWarn(cell, title) {
         const existing = cell.querySelector("[data-slot-warn]");
-        if (!level) {
+        if (!title) {
             existing?.remove();
             return;
         }
 
-        const title = warnTitle(contentOf(cell));
         const warn = existing || document.createElement("span");
         if (!existing) {
             warn.className = "day-slot-warn";
@@ -144,7 +152,7 @@
             warn.setAttribute("role", "img");
             contentOf(cell).after(warn);
         }
-        warn.textContent = "!".repeat(level);
+        warn.textContent = "!";
         warn.title = title;
         warn.setAttribute("aria-label", title);
     }
@@ -200,19 +208,24 @@
         const booked = Boolean(content.dataset.projectId);
         const done = booked && content.dataset.done === "1";
         const failed = booked && content.dataset.failed === "1";
-        const level = booked ? warnLevel(content, done || failed) : 0;
+        const warning = booked ? warnFor(cell, done || failed) : "";
 
         cell.classList.toggle("is-booked", booked);
         cell.classList.toggle("is-free", !booked);
         cell.classList.toggle("is-done", done);
         cell.classList.toggle("is-failed", failed);
-        cell.classList.toggle("is-postponed-1", level === 1);
-        cell.classList.toggle("is-postponed-2", level === 2);
-        setWarn(cell, level);
+        cell.classList.toggle("is-warned", Boolean(warning));
+        setWarn(cell, warning);
         setLetter(cell, booked, done || failed);
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
         cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
         content.draggable = booked;
+    }
+
+    /* Every block, not just the two a move touched: a session moved or freed
+       changes what the project's other session is measured from. */
+    function refreshAll() {
+        cells().forEach(refreshCell);
     }
 
     function setDone(content, done) {
@@ -270,17 +283,16 @@
      * dropped when the project lands on another date - the same rule the server
      * applies, kept in step here so the page does not lie until the next reload.
      *
-     * The postponement count follows the same idea and the other half of that
-     * rule: the two blocks pass each other, so in a swap across days one goes a
-     * step later and the other a step earlier. Dates are ISO strings, which sort
-     * as the days they name.
+     * Whether a block is red is worked out afresh for every block afterwards
+     * (refreshAll): moving a session is free until it lands too long after the
+     * one before, and a move can change that for the project's other session
+     * too. Dates are ISO strings, which sort as the days they name.
      */
     function applyMove(fromCell, toCell) {
         const fromContent = contentOf(fromCell);
         const toContent = contentOf(toCell);
         const wasDone = [fromContent.dataset.done === "1", toContent.dataset.done === "1"];
         const wasFailed = [fromContent.dataset.failed === "1", toContent.dataset.failed === "1"];
-        const wasPostponed = [postponedOf(fromContent), postponedOf(toContent)];
         const fromDate = fromCell.dataset.date;
         const toDate = toCell.dataset.date;
         const sameDay = fromDate === toDate;
@@ -291,10 +303,7 @@
         setDone(toContent, wasDone[1] && sameDay);
         setFailed(fromContent, wasFailed[0] && sameDay);
         setFailed(toContent, wasFailed[1] && sameDay);
-        fromContent.dataset.postponed = postponementAfter(wasPostponed[0], fromDate, toDate);
-        toContent.dataset.postponed = postponementAfter(wasPostponed[1], toDate, fromDate);
-        refreshCell(fromCell);
-        refreshCell(toCell);
+        refreshAll();
 
         return function undo() {
             moveContentInto(fromCell, fromContent);
@@ -303,10 +312,7 @@
             setDone(toContent, wasDone[1]);
             restoreFailed(fromContent, wasFailed[0]);
             restoreFailed(toContent, wasFailed[1]);
-            fromContent.dataset.postponed = wasPostponed[0];
-            toContent.dataset.postponed = wasPostponed[1];
-            refreshCell(fromCell);
-            refreshCell(toCell);
+            refreshAll();
         };
     }
 
@@ -384,7 +390,10 @@
         const previous = {
             projectId: content.dataset.projectId,
             done: content.dataset.done,
-            postponed: content.dataset.postponed,
+            sessionGap: content.dataset.sessionGap,
+            sessionsPerWeek: content.dataset.sessionsPerWeek,
+            sessionBefore: content.dataset.sessionBefore,
+            sessionBeforeCreation: content.dataset.sessionBeforeCreation,
             failed: content.dataset.failed,
             problematic: content.dataset.problematic,
             deadline: content.dataset.deadline,
@@ -401,9 +410,10 @@
 
         content.dataset.projectId = "";
         content.dataset.done = "0";
-        // Freeing the block throws the booking away, and with it the record of
-        // how often it was put off - whatever is booked here next starts clean.
-        content.dataset.postponed = "0";
+        content.dataset.sessionGap = "";
+        content.dataset.sessionsPerWeek = "";
+        content.dataset.sessionBefore = "";
+        content.dataset.sessionBeforeCreation = "0";
         content.dataset.failed = "0";
         content.dataset.problematic = "0";
         content.dataset.deadline = "";
@@ -411,12 +421,15 @@
         content.dataset.deadlineLabel = "";
         content.dataset.deadlineTime = "";
         content.replaceChildren(free);
-        refreshCell(cell);
+        refreshAll();
 
         return function undo() {
             content.dataset.projectId = previous.projectId;
             content.dataset.done = previous.done;
-            content.dataset.postponed = previous.postponed;
+            content.dataset.sessionGap = previous.sessionGap;
+            content.dataset.sessionsPerWeek = previous.sessionsPerWeek;
+            content.dataset.sessionBefore = previous.sessionBefore;
+            content.dataset.sessionBeforeCreation = previous.sessionBeforeCreation;
             content.dataset.failed = previous.failed;
             content.dataset.problematic = previous.problematic;
             content.dataset.deadline = previous.deadline;
@@ -424,7 +437,7 @@
             content.dataset.deadlineLabel = previous.deadlineLabel;
             content.dataset.deadlineTime = previous.deadlineTime;
             content.replaceChildren(...previous.nodes);
-            refreshCell(cell);
+            refreshAll();
         };
     }
 

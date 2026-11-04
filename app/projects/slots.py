@@ -9,12 +9,13 @@ CALENDAR_TIMEZONE rather than in UTC.
 
 from datetime import date, timedelta
 
+from flask import g, has_app_context
 from sqlalchemy import case, func
 from sqlalchemy.orm import joinedload
 
 from ..extensions import db
 from ..models import Project, ProjectDaySlot
-from ..time_tracking.service import app_timezone, tracked_seconds_by_day, utc_now
+from ..time_tracking.service import app_timezone, ensure_utc, tracked_seconds_by_day, utc_now
 
 
 SLOTS = ("A", "B", "C")
@@ -40,13 +41,10 @@ MAX_CALENDAR_WEEKS = 12
 # but a year ahead is where the scroll stops: nothing is planned that far out.
 MAX_SCROLL_WEEKS = 52
 
-# How far a session's block can be tinted for having been put off: one move onto
-# a later day tints it, a second turns it red, and there is nothing past that.
-# This caps the colour, not the count. The count itself runs on, so a session
-# pushed four times has to be pulled back four times to come off red - anything
-# else would let four postponements be undone by one, and the block would go
-# quiet while the plan was still three days behind.
-MAX_POSTPONED_LEVEL = 2
+# What a project may ask for as its fewest sessions a week. At most one block a
+# day goes to a project, so seven is as many as a week can hold.
+MIN_SESSIONS_PER_WEEK = 1
+MAX_SESSIONS_PER_WEEK = 7
 
 # The health score on the home page: the last week of finished sessions, and
 # nothing else. It measures the bookings that were actually made - A, B and C
@@ -218,37 +216,174 @@ def meet_deadline(booking):
         booking.project.is_problematic = False
 
 
-# What the ! says on hover, on the board and on the home page alike. The board's
-# script spells the same two out after a move (schedule-board.js).
+# What the ! says on hover for a problematic project, on the board and on the
+# home page alike. The board's script spells the same out after a move
+# (schedule-board.js), along with the frequency title below.
 PROBLEMATIC_TITLE = "Problematic project — a session of it failed"
 
 
-def postponed_title(count):
-    """ "Put off twice — moved to a later day": the number the ! stops counting."""
-    times = "once" if count == 1 else "twice" if count == 2 else f"{count} times"
-    return f"Put off {times} — moved to a later day"
+def allowed_gap_days(project):
+    """The most days one session may come after the one before: 7 / sessions a week.
+
+    A float on purpose - twice a week allows 3.5 days, so a gap of 4 is late and
+    3 is not.
+    """
+    per_week = (project.sessions_per_week if project is not None else None) or 1
+    per_week = max(MIN_SESSIONS_PER_WEEK, min(per_week, MAX_SESSIONS_PER_WEEK))
+    return DAYS_PER_WEEK / per_week
 
 
-def warn_title(booking):
-    """What a session's ! means: its project is problematic, or it was put off."""
-    if booking is not None and booking.project is not None and booking.project.is_problematic:
-        return PROBLEMATIC_TITLE
-    return postponed_title(booking.postponed_count) if booking is not None else ""
+def _session_history(user_id):
+    """``{project_id: [(booking_id, day, is_done, is_failed), ...]}`` for a user.
+
+    Every booking there has ever been, read once per request: a schedule page
+    weighs each of its blocks against the ones before it, and asking per block
+    would be a query each. Kept on ``g`` for the request only - nothing that
+    changes a booking renders a block afterwards in the same request.
+    """
+    cache = getattr(g, "_session_history", None) if has_app_context() else None
+    if cache is not None and user_id in cache:
+        return cache[user_id]
+
+    rows = (
+        db.session.query(
+            ProjectDaySlot.id,
+            ProjectDaySlot.project_id,
+            ProjectDaySlot.slot_date,
+            ProjectDaySlot.is_done,
+            ProjectDaySlot.is_failed,
+        )
+        .filter(ProjectDaySlot.user_id == user_id)
+        .all()
+    )
+    history = {}
+    for booking_id, project_id, day, is_done, is_failed in rows:
+        history.setdefault(project_id, []).append((booking_id, day, bool(is_done), bool(is_failed)))
+
+    if has_app_context():
+        if cache is None:
+            cache = g._session_history = {}
+        cache[user_id] = history
+    return history
+
+
+def _counts_as_session(day, is_done, is_failed, today):
+    """Whether a booking is a session the next one is measured from.
+
+    A done one always is. One still to come - today or later, not failed -
+    is too, since it is planned to happen. A past one never ticked off is not:
+    as far as the app knows, it did not happen.
+    """
+    return is_done or (day >= today and not is_failed)
+
+
+def project_created_day(project):
+    """The day a project was created, in CALENDAR_TIMEZONE."""
+    return ensure_utc(project.created_at).astimezone(app_timezone()).date()
+
+
+def previous_session(booking, today=None):
+    """``(day, is_creation)``: what ``booking`` is measured from.
+
+    The latest session of the project before the booking's day - done, or
+    planned and still to come - or, for a project with none, the day it was
+    created, so a new project's first session is held to the same rhythm.
+    """
+    today = today or today_local()
+    project = booking.project
+    days = [
+        day
+        for booking_id, day, is_done, is_failed in _session_history(booking.user_id).get(project.id, ())
+        if booking_id != booking.id
+        and day < booking.slot_date
+        and _counts_as_session(day, is_done, is_failed, today)
+    ]
+    if days:
+        return max(days), False
+    return project_created_day(project), True
+
+
+def frequency_gap(booking, today=None):
+    """``(days, previous_day, is_creation)`` for an open booked session, or None.
+
+    None for anything that is not a session still to happen: a free block, a
+    done one, a failed one.
+    """
+    if booking is None or booking.project is None or booking.is_done or booking.is_failed:
+        return None
+    previous_day, is_creation = previous_session(booking, today)
+    return (booking.slot_date - previous_day).days, previous_day, is_creation
+
+
+def is_behind_frequency(booking, today=None):
+    """Whether the session comes too long after the one before it.
+
+    Too long is more than ``allowed_gap_days``: with one session a week, a
+    session eight days after the last one is late and one seven days after is
+    not. Moving a session about is free until it crosses that line.
+    """
+    gap = frequency_gap(booking, today)
+    return gap is not None and gap[0] > allowed_gap_days(booking.project)
+
+
+def sessions_per_week_label(count):
+    return f"{count} session a week" if count == 1 else f"{count} sessions a week"
+
+
+def frequency_title(booking, today=None):
+    """What the ! says for a session behind the project's minimum frequency."""
+    gap = frequency_gap(booking, today)
+    if gap is None:
+        return ""
+    days, previous_day, is_creation = gap
+    since = "the project was created" if is_creation else "the session before"
+    return (
+        f"Below {sessions_per_week_label(booking.project.sessions_per_week or 1)} — "
+        f"{days} days after {since} ({deadline_label(previous_day)})"
+    )
+
+
+def session_before_today(project, user_id, today=None):
+    """``(day, is_creation)``: the last session before today, or the creation day.
+
+    What the board's script measures a moved session from, together with the
+    project's sessions still on the board (today and later), which it can see
+    for itself.
+    """
+    today = today or today_local()
+    days = [
+        day
+        for _, day, is_done, _ in _session_history(user_id).get(project.id, ())
+        if day < today and is_done
+    ]
+    if days:
+        return max(days), False
+    return project_created_day(project), True
 
 
 def warn_level(booking):
-    """How many ! a booked session carries, and how far it is tinted: 0, 1 or 2.
+    """1 when a session still to come is flagged red with a "!", otherwise 0.
 
-    A problematic project comes first: every one of its sessions still to come
-    gets the full two, however rarely it has been moved. Otherwise it is the
-    postponement count, as before. A session that has ended - done or failed -
-    carries none, since nothing about it is late any more.
+    Two things flag it, and nothing else: its project is problematic (a session
+    of it failed), or the session comes so long after the one before that the
+    project falls below its sessions a week. Moving a session is free until it
+    crosses that line. A session that has ended - done or failed - is never
+    flagged, since nothing about it is late any more.
     """
-    if booking is None or booking.is_done or booking.is_failed:
+    if booking is None or booking.project is None or booking.is_done or booking.is_failed:
         return 0
-    if booking.project is not None and booking.project.is_problematic:
-        return MAX_POSTPONED_LEVEL
-    return postponed_level(booking.postponed_count)
+    if booking.project.is_problematic or is_behind_frequency(booking):
+        return 1
+    return 0
+
+
+def warn_title(booking):
+    """What a session's ! means: its project is problematic, or it is behind."""
+    if not warn_level(booking):
+        return ""
+    if booking.project.is_problematic:
+        return PROBLEMATIC_TITLE
+    return frequency_title(booking)
 
 
 def slots_for_date(user_id, day):
@@ -859,25 +994,15 @@ def postponement_after(count, from_day, to_day):
     sheet - dragging a session from block A to block B - is not a move in time
     at all, so it leaves the count alone.
 
-    Nothing caps this on the way up: every postponement is counted, and every one
-    of them has to be pulled back for the block to come off red. The floor at
-    zero is the one bound, since a session can hardly be earlier than never late.
+    Only a record now: the count no longer colours or marks the block - the
+    project's sessions a week decide that (``warn_level``). The floor at zero is
+    the one bound, since a session can hardly be earlier than never late.
     """
     if to_day > from_day:
         return count + 1
     if to_day < from_day:
         return max(count - 1, 0)
     return count
-
-
-def postponed_level(count):
-    """How far up the colour scale a count puts the block: 0, 1 or 2.
-
-    The count runs past this; the scale does not. Two moves onto a later day is
-    already the red, and a third has nowhere further to go - what it does is make
-    the way back longer.
-    """
-    return min(count, MAX_POSTPONED_LEVEL)
 
 
 def assign_slot(user_id, project_id, day, slot):

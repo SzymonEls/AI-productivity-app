@@ -603,8 +603,25 @@
                             data-settings-problematic-toggle
                             {% if project.is_problematic %}checked{% endif %}
                         >
-                        <label class="form-check-label" for="projectProblematic">Problematic (flags its sessions !!)</label>
+                        <label class="form-check-label" for="projectProblematic">Problematic (flags its sessions red with a !)</label>
                         <div class="form-text">Set by a failed session, cleared by one marked done.</div>
+                    </div>
+
+                    <div class="mt-3">
+                        <label class="form-label" for="projectSessionsPerWeek">Minimum sessions a week</label>
+                        <input
+                            type="number"
+                            class="form-control"
+                            id="projectSessionsPerWeek"
+                            name="sessions_per_week"
+                            min="1"
+                            max="7"
+                            step="1"
+                            inputmode="numeric"
+                            value="{{ project.sessions_per_week or 1 }}"
+                            required
+                        >
+                        <div class="form-text">A session booked so long after the one before that the project falls below this turns red with a ! on the schedule and the home page.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

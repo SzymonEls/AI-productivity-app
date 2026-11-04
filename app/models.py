@@ -179,6 +179,10 @@ class Project(db.Model):
     # ever set together with the date; the slots carry no clock time, so being
     # late is still decided by the day alone.
     session_deadline_time = db.Column(db.Time, nullable=True)
+    # The fewest sessions a week the project should get. A session booked so
+    # long after the one before it that the project falls below this is
+    # flagged red with a "!" (``is_behind_frequency`` in projects/slots.py).
+    sessions_per_week = db.Column(db.Integer, nullable=False, default=1, server_default="1")
     # Set by a session marked failed, cleared by one marked done - or by hand,
     # in the project's settings. While it is on, every session still to come is
     # flagged with the full "!!", whatever its postponement count.

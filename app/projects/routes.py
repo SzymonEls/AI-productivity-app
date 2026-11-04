@@ -24,6 +24,8 @@ from .slots import (
     DAYS_PER_WEEK,
     MAX_CALENDAR_WEEKS,
     MAX_SCROLL_WEEKS,
+    MAX_SESSIONS_PER_WEEK,
+    MIN_SESSIONS_PER_WEEK,
     DEADLINE_RULE_DAY_BEFORE,
     DEADLINE_RULE_LABELS,
     DEADLINE_RULE_SAME_DAY,
@@ -58,6 +60,8 @@ from .slots import (
     slots_for_date,
     today_local,
     unscheduled_projects,
+    allowed_gap_days,
+    session_before_today,
     warn_level,
     warn_title,
     weeks_to_cover,
@@ -120,17 +124,34 @@ def _block_deadline(booking, day):
 def _block_warn(booking):
     """The ! a booked block carries, the same on the home page and the schedule.
 
-    ``warn_level`` is 2 for every open session of a problematic project and the
-    postponement stage otherwise; ``is_problematic`` rides along so the board's
-    script can redraw the marks after a move without asking the server.
+    ``warn_level`` is 1 for a session still to come whose project is
+    problematic or that comes too long after the session before it, and 0
+    otherwise. The rest rides along so the board's script can redraw the mark
+    after a move without asking the server: the project's allowed gap in days,
+    its sessions a week (for the tooltip), and the last session before today -
+    the board can see the sessions from today on for itself.
     """
-    if booking is None:
-        return {"is_failed": False, "is_problematic": False, "warn_level": 0, "warn_title": ""}
+    if booking is None or booking.project is None:
+        return {
+            "is_failed": False,
+            "is_problematic": False,
+            "warn_level": 0,
+            "warn_title": "",
+            "session_gap": "",
+            "sessions_per_week": "",
+            "session_before": None,
+            "session_before_is_creation": False,
+        }
+    session_before, is_creation = session_before_today(booking.project, booking.user_id)
     return {
         "is_failed": bool(booking.is_failed),
-        "is_problematic": bool(booking.project and booking.project.is_problematic),
+        "is_problematic": bool(booking.project.is_problematic),
         "warn_level": warn_level(booking),
         "warn_title": warn_title(booking),
+        "session_gap": f"{allowed_gap_days(booking.project):g}",
+        "sessions_per_week": booking.project.sessions_per_week or 1,
+        "session_before": session_before,
+        "session_before_is_creation": is_creation,
     }
 
 
@@ -437,12 +458,6 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
                 first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
             ),
             "is_done": bool(booked[slot].is_done) if booked[slot] else False,
-            # How often the session has been put off - the count itself, which
-            # the board's script needs after a move. How far up the colour scale
-            # the block goes is ``warn_level`` (from _block_warn), worked out here
-            # rather than in the template so that the class rendered is always
-            # one the stylesheet has a colour for, however high the count has run.
-            "postponed": booked[slot].postponed_count if booked[slot] else 0,
             # C is the spare slot; it stays visibly secondary once it is filled.
             "is_optional": slot not in TIMED_SLOTS,
             **_block_deadline(booked[slot], day),
@@ -1478,6 +1493,11 @@ def edit_project(project_id):
     # Switched by hand in the settings; a failed session sets it and a done one
     # clears it on their own.
     is_problematic = _form_bool("is_problematic", default=project.is_problematic)
+    # Only the settings dialog sends it; every other save of the project keeps
+    # what is there.
+    sessions_per_week = _coerce_int(request.form.get("sessions_per_week"))
+    if sessions_per_week is None:
+        sessions_per_week = project.sessions_per_week or 1
 
     # A navigator.sendBeacon() save fired while the page is being closed: it can't
     # set request headers, so we detect it by a form flag and answer quietly (no
@@ -1486,7 +1506,16 @@ def edit_project(project_id):
     is_beacon = request.form.get("_beacon") == "1"
 
     # As on creation, the name is the one thing a project cannot be without.
-    if not title:
+    if not MIN_SESSIONS_PER_WEEK <= sessions_per_week <= MAX_SESSIONS_PER_WEEK:
+        error_message = (
+            f"Sessions a week has to be between {MIN_SESSIONS_PER_WEEK} and {MAX_SESSIONS_PER_WEEK}."
+        )
+        if wants_json:
+            return jsonify({"ok": False, "message": error_message}), 400
+        if is_beacon:
+            return ("", 400)
+        flash(error_message, "danger")
+    elif not title:
         error_message = "Please give the project a name."
         if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
@@ -1500,6 +1529,7 @@ def edit_project(project_id):
         project.is_starred = is_starred
         project.is_private = is_private
         project.is_problematic = is_problematic
+        project.sessions_per_week = sessions_per_week
         try:
             db.session.commit()
         except SQLAlchemyError:
@@ -1531,6 +1561,7 @@ def edit_project(project_id):
                         "is_starred": project.is_starred,
                         "is_private": project.is_private,
                         "is_problematic": project.is_problematic,
+                        "sessions_per_week": project.sessions_per_week,
                         "updated_label": "just now",
                     },
                 }
