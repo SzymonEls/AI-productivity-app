@@ -22,6 +22,10 @@
 
     let dialog = null;
     let currentProjectId = null;
+    // What to do once a session has been booked from the planner: set when
+    // the planner was opened to plan the next session before ending today's,
+    // so booking one goes straight on to marking today's done or failed.
+    let afterBook = null;
 
     /**
      * Ask before booking a session past its project's deadline.
@@ -63,10 +67,110 @@
         }).then(async (response) => {
             const payload = await response.json().catch(() => ({}));
             if (!response.ok || !payload.ok) {
-                throw new Error(payload.message || "Could not update the schedule.");
+                const error = new Error(payload.message || "Could not update the schedule.");
+                // The server's "plan the next session first" - answered with a
+                // question rather than an alert.
+                error.needsNextSession = Boolean(payload.needs_next_session);
+                throw error;
             }
             return payload;
         });
+    }
+
+    /**
+     * The question before today's session ends with nothing planned after it.
+     *
+     * Ending it - done or failed - needs the next session booked, or a
+     * deliberate "leave it unplanned". Resolves to "plan", "skip" or null for
+     * cancel. Built once, in the planner's own dialog frame.
+     */
+    let gate = null;
+    function askNextSession(kind) {
+        if (!gate) {
+            gate = document.createElement("div");
+            gate.className = "planner-backdrop";
+            gate.hidden = true;
+            gate.innerHTML = `
+                <div class="planner-dialog" role="dialog" aria-modal="true" aria-labelledby="nextSessionGateTitle">
+                    <header class="planner-header">
+                        <h2 class="h6 mb-0" id="nextSessionGateTitle">No next session planned</h2>
+                        <button type="button" class="icon-button" data-gate-answer="" aria-label="Close">&times;</button>
+                    </header>
+                    <p class="next-session-gate-text" data-gate-text></p>
+                    <div class="next-session-gate-actions">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-gate-answer="">Cancel</button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" data-gate-answer="skip" data-gate-skip></button>
+                        <button type="button" class="btn btn-primary btn-sm" data-gate-answer="plan">Plan next session</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(gate);
+        }
+
+        const verb = kind === "failed" ? "failed" : "done";
+        gate.querySelector("[data-gate-text]").textContent =
+            `Before marking today's session ${verb}, plan the next one - or leave it unplanned on purpose.`;
+        gate.querySelector("[data-gate-skip]").textContent = `Skip planning, mark ${verb}`;
+        gate.hidden = false;
+        gate.querySelector('[data-gate-answer="plan"]').focus();
+
+        return new Promise((resolve) => {
+            const finish = (answer) => {
+                gate.hidden = true;
+                gate.removeEventListener("click", onClick);
+                document.removeEventListener("keydown", onKey);
+                resolve(answer);
+            };
+            const onClick = (event) => {
+                if (event.target === gate) {
+                    finish(null);
+                    return;
+                }
+                const button = event.target.closest("[data-gate-answer]");
+                if (button) {
+                    finish(button.dataset.gateAnswer || null);
+                }
+            };
+            const onKey = (event) => {
+                if (event.key === "Escape") {
+                    finish(null);
+                }
+            };
+            gate.addEventListener("click", onClick);
+            document.addEventListener("keydown", onKey);
+        });
+    }
+
+    /**
+     * End today's session (done or failed) through the next-session question.
+     *
+     * ``send(skipNext)`` posts the change. Tried first as it is: with a session
+     * already booked after today the server just agrees. When it answers that
+     * the next session is missing, the question decides - plan one (the
+     * planner opens, and booking a block there sends the change after it), or
+     * skip on purpose (sent again with skip_next).
+     */
+    function endSession(kind, button, send, onDone) {
+        button.disabled = true;
+        return send(false)
+            .then(onDone)
+            .catch(async (error) => {
+                if (!error.needsNextSession) {
+                    window.alert(error.message);
+                    return;
+                }
+                const answer = await askNextSession(kind);
+                if (answer === "skip") {
+                    return send(true).then(onDone).catch((again) => window.alert(again.message));
+                }
+                if (answer === "plan") {
+                    afterBook = () => send(false).then(() => window.location.reload());
+                    openPlanner(button.dataset.projectId, button.dataset.projectTitle);
+                }
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
     }
 
     function buildDialog() {
@@ -229,6 +333,14 @@
                 // The dashboard, the switcher and the schedule page all read
                 // from the server, so refresh once the user closes the dialog.
                 dialog.dataset.dirty = "true";
+                // Opened to plan the next session before ending today's: now
+                // there is one, so today's is ended and the page reloaded.
+                if (afterBook) {
+                    const then = afterBook;
+                    afterBook = null;
+                    setStatus(`${payload.message} Marking today's session…`, "success");
+                    then().catch((error) => setStatus(error.message, "danger"));
+                }
             })
             .catch((error) => setStatus(error.message, "danger"));
     }
@@ -377,6 +489,8 @@
             return;
         }
         dialog.hidden = true;
+        // Closing without booking leaves today's session as it was.
+        afterBook = null;
         if (dialog.dataset.dirty === "true") {
             window.location.reload();
         }
@@ -394,32 +508,43 @@
         if (doneButton) {
             event.preventDefault();
             const next = doneButton.dataset.done === "1" ? 0 : 1;
-            doneButton.disabled = true;
-            postJson(`/projects/${doneButton.dataset.projectId}/session-done`, { done: next })
-                .then((payload) => {
-                    doneButton.dataset.done = payload.is_done ? "1" : "0";
-                    doneButton.classList.toggle("btn-success", payload.is_done);
-                    doneButton.classList.toggle("btn-outline-secondary", !payload.is_done);
-                    doneButton.querySelector("[data-session-done-label]").textContent =
-                        payload.is_done ? "Done" : "Mark done";
-                    // A session done meets the deadline, and the server has
-                    // just cleared it - the badge saying otherwise goes too.
-                    // It also ends a failed session and the project being
-                    // problematic, which the page draws in several places, so
-                    // then it is simpler to load it again.
-                    if (payload.is_done) {
-                        const failedItem = document.querySelector("[data-session-failed]");
-                        if (document.querySelector("[data-problematic-banner]") || failedItem?.dataset.failed === "1") {
-                            window.location.reload();
-                            return;
-                        }
-                        document.querySelector("[data-session-deadline-badge]")?.remove();
-                    }
-                })
-                .catch((error) => window.alert(error.message))
-                .finally(() => {
-                    doneButton.disabled = false;
-                });
+            const applyDone = (payload) => {
+                doneButton.dataset.done = payload.is_done ? "1" : "0";
+                doneButton.classList.toggle("btn-success", payload.is_done);
+                doneButton.classList.toggle("btn-outline-secondary", !payload.is_done);
+                doneButton.querySelector("[data-session-done-label]").textContent =
+                    payload.is_done ? "Done" : "Mark done";
+                // A session done meets the deadline, and the server has just
+                // cleared it - the badge saying otherwise goes too. It also
+                // ends a failed session and the project being problematic,
+                // which the page draws in several places, and moves the plan
+                // button on from today's session, so then it is simpler to
+                // load the page again.
+                if (payload.is_done) {
+                    window.location.reload();
+                }
+            };
+            if (!next) {
+                // Reopening needs no next session.
+                doneButton.disabled = true;
+                postJson(`/projects/${doneButton.dataset.projectId}/session-done`, { done: 0 })
+                    .then(applyDone)
+                    .catch((error) => window.alert(error.message))
+                    .finally(() => {
+                        doneButton.disabled = false;
+                    });
+                return;
+            }
+            endSession(
+                "done",
+                doneButton,
+                (skipNext) =>
+                    postJson(`/projects/${doneButton.dataset.projectId}/session-done`, {
+                        done: 1,
+                        skip_next: skipNext ? 1 : 0,
+                    }),
+                applyDone
+            );
             return;
         }
 
@@ -430,16 +555,29 @@
         if (failedButton) {
             event.preventDefault();
             const next = failedButton.dataset.failed === "1" ? 0 : 1;
-            if (next && !window.confirm("Mark today's session as failed? The project will be marked problematic until a session of it is done.")) {
+            if (!next) {
+                failedButton.disabled = true;
+                postJson(`/projects/${failedButton.dataset.projectId}/session-failed`, { failed: 0 })
+                    .then(() => window.location.reload())
+                    .catch((error) => {
+                        window.alert(error.message);
+                        failedButton.disabled = false;
+                    });
                 return;
             }
-            failedButton.disabled = true;
-            postJson(`/projects/${failedButton.dataset.projectId}/session-failed`, { failed: next })
-                .then(() => window.location.reload())
-                .catch((error) => {
-                    window.alert(error.message);
-                    failedButton.disabled = false;
-                });
+            if (!window.confirm("Mark today's session as failed? The project will be marked problematic until a session of it is done.")) {
+                return;
+            }
+            endSession(
+                "failed",
+                failedButton,
+                (skipNext) =>
+                    postJson(`/projects/${failedButton.dataset.projectId}/session-failed`, {
+                        failed: 1,
+                        skip_next: skipNext ? 1 : 0,
+                    }),
+                () => window.location.reload()
+            );
             return;
         }
 

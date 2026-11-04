@@ -4407,3 +4407,34 @@ button.picker-row:hover {
     color: var(--muted-foreground);
     font-size: 0.78rem;
 }
+
+/* The project page's plan button, in the state it is in: amber while no
+   session is planned, with a chip saying so; green with the day once one is. */
+.plan-session-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.plan-session-flag {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* The question asked before today's session ends with nothing planned after
+   it (day-planner.js). It reuses the planner's dialog frame. */
+.next-session-gate-text {
+    margin: 0 0 1rem;
+}
+
+.next-session-gate-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}

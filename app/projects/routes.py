@@ -49,6 +49,7 @@ from .slots import (
     past_calendar_weeks,
     planned_session_labels,
     planned_session_labels_by_project,
+    project_bookings,
     project_deadline_label,
     project_statistics,
     schedule_window,
@@ -770,6 +771,55 @@ def slot_candidate_list():
     )
 
 
+def _payload_flag(payload, name, default="1"):
+    return str(payload.get(name, default)).lower() not in {"0", "false", "no", "off"}
+
+
+def _needs_next_session(project, payload):
+    """The answer that stops today's session being finished with nothing planned after it.
+
+    Ending today's session - done or failed - asks for the next one first: a
+    session booked after today, or ``skip_next`` saying it is being left
+    unplanned on purpose. None when it may go ahead. The page asks the
+    question; this is the same rule for any client that did not.
+    """
+    if _payload_flag(payload, "skip_next", default="0"):
+        return None
+    today_slot, future_slot = project_bookings(current_user.id, project.id)
+    # No session today: nothing to end, and the caller's own answer says so.
+    if today_slot is None or future_slot is not None:
+        return None
+    return (
+        jsonify(
+            {
+                "ok": False,
+                "needs_next_session": True,
+                "message": "Plan the next session first, or confirm leaving it unplanned.",
+            }
+        ),
+        409,
+    )
+
+
+def _next_session_label(project, today_booking):
+    """``(label, is_planned)`` for the project page's plan button.
+
+    The next session is today's while it is still to happen, and otherwise the
+    one booked after today. "Thu 6 Nov · A", or "Today · B".
+    """
+    upcoming = None
+    if today_booking is not None and not today_booking.is_done and not today_booking.is_failed:
+        upcoming = today_booking
+    else:
+        _, upcoming = project_bookings(current_user.id, project.id)
+    if upcoming is None:
+        return "", False
+    if upcoming.slot_date == today_local():
+        return f"Today · {upcoming.slot}", True
+    day = upcoming.slot_date
+    return f"{day.strftime('%a')} {day.day} {day.strftime('%b')} · {upcoming.slot}", True
+
+
 @projects_bp.route("/<int:project_id>/session-done", methods=["POST"])
 @login_required
 def toggle_session_done(project_id):
@@ -777,7 +827,11 @@ def toggle_session_done(project_id):
 
     project = _get_user_project_or_404(project_id)
     payload = request.get_json(silent=True) or request.form
-    done = str(payload.get("done", "1")).lower() not in {"0", "false", "no", "off"}
+    done = _payload_flag(payload, "done")
+    if done:
+        refused = _needs_next_session(project, payload)
+        if refused:
+            return refused
 
     ok, message, is_done = set_session_done(current_user.id, project.id, today_local(), done)
     if not ok:
@@ -803,7 +857,11 @@ def toggle_session_failed(project_id):
 
     project = _get_user_project_or_404(project_id)
     payload = request.get_json(silent=True) or request.form
-    failed = str(payload.get("failed", "1")).lower() not in {"0", "false", "no", "off"}
+    failed = _payload_flag(payload, "failed")
+    if failed:
+        refused = _needs_next_session(project, payload)
+        if refused:
+            return refused
 
     ok, message, is_failed = set_session_failed(current_user.id, project.id, today_local(), failed)
     if not ok:
@@ -1426,6 +1484,9 @@ def project_detail(project_id):
         today_slot=today_booking.slot if today_booking else "",
         today_session_done=bool(today_booking and today_booking.is_done),
         today_session_failed=bool(today_booking and today_booking.is_failed),
+        # What the plan button says: the next session's day and block, or that
+        # there is none planned.
+        next_session_label=_next_session_label(project, today_booking)[0],
         # What archiving left standing, for the banner to name. Only asked for
         # when there is a banner to put it in.
         planned_sessions=planned_session_labels(current_user.id, project.id)

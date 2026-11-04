@@ -669,6 +669,19 @@ The schema in the code matches the latest migration (`20261027_0034`).
     it shows ✗ / "Failed", carries no marks, keeps its place on a day off like a done one, and
     loses the mark when it is moved onto another day.
 
+    **Ending today's session asks for the next one.** Marking it done or failed on the project
+    page goes through only when the project already has a session booked after today, or the
+    request says `skip_next` — leaving it unplanned on purpose. Otherwise `toggle_session_done` /
+    `toggle_session_failed` answer 409 with `needs_next_session` (`_needs_next_session` in
+    [app/projects/routes.py](../app/projects/routes.py)), and the page
+    ([day-planner.js](../app/static/js/day-planner.js), `endSession`) asks: "Plan next session"
+    opens the planner and, once a block is taken there, sends the done/failed itself and reloads;
+    "Skip planning" sends it again with `skip_next`; Cancel leaves the session as it was.
+    Reopening a session or taking a failure back needs nothing. The project page's plan button
+    says which state the project is in (`_next_session_label`): green with the next session's
+    day and block ("Next: Thu 6 Nov · A", or "Today · B" while today's is still to happen), amber
+    with "Not planned" while there is none.
+
 26. **Mood is rated once a day and read as a week.** The button left of **Inbox** on the home
     page opens a dialog of five numbers; picking one posts it to `POST /mood`
     ([app/mood/routes.py](../app/mood/routes.py)) and closes the dialog, and

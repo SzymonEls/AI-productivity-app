@@ -66,16 +66,35 @@
            grid where every block refuses it, so it is not offered at all. Its
            sessions already booked keep their own controls below. #}
         {% if not project.is_archived %}
-            <button
-                type="button"
-                class="btn btn-outline-secondary"
-                data-plan-session
-                data-project-id="{{ project.id }}"
-                data-project-title="{{ project.title }}"
-            >
-                <i class="fa-regular fa-calendar" aria-hidden="true"></i>
-                <span>Plan next session</span>
-            </button>
+            {# Says at a glance whether the project needs planning: green with
+               the day and block once a session is booked (still a click away
+               from changing it), amber with "Not planned" while none is. #}
+            {% if next_session_label %}
+                <button
+                    type="button"
+                    class="btn btn-outline-success plan-session-button is-planned"
+                    data-plan-session
+                    data-project-id="{{ project.id }}"
+                    data-project-title="{{ project.title }}"
+                    title="Next session planned — click to change it"
+                >
+                    <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
+                    <span>Next: {{ next_session_label }}</span>
+                </button>
+            {% else %}
+                <button
+                    type="button"
+                    class="btn btn-warning plan-session-button is-unplanned"
+                    data-plan-session
+                    data-project-id="{{ project.id }}"
+                    data-project-title="{{ project.title }}"
+                    title="No session planned — click to plan one"
+                >
+                    <i class="fa-regular fa-calendar-plus" aria-hidden="true"></i>
+                    <span>Plan next session</span>
+                    <span class="plan-session-flag">Not planned</span>
+                </button>
+            {% endif %}
         {% endif %}
         {% if today_slot %}
             {# Only shown when the project actually has a session today - there is
@@ -86,6 +105,7 @@
                 class="btn {% if today_session_done %}btn-success{% else %}btn-outline-secondary{% endif %}"
                 data-session-done
                 data-project-id="{{ project.id }}"
+                data-project-title="{{ project.title }}"
                 data-done="{{ 1 if today_session_done else 0 }}"
                 title="Today's session is in slot {{ today_slot }}"
             >
@@ -107,6 +127,7 @@
                             class="dropdown-item{% if not today_session_failed %} text-danger{% endif %}"
                             data-session-failed
                             data-project-id="{{ project.id }}"
+                            data-project-title="{{ project.title }}"
                             data-failed="{{ 1 if today_session_failed else 0 }}"
                         ><i class="fa-regular fa-circle-xmark" aria-hidden="true"></i>{{ "Undo session failed" if today_session_failed else "Mark session failed" }}</button>
                     </li>
@@ -156,13 +177,13 @@
 
 {% if project.is_problematic %}
     {# Red, and first: a session of this project failed, and nothing has been
-       done since. Every session still to come carries the full !! until one of
+       done since. Every session still to come is red with a ! until one of
        them is ticked done - or the flag is switched off in the settings. #}
     <div class="alert alert-danger project-archived-note project-problematic-note d-flex justify-content-between align-items-center flex-wrap gap-2" data-problematic-banner>
         <span>
             <i class="fa-solid fa-triangle-exclamation me-1" aria-hidden="true"></i>
             <strong>Problematic project.</strong>
-            A session failed — its sessions are flagged !! until one is marked done.
+            A session failed — its sessions are flagged red with a ! until one is marked done.
         </span>
         <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#projectSettingsModal">Settings</button>
     </div>
