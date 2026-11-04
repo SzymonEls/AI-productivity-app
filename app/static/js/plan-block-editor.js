@@ -1090,25 +1090,37 @@
         }
 
         /**
-         * Start editing wherever a row is tapped, not only on its letters.
+         * Start editing a line wherever the line is tapped, not only on its letters.
          *
          * An iPad only puts the caret into a line when the tap lands on its text:
-         * a tap past the end of the line, between two lines or on a bullet did
-         * nothing. On a touch tap the editor checks whether the line it landed in
-         * - or the nearest one, for a tap in the gap between two - did get the
-         * caret, and if not puts it there itself: at the letter under the finger,
-         * or at the end of the line. It happens inside the tap, which is what lets
-         * iOS bring the keyboard up for it.
+         * a tap past the end of the line did nothing. On a touch tap inside a
+         * line's own box - its full width, and the gap above it that belongs to
+         * it - the editor checks whether the line got the caret, and if not puts
+         * it there itself: at the letter under the finger, or at the end of the
+         * line. It happens inside the tap, which is what lets iOS bring the
+         * keyboard up for it.
+         *
+         * A tap anywhere else - the card around the lines, its margins, the bullet
+         * or the handle - is left alone and raises no keyboard: reading the plan
+         * and touching the page must not start editing it.
          */
         _focusFromTap(event) {
             if (this._lastPointerType === "mouse" || this.drag || this.selectedIds.length) return;
             const target = event.target;
-            if (target.closest("a, button, input, label, .pbe-handle, .pbe-check")) return;
+            if (target.closest("a, button, input, label, .pbe-handle, .pbe-check, .pbe-marker")) return;
 
-            let el = target.closest(".pbe-block");
-            if (!el || !this.list.contains(el)) el = this._nearestBlockEl(event.clientY);
-            const content = el?.querySelector(".pbe-content");
+            const el = target.closest(".pbe-block");
+            if (!el || !this.list.contains(el)) return;
+            const content = el.querySelector(".pbe-content");
             if (!content) return;
+
+            // Only the line's own box: as wide as the text can run, from the gap
+            // above it down to its last line.
+            const box = content.getBoundingClientRect();
+            const rowTop = el.getBoundingClientRect().top;
+            const inside = event.clientX >= box.left - 4 && event.clientX <= box.right + 4
+                && event.clientY >= rowTop && event.clientY <= box.bottom + 4;
+            if (!inside) return;
 
             const selection = window.getSelection();
             const caretHere = document.activeElement === content
@@ -1118,22 +1130,6 @@
 
             const offset = this._offsetFromPoint(content, event.clientX, event.clientY);
             setCaretOffset(content, offset ?? content.textContent.length);
-        }
-
-        // The row a tap between rows belongs to: the closest one within a finger's
-        // width of it, or none.
-        _nearestBlockEl(y) {
-            let best = null;
-            let bestDistance = 14;
-            this._blockEls().forEach((row) => {
-                const rect = row.getBoundingClientRect();
-                const distance = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0;
-                if (distance < bestDistance) {
-                    best = row;
-                    bestDistance = distance;
-                }
-            });
-            return best;
         }
 
         // The character offset under a point, or null when the point is not over

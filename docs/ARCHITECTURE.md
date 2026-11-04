@@ -720,11 +720,13 @@ The schema in the code matches the latest migration (`20261027_0034`).
     `pointerType`, so a mouse or trackpad on the same device keeps the desktop behaviour; on a
     desktop nothing changes. In [plan-block-editor.js](../app/static/js/plan-block-editor.js):
 
-    - **A tap anywhere in a row starts editing it** (`_focusFromTap`): an iPad only placed the
-      caret on a tap that hit the letters. On a touch tap the editor checks whether the line
-      under the finger — or the nearest one, for a tap between lines — got the caret, and if
-      not puts it there itself, at the letter under the finger (`caretRangeFromPoint`) or at the
-      end of the line, inside the tap so iOS raises the keyboard.
+    - **A tap anywhere in a line's own box starts editing it** (`_focusFromTap`): an iPad only
+      placed the caret on a tap that hit the letters. The box is the line's full width and the
+      gap above it; for a touch tap there the editor checks whether the line got the caret, and
+      if not puts it there itself, at the letter under the finger (`caretRangeFromPoint`) or at
+      the end of the line, inside the tap so iOS raises the keyboard. A tap anywhere else — the
+      card around the lines, its margins, a bullet or a handle — is left alone and raises no
+      keyboard.
     - **Enter and Backspace also go through `beforeinput`** (`_onBeforeInput`):
       on-screen keyboards often send "Unidentified" or no keydown at all, so a line was not
       split or merged. `insertParagraph` (and an `insertLineBreak` that was not Shift+Enter)
