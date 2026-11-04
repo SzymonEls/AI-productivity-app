@@ -1,3 +1,4 @@
+import math
 import re
 from datetime import datetime, timedelta
 
@@ -150,7 +151,7 @@ def _block_warn(booking):
         "warn_level": warn_level(booking),
         "warn_title": warn_title(booking),
         "session_gap": f"{allowed_gap_days(booking.project):g}",
-        "sessions_per_week": booking.project.sessions_per_week or 1,
+        "sessions_per_week": f"{booking.project.sessions_per_week or 1:g}",
         "session_before": session_before,
         "session_before_is_creation": is_creation,
     }
@@ -1551,7 +1552,7 @@ def edit_project(project_id):
     is_problematic = _form_bool("is_problematic", default=project.is_problematic)
     # Only the settings dialog sends it; every other save of the project keeps
     # what is there.
-    sessions_per_week = _coerce_int(request.form.get("sessions_per_week"))
+    sessions_per_week = _parse_sessions_per_week(request.form.get("sessions_per_week"))
     if sessions_per_week is None:
         sessions_per_week = project.sessions_per_week or 1
 
@@ -1562,9 +1563,10 @@ def edit_project(project_id):
     is_beacon = request.form.get("_beacon") == "1"
 
     # As on creation, the name is the one thing a project cannot be without.
-    if not MIN_SESSIONS_PER_WEEK <= sessions_per_week <= MAX_SESSIONS_PER_WEEK:
+    if not MIN_SESSIONS_PER_WEEK < sessions_per_week <= MAX_SESSIONS_PER_WEEK:
         error_message = (
-            f"Sessions a week has to be between {MIN_SESSIONS_PER_WEEK} and {MAX_SESSIONS_PER_WEEK}."
+            f"Sessions a week has to be more than {MIN_SESSIONS_PER_WEEK} and at most "
+            f"{MAX_SESSIONS_PER_WEEK} - 0.25 is one every four weeks."
         )
         if wants_json:
             return jsonify({"ok": False, "message": error_message}), 400
@@ -2005,6 +2007,21 @@ def _serialize_timeline_item(item, last_session_labels=None):
         "body": item.body or "",
         "is_private": bool(item.is_private),
     }
+
+
+def _parse_sessions_per_week(value):
+    """The settings' sessions a week as a number - "0.25" or "0,25" alike.
+
+    None when nothing was sent, so the project keeps what it has; a value that
+    is not a finite number comes back as 0, which the range check refuses.
+    """
+    if value is None or not str(value).strip():
+        return None
+    try:
+        number = float(str(value).strip().replace(",", "."))
+    except ValueError:
+        return 0.0
+    return number if math.isfinite(number) else 0.0
 
 
 def _coerce_int(value):

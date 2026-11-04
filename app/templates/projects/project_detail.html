@@ -635,14 +635,14 @@
                             class="form-control"
                             id="projectSessionsPerWeek"
                             name="sessions_per_week"
-                            min="1"
+                            min="0.01"
                             max="7"
-                            step="1"
-                            inputmode="numeric"
-                            value="{{ project.sessions_per_week or 1 }}"
+                            step="any"
+                            inputmode="decimal"
+                            value="{{ '%g' % (project.sessions_per_week or 1) }}"
                             required
                         >
-                        <div class="form-text">A session booked so long after the one before that the project falls below this turns red with a ! on the schedule and the home page.</div>
+                        <div class="form-text">Fractions work too: 0.5 is one session every two weeks, 0.25 one every four. A session booked so long after the one before that the project falls below this turns red with a ! on the schedule and the home page.</div>
                     </div>
                 </div>
                 <div class="modal-footer">

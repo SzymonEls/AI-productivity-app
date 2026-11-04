@@ -40,8 +40,9 @@ container, no external services.
   sheets are a live board with no edit mode to switch on: click a free block to fill it, drag a
   project between blocks — dropping one on a taken block swaps the two — or free a block with its ×.
   A session that comes too late says so: each project has a minimum number of sessions a week
-  (1 unless changed in its settings), and a session booked so long after the one before it —
-  more than 7 days for once a week, 3.5 for twice — turns its block red with a **!** that says,
+  (1 unless changed in its settings; fractions work too, 0.25 being one every four weeks), and a
+  session booked so long after the one before it — more than 7 days for once a week, 3.5 for
+  twice, 28 for 0.25 — turns its block red with a **!** that says,
   on hover, how far behind it is. Moving a session about is free until it crosses that line.
   Every session of a project marked problematic (a session of it failed) is red with a **!** too.
   A finished session is green whatever it took to get there.

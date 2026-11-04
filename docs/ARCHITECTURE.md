@@ -77,7 +77,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   project's deadline, `session_deadline_time` an optional hour on it, and
   `session_deadline_day_before` whether the next session has to come a day before it rather than
   on the day at the latest — see point 24. `is_problematic` flags every session still to come red with a "!" — see point 25.
-  `sessions_per_week` (1–7, default 1) is the fewest sessions a week it should get — see point 18.
+  `sessions_per_week` (a float above 0 up to 7, default 1 — 0.25 is one session every four
+  weeks) is the fewest sessions a week it should get — see point 18.
 - **ProjectTimeEntry** — a work session for a project (`started_at`/`ended_at`, `description`).
   `project_id` is optional and **has no cascade**: deleting a project orphans the entries instead of deleting them;
   `project_title_snapshot` remembers the project's name ([app/models.py:98-131](../app/models.py#L98-L131)).
@@ -366,9 +367,11 @@ The schema in the code matches the latest migration (`20261027_0034`).
     open proxy into whatever network it is deployed in.
 
 18. **A session goes red when its project falls behind, not when it is moved.** Each project has
-    `sessions_per_week` (1–7, default 1, in the project's settings), and `allowed_gap_days()` turns
-    it into the longest a session may come after the one before: 7 / sessions a week, a float, so
-    twice a week allows 3.5 days. `warn_level()` in [app/projects/slots.py](../app/projects/slots.py)
+    `sessions_per_week` (default 1, in the project's settings): any number above 0 up to 7, so a
+    fraction is a slower rhythm — 0.5 is one session every two weeks, 0.25 one every four — and
+    the tooltip says it that way ("1 session every 4 weeks", `sessions_per_week_label`).
+    `allowed_gap_days()` turns it into the longest a session may come after the one before:
+    7 / sessions a week, a float, so twice a week allows 3.5 days and 0.25 a week 28. `warn_level()` in [app/projects/slots.py](../app/projects/slots.py)
     gives an open session (not done, not failed) a red tint and one "!" when its project is
     problematic (point 25) or when `is_behind_frequency()` says it comes more than that many days
     after `previous_session()`. A done or failed session is never flagged; `warn_title()` is the

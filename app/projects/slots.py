@@ -41,9 +41,10 @@ MAX_CALENDAR_WEEKS = 12
 # but a year ahead is where the scroll stops: nothing is planned that far out.
 MAX_SCROLL_WEEKS = 52
 
-# What a project may ask for as its fewest sessions a week. At most one block a
-# day goes to a project, so seven is as many as a week can hold.
-MIN_SESSIONS_PER_WEEK = 1
+# What a project may ask for as its fewest sessions a week: anything above
+# nothing - 0.25 is one session every four weeks - up to seven, since at most
+# one block a day goes to a project.
+MIN_SESSIONS_PER_WEEK = 0
 MAX_SESSIONS_PER_WEEK = 7
 
 # The health score on the home page: the last week of finished sessions, and
@@ -226,10 +227,10 @@ def allowed_gap_days(project):
     """The most days one session may come after the one before: 7 / sessions a week.
 
     A float on purpose - twice a week allows 3.5 days, so a gap of 4 is late and
-    3 is not.
+    3 is not; 0.25 a week allows 28.
     """
     per_week = (project.sessions_per_week if project is not None else None) or 1
-    per_week = max(MIN_SESSIONS_PER_WEEK, min(per_week, MAX_SESSIONS_PER_WEEK))
+    per_week = min(per_week, MAX_SESSIONS_PER_WEEK)
     return DAYS_PER_WEEK / per_week
 
 
@@ -327,7 +328,19 @@ def is_behind_frequency(booking, today=None):
 
 
 def sessions_per_week_label(count):
-    return f"{count} session a week" if count == 1 else f"{count} sessions a week"
+    """ "1 session a week", "2.5 sessions a week" - or, below one a week when it
+    divides evenly into weeks, the rhythm it means: "1 session every 4 weeks".
+
+    The board's script spells it the same way (sessionsLabel in
+    schedule-board.js).
+    """
+    count = float(count or 1)
+    if count < 1:
+        weeks = 1 / count
+        if abs(weeks - round(weeks)) < 1e-9:
+            return f"1 session every {round(weeks)} weeks"
+    number = f"{count:g}"
+    return f"{number} session a week" if count == 1 else f"{number} sessions a week"
 
 
 def frequency_title(booking, today=None):

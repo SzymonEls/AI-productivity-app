@@ -104,7 +104,15 @@
         return [best, isCreation];
     }
 
+    // sessions_per_week_label() in slots.py: below one a week, when it divides
+    // evenly into weeks, the rhythm it means - "1 session every 4 weeks".
     function sessionsLabel(count) {
+        if (count < 1) {
+            const weeks = 1 / count;
+            if (Math.abs(weeks - Math.round(weeks)) < 1e-9) {
+                return `1 session every ${Math.round(weeks)} weeks`;
+            }
+        }
         return count === 1 ? "1 session a week" : `${count} sessions a week`;
     }
 
