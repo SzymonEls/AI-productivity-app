@@ -196,7 +196,7 @@
 
             {# Today's tasks, and every open one whose day has already gone, so
                nothing left undone slips off the page the day is started on. #}
-            <div class="dashboard-section day-lines-box">
+            <div class="dashboard-section day-lines-box" data-tasks-ui>
                 <div class="d-flex justify-content-between align-items-baseline gap-2">
                     <h2 class="h6 mb-0">Tasks</h2>
                     <a class="small text-muted" href="{{ url_for('tasks.tasks_page') }}">All tasks →</a>
