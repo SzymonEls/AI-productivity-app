@@ -6,6 +6,7 @@ from flask_login import current_user, login_required
 from ..integrations.feeds import events_by_date, has_stale_feeds
 from ..projects.day_notes import notes_from
 from ..projects.slots import (
+    prime_session_window,
     SLOTS,
     TIMED_SLOTS,
     health_history,
@@ -45,6 +46,9 @@ def home():
     # One query for every project's time today, rather than one per slot.
     totals = daily_totals_by_project(current_user.id, today)
     unplanned = unscheduled_projects(current_user.id)
+    # Today's three cards are weighed against the sessions before them: one
+    # day's window, two small queries (see prime_session_window).
+    prime_session_window(current_user.id, today, today, today)
     slot_cards = [serialize_slot_card(slot, booked[slot], totals, today) for slot in SLOTS]
     # Two more queries on a page that already makes several. The projects are
     # fetched even with an empty inbox: the + beside "Today" can fill it without

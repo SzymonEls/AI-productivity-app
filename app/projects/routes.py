@@ -50,6 +50,7 @@ from .slots import (
     past_calendar_weeks,
     planned_session_labels,
     planned_session_labels_by_project,
+    prime_session_window,
     project_bookings,
     project_deadline_label,
     project_statistics,
@@ -293,6 +294,9 @@ def _schedule_weeks(calendar, today):
     # schedule asks: the archive's days are past, and a deadline still open
     # back there is already named by the project page in red.
     deadlines = deadlines_by_day(current_user.id, first_day, last_day)
+    # What every block on these weeks is measured from, for the red "!":
+    # two small queries for the whole range (see prime_session_window).
+    prime_session_window(current_user.id, first_day, last_day, today)
     return [
         {
             "label": _week_label(_weeks_ahead(days[0][0] - timedelta(days=days[0][0].weekday()), today)),
@@ -377,6 +381,7 @@ def schedule_archive():
     notes = notes_from(current_user.id, first_day, last_day)
     events = events_by_date(current_user.id, first_day, last_day)
     tasks = tasks_from(current_user.id, first_day, last_day)
+    prime_session_window(current_user.id, first_day, last_day, today)
 
     return render_template(
         "projects/archive.html",

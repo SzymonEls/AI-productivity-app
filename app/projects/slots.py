@@ -11,7 +11,7 @@ from bisect import bisect_left
 from datetime import date, timedelta
 
 from flask import g, has_app_context
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from ..extensions import db
@@ -235,43 +235,103 @@ def allowed_gap_days(project):
     return DAYS_PER_WEEK / per_week
 
 
-def _session_days(user_id, today):
-    """``{project_id: [day, ...]}``: the sorted days of a user's sessions that count.
+def _counted_filter(user_id, today):
+    """The rows a session is measured from (``_counts_as_session``), in SQL."""
+    return and_(
+        ProjectDaySlot.user_id == user_id,
+        or_(
+            ProjectDaySlot.is_done.is_(True),
+            and_(ProjectDaySlot.slot_date >= today, ProjectDaySlot.is_failed.is_(False)),
+        ),
+    )
 
-    What a session is measured from (``_counts_as_session``): done ones, and
-    ones still to come that have not failed. Only those rows are read, and only
-    their project and day, once per request: a schedule page weighs each of its
-    blocks against the ones before it, and asking per block would be a query
-    each. Sorted, so the session before a day is a binary search rather than a
-    pass over the whole history. Kept on ``g`` for the request only - nothing
-    that changes a booking renders a block afterwards in the same request.
+
+def _window_cache():
+    if not has_app_context():
+        return {}
+    cache = getattr(g, "_session_windows", None)
+    if cache is None:
+        cache = g._session_windows = {}
+    return cache
+
+
+def prime_session_window(user_id, first_day, last_day, today=None):
+    """Read what the blocks from ``first_day`` to ``last_day`` are measured from.
+
+    Two small queries instead of the user's whole history: the database hands
+    back, per project, the one latest counted day before the window, and the
+    counted days inside the window. A block in
+    the window is then measured from the latest of its project's days before
+    its own, found by binary search, or from that one day before the window.
+    However many years of sessions there are, what reaches the app is a row
+    per project plus the window's own few.
+
+    Pages call this with the days they show. Nothing is read until the first
+    block asks (``_load_window``), so weeks with no sessions in them cost no
+    query at all. Kept on ``g`` for the request only - nothing that changes a
+    booking renders a block afterwards in the same request.
     """
-    cache = getattr(g, "_session_days", None) if has_app_context() else None
-    key = (user_id, today)
-    if cache is not None and key in cache:
-        return cache[key]
+    today = today or today_local()
+    _window_cache()[(user_id, today)] = {"first": first_day, "last": last_day, "loaded": False}
 
-    rows = (
+
+def _load_window(user_id, today, window):
+    """Run the two queries of a primed window, once, on first use."""
+    first_day, last_day = window["first"], window["last"]
+    counted = _counted_filter(user_id, today)
+    # Newest first per project, stopping at the first day that counts: the
+    # (project_id, slot_date) index walks back from the window a row or two per
+    # project, where a GROUP BY would read the whole history every time.
+    latest_before = (
+        select(ProjectDaySlot.slot_date)
+        .where(ProjectDaySlot.project_id == Project.id, counted, ProjectDaySlot.slot_date < first_day)
+        .order_by(ProjectDaySlot.slot_date.desc())
+        .limit(1)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+    before = {
+        project_id: day
+        for project_id, day in db.session.query(Project.id, latest_before)
+        .filter(Project.user_id == user_id)
+        .all()
+        if day is not None
+    }
+    inside = {}
+    for project_id, day in (
         db.session.query(ProjectDaySlot.project_id, ProjectDaySlot.slot_date)
-        .filter(
-            ProjectDaySlot.user_id == user_id,
-            or_(
-                ProjectDaySlot.is_done.is_(True),
-                and_(ProjectDaySlot.slot_date >= today, ProjectDaySlot.is_failed.is_(False)),
-            ),
-        )
+        .filter(counted, ProjectDaySlot.slot_date >= first_day, ProjectDaySlot.slot_date <= last_day)
         .order_by(ProjectDaySlot.slot_date.asc())
         .all()
-    )
-    days = {}
-    for project_id, day in rows:
-        days.setdefault(project_id, []).append(day)
+    ):
+        inside.setdefault(project_id, []).append(day)
+    window.update(before=before, inside=inside, loaded=True)
+    return window
 
-    if has_app_context():
-        if cache is None:
-            cache = g._session_days = {}
-        cache[key] = days
-    return days
+
+def _counted_day_before(user_id, project_id, day, today):
+    """The latest counted day of a project strictly before ``day``, or None.
+
+    From the primed window when ``day`` is inside it (or the day after it,
+    which is what "before today" is for a window ending yesterday); otherwise
+    a direct query, so a caller that did not prime gets the right answer too,
+    just less cheaply.
+    """
+    window = _window_cache().get((user_id, today))
+    if window is not None and window["first"] <= day <= window["last"] + timedelta(days=1):
+        if not window["loaded"]:
+            _load_window(user_id, today, window)
+        previous = _latest_before(window["inside"].get(project_id, []), day)
+        return previous if previous is not None else window["before"].get(project_id)
+    return (
+        db.session.query(func.max(ProjectDaySlot.slot_date))
+        .filter(
+            _counted_filter(user_id, today),
+            ProjectDaySlot.project_id == project_id,
+            ProjectDaySlot.slot_date < day,
+        )
+        .scalar()
+    )
 
 
 def _counts_as_session(day, is_done, is_failed, today):
@@ -279,8 +339,8 @@ def _counts_as_session(day, is_done, is_failed, today):
 
     A done one always is. One still to come - today or later, not failed -
     is too, since it is planned to happen. A past one never ticked off is not:
-    as far as the app knows, it did not happen. (_session_days reads exactly
-    these rows from the database.)
+    as far as the app knows, it did not happen. (_counted_filter is the same
+    rule in SQL.)
     """
     return is_done or (day >= today and not is_failed)
 
@@ -307,7 +367,7 @@ def previous_session(booking, today=None):
     """
     today = today or today_local()
     project = booking.project
-    previous = _latest_before(_session_days(booking.user_id, today).get(project.id, []), booking.slot_date)
+    previous = _counted_day_before(booking.user_id, project.id, booking.slot_date, today)
     if previous is not None:
         return previous, False
     return project_created_day(project), True
@@ -374,7 +434,7 @@ def session_before_today(project, user_id, today=None):
     counted days before today are.
     """
     today = today or today_local()
-    previous = _latest_before(_session_days(user_id, today).get(project.id, []), today)
+    previous = _counted_day_before(user_id, project.id, today, today)
     if previous is not None:
         return previous, False
     return project_created_day(project), True

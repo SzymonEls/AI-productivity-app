@@ -381,11 +381,16 @@ The schema in the code matches the latest migration (`20261027_0034`).
     a session: a done one, or one still to come (today or later, not failed) — a session planned
     for today is what next week's is measured from. A past one never ticked off does not count; as
     far as the app knows it did not happen. A project with none is measured from the day it was
-    created, so a new project's first session is held to the same rhythm. The days that count are
-    read once per request — only those rows, only project and day (`_session_days`, kept on
-    `g`) — and kept sorted per project, so finding a block's session before is a binary search
-    (`_latest_before`) rather than a pass over the history: a page of blocks is one query and
-    stays cheap however many years of sessions there are.
+    created, so a new project's first session is held to the same rhythm. A page never reads the
+    history itself: it names the days it shows (`prime_session_window`, called by the schedule,
+    its scrolled-in weeks, the archive and the home page), and on the first block that asks
+    (`_load_window`, kept on `g`) two small queries fetch, per project, the one latest counted
+    day before those days — newest first down the `(project_id, slot_date)` index, stopping at
+    the first that counts, a row or two per project — and the counted days inside them. A block
+    is then measured from the latest of its project's days before its own (a binary search,
+    `_latest_before`) or that one day before the window. The cost does not grow with the years
+    of sessions behind it, and weeks with no sessions cost no query. A caller that did not
+    prime still gets the right answer from a direct query (`_counted_day_before`).
 
     Moving a session is therefore free until it crosses the line. The board applies a move before
     the server answers, so [schedule-board.js](../app/static/js/schedule-board.js) works the same
