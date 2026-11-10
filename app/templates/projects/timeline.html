@@ -103,7 +103,7 @@
                 </thead>
                 <tbody>
                     {% for project in projects %}
-                        <tr class="{% if project.is_archived %}text-muted{% endif %}">
+                        <tr>
                             <td><a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a></td>
                             <td>
                                 <div class="form-check form-switch mb-0">
@@ -115,7 +115,7 @@
                                 </div>
                             </td>
                             <td class="small">
-                                {% if project.is_archived %}Archived{% elif project.waiting_for %}Waiting for {{ project.waiting_for.title }}{% else %}Active{% endif %}
+                                {% if project.waiting_for %}Waiting for {{ project.waiting_for.title }}{% else %}Active{% endif %}
                             </td>
                             <td class="small text-muted">{{ project_last_session_labels.get(project.id, "Last session: none") | replace("Last session: ", "") }}</td>
                         </tr>

@@ -154,7 +154,7 @@
                                 {% endif %}
                             </div>
                             {% if card.plan_heading %}
-                                <p class="slot-card-step mb-0">{{ card.plan_heading }}</p>
+                                <p class="slot-card-step mb-0{% if card.project.is_private %} private-plan-heading{% endif %}">{{ card.plan_heading }}</p>
                             {% else %}
                                 <p class="slot-card-step slot-card-step-empty mb-0">No <code>#</code> section in the plan yet</p>
                             {% endif %}

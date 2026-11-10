@@ -830,6 +830,9 @@
    mode covers it the way it covers the plan. */
 .waiting-node-note-private { display: none; font-style: italic; }
 [data-safe-mode="on"] .waiting-node.is-private .waiting-node-note { display: none; }
+/* A private project's first plan heading (the subtitle on slot cards and the
+   day sheet) says what it is about, so safe mode hides it like the plan. */
+[data-safe-mode="on"] .private-plan-heading { display: none; }
 [data-safe-mode="on"] .waiting-node.is-private .waiting-node-note-private { display: inline; }
 
 .timeline-item.is-private-masked {

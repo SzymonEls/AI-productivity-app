@@ -988,6 +988,7 @@ def slot_candidates(user_id, day, slot):
                 "plan_heading": first_plan_section_title(project.long_goal),
                 "last_session": labels.get(project.id, ""),
                 "is_starred": bool(project.is_starred),
+                "is_private": bool(project.is_private),
                 "can_take": not reason,
                 "reason": reason,
                 # Bookable all the same; the picker says it would be late, and

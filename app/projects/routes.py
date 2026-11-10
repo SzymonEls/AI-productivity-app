@@ -514,8 +514,8 @@ def timeline_view():
 
     if view == "all":
         projects = (
-            Project.query.filter_by(user_id=current_user.id)
-            .order_by(Project.is_archived.asc(), func.lower(Project.title).asc())
+            Project.query.filter_by(user_id=current_user.id, is_archived=False)
+            .order_by(func.lower(Project.title).asc())
             .all()
         )
         return render_template(

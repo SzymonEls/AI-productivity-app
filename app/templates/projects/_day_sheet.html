@@ -49,7 +49,7 @@
                 <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
                 {% if entry.is_done and not readonly %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
                 {% if entry.is_failed %}<span class="day-slot-failed" data-slot-failed title="Session failed" aria-label="Session failed">✗</span>{% endif %}
-                {% if entry.plan_heading %}<span class="day-slot-step">{{ entry.plan_heading }}</span>{% endif %}
+                {% if entry.plan_heading %}<span class="day-slot-step{% if entry.project.is_private %} private-plan-heading{% endif %}">{{ entry.plan_heading }}</span>{% endif %}
             {% else %}
                 <span class="day-slot-free">Free</span>
             {% endif %}

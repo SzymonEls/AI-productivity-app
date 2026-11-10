@@ -413,7 +413,9 @@
             const note = document.createElement("span");
             note.className = "picker-row-note";
             note.textContent = project.can_take
-                ? project.plan_heading || project.last_session
+                ? (project.is_private && document.documentElement.getAttribute("data-safe-mode") === "on"
+                    ? project.last_session
+                    : project.plan_heading || project.last_session)
                 : project.reason;
             text.appendChild(note);
 
