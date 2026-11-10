@@ -494,17 +494,35 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
 @projects_bp.route("/timeline-view")
 @login_required
 def timeline_view():
-    """The Projects page: the grouped timeline, or the waiting diagram.
+    """The Projects page: the waiting diagram, a table of every project, or the timeline.
 
-    Two tabs as two URLs (``?view=waiting``) rather than a switch in the page,
-    so a banner on a project page can link straight to the diagram.
+    Three tabs as three URLs (``?view=all``, ``?view=timeline``; the diagram is
+    the default) rather than a switch in the page, so a banner on a project page
+    can link straight to the diagram and the timeline's script only runs on its tab.
     """
 
-    if request.args.get("view") == "waiting":
+    view = request.args.get("view", "waiting")
+    if view not in {"waiting", "all", "timeline"}:
+        view = "waiting"
+
+    if view == "waiting":
         return render_template(
             "projects/timeline.html",
             view="waiting",
             diagram=_waiting_diagram(current_user.id),
+        )
+
+    if view == "all":
+        projects = (
+            Project.query.filter_by(user_id=current_user.id)
+            .order_by(Project.is_archived.asc(), func.lower(Project.title).asc())
+            .all()
+        )
+        return render_template(
+            "projects/timeline.html",
+            view="all",
+            projects=projects,
+            project_last_session_labels=project_last_session_labels(current_user.id, projects),
         )
 
     projects = (
@@ -1223,6 +1241,21 @@ def project_milestones(project_id):
             "milestones": _plan_milestones(project.long_goal),
         }
     )
+
+
+@projects_bp.route("/<int:project_id>/private", methods=["POST"])
+@login_required
+def set_project_private(project_id):
+    """Mark a project private or not, from the switch in the All projects table."""
+    project = _get_user_project_or_404(project_id)
+    payload = request.get_json(silent=True) or {}
+    project.is_private = bool(payload.get("is_private"))
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to save. The database is unavailable for writing."}), 500
+    return jsonify({"ok": True, "is_private": project.is_private})
 
 
 @projects_bp.route("/<int:project_id>/waiting-for", methods=["POST"])

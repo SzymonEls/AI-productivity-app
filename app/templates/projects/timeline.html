@@ -9,11 +9,12 @@
     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <h1 class="h5 mb-0">Your Projects</h1>
-            {# Two tabs as two URLs: the diagram can be linked to, and the
+            {# Three tabs as three URLs: the diagram can be linked to, and the
                timeline's editing script never runs on a page without one. #}
             <nav class="settings-segments project-view-tabs" aria-label="Projects view">
-                <a class="settings-segment {% if view == 'timeline' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view') }}" {% if view == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
-                <a class="settings-segment {% if view == 'waiting' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view', view='waiting') }}" {% if view == 'waiting' %}aria-current="page"{% endif %}>Waiting</a>
+                <a class="settings-segment {% if view == 'waiting' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view') }}" {% if view == 'waiting' %}aria-current="page"{% endif %}>Waiting</a>
+                <a class="settings-segment {% if view == 'all' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view', view='all') }}" {% if view == 'all' %}aria-current="page"{% endif %}>All projects</a>
+                <a class="settings-segment {% if view == 'timeline' %}is-active{% endif %}" href="{{ url_for('projects.timeline_view', view='timeline') }}" {% if view == 'timeline' %}aria-current="page"{% endif %}>Timeline</a>
             </nav>
             <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
         </div>
@@ -88,7 +89,72 @@
             </p>
         {% endif %}
     </section>
-{% elif projects %}
+{% elif view == "all" and projects %}
+    <section class="dashboard-section project-table-section">
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 project-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Project</th>
+                        <th scope="col">Private</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Last session</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in projects %}
+                        <tr class="{% if project.is_archived %}text-muted{% endif %}">
+                            <td><a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a></td>
+                            <td>
+                                <div class="form-check form-switch mb-0">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                        data-project-private-toggle
+                                        data-url="{{ url_for('projects.set_project_private', project_id=project.id) }}"
+                                        aria-label="Private: {{ project.title }}"
+                                        {% if project.is_private %}checked{% endif %}>
+                                </div>
+                            </td>
+                            <td class="small">
+                                {% if project.is_archived %}Archived{% elif project.waiting_for %}Waiting for {{ project.waiting_for.title }}{% else %}Active{% endif %}
+                            </td>
+                            <td class="small text-muted">{{ project_last_session_labels.get(project.id, "Last session: none") | replace("Last session: ", "") }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <p class="small text-danger mt-2 mb-0 d-none" data-project-private-error role="status"></p>
+    </section>
+    <script>
+        (() => {
+            const errorOutput = document.querySelector("[data-project-private-error]");
+            document.querySelectorAll("[data-project-private-toggle]").forEach((toggle) => {
+                toggle.addEventListener("change", async () => {
+                    const wanted = toggle.checked;
+                    toggle.disabled = true;
+                    errorOutput.classList.add("d-none");
+                    try {
+                        const response = await fetch(toggle.dataset.url, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                            body: JSON.stringify({ is_private: wanted }),
+                        });
+                        const payload = await response.json().catch(() => ({}));
+                        if (!response.ok || !payload.ok) {
+                            throw new Error(payload.message || "Could not save the change.");
+                        }
+                    } catch (error) {
+                        toggle.checked = !wanted;
+                        errorOutput.textContent = error.message;
+                        errorOutput.classList.remove("d-none");
+                    } finally {
+                        toggle.disabled = false;
+                    }
+                });
+            });
+        })();
+    </script>
+{% elif view == "timeline" and projects %}
     <script type="application/json" id="project-timeline-data">
         {{ timeline_data | tojson }}
     </script>
