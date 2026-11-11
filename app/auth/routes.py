@@ -1,11 +1,18 @@
-from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, url_for
+import io
+import json
+import re
+import unicodedata
+import zipfile
+from datetime import date
+
+from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from sqlalchemy.exc import SQLAlchemyError
 
 from . import lockout
 from ..extensions import db
-from ..models import User
+from ..models import Project, User
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -139,6 +146,57 @@ def regenerate_api_token():
 
     flash("A new API token is ready. Paste it into the app - the old one stopped working.", "success")
     return redirect(url_for("auth.change_password"))
+
+
+def _project_markdown_filename(title):
+    # Same rule as the project page's "Download markdown", so a file has one name
+    # whichever button produced it.
+    normalized = re.sub(r"[\u0300-\u036f]", "", unicodedata.normalize("NFD", title)).lower()
+    return re.sub(r"[^a-z0-9]+", "-", normalized).strip("-") or "project"
+
+
+def _project_markdown(project):
+    title = project.title.strip() or "Project"
+    short_goal = project.short_goal.strip()
+    long_goal = project.long_goal.strip()
+    sections = [f"# {title}"]
+    if short_goal:
+        sections.append(f"## Thoughts\n\n{short_goal}")
+    if long_goal:
+        sections.append(f"## Plan\n\n{long_goal}")
+    return "\n\n".join(sections) + "\n"
+
+
+@auth_bp.route("/export")
+@login_required
+def export_all_data():
+    projects = Project.query.filter_by(user_id=current_user.id).order_by(Project.id).all()
+    buffer = io.BytesIO()
+    used_paths = set()
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for project in projects:
+            folder = "projects/archived" if project.is_archived else "projects"
+            stem = _project_markdown_filename(project.title)
+            path = f"{folder}/{stem}.md"
+            suffix = 2
+            # Two projects may share a title; a zip would keep both entries but
+            # unpacking would let the second silently overwrite the first.
+            while path in used_paths:
+                path = f"{folder}/{stem}-{suffix}.md"
+                suffix += 1
+            used_paths.add(path)
+            archive.writestr(path, _project_markdown(project))
+
+        archive.writestr("data.json", json.dumps({"status": "to be implemented"}, indent=2) + "\n")
+
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=f"productivity-export-{date.today().isoformat()}.zip",
+    )
 
 
 @auth_bp.route("/logout")
