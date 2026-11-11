@@ -3682,6 +3682,35 @@ button.picker-row:hover {
     white-space: nowrap;
 }
 
+/* Inline Markdown in the block editor. The markers stay in the text, so they
+   are dimmed rather than hidden. */
+.pbe-md-mark {
+    opacity: 0.4;
+}
+
+.pbe-md-bold {
+    font-weight: 700;
+}
+
+.pbe-md-italic {
+    font-style: italic;
+}
+
+.pbe-md-strike {
+    text-decoration: line-through;
+}
+
+.pbe-md-code {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.9em;
+    background: var(--bs-tertiary-bg);
+    border-radius: 4px;
+}
+
+.pbe-md-link {
+    color: var(--bs-link-color);
+}
+
 /* The tag the reader was sent to, in the classic (rendered) plan. */
 .plan-tag.plan-tag-found {
     outline: 2px solid var(--primary);
