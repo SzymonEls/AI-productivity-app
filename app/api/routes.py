@@ -124,6 +124,7 @@ def _today_payload(user):
         )
 
     day_total = sum(totals.values())
+    booked_ids = {booking.project_id for booking in bookings.values() if booking}
     return {
         "ok": True,
         "date": day.isoformat(),
@@ -131,6 +132,13 @@ def _today_payload(user):
         "slots": slots,
         "active": _active_payload(active),
         "day_total_seconds": day_total,
+        # Per-project totals for what was tracked today outside the booked slots,
+        # so a client can show the day's time for those too, not one session's.
+        "unbooked_tracked_seconds": {
+            str(project_id): seconds
+            for project_id, seconds in totals.items()
+            if project_id is not None and project_id not in booked_ids
+        },
         "day_total_label": format_duration(day_total),
     }
 
