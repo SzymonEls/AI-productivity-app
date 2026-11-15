@@ -289,6 +289,37 @@ def edit_entry(entry_id):
     return redirect(_tracking_redirect(redirect_project_id))
 
 
+@time_tracking_bp.route("/entries/add", methods=["POST"])
+@login_required
+def add_entry():
+    project = _get_user_project_or_404(request.form.get("project_id", type=int))
+    started_at = parse_local_datetime(request.form.get("started_at"), None)
+    ended_at = parse_local_datetime(request.form.get("ended_at"), None)
+    if not started_at or not ended_at or ended_at <= started_at:
+        flash("The session end must be later than the start.", "danger")
+        return redirect(_tracking_redirect(project.id))
+
+    db.session.add(
+        ProjectTimeEntry(
+            owner=current_user,
+            project=project,
+            project_title_snapshot=project.title,
+            started_at=started_at,
+            ended_at=ended_at,
+            description=(request.form.get("description") or "").strip() or None,
+        )
+    )
+
+    try:
+        db.session.commit()
+        flash("The time session was added.", "success")
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash("Failed to add the time session.", "danger")
+
+    return redirect(_tracking_redirect(project.id))
+
+
 @time_tracking_bp.route("/entries/<int:entry_id>/delete", methods=["POST"])
 @login_required
 def delete_entry(entry_id):
