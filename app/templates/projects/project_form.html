@@ -8,9 +8,17 @@
             <div class="card shadow-sm">
             <div class="card-body p-4">
                 <h1 class="h3 mb-4">{{ form_title }}</h1>
+                {% if is_group %}
+                    <p class="text-muted small mb-4">
+                        A group gathers several projects into one session: the group is
+                        what you plan, and its session is worked through project by
+                        project, one tab each.
+                    </p>
+                {% endif %}
                 <form method="post" data-unsaved-warning="true">
+                    {% if is_group %}<input type="hidden" name="is_group" value="true">{% endif %}
                     <div class="mb-3">
-                        <label for="title" class="form-label">Project Title</label>
+                        <label for="title" class="form-label">{{ "Group name" if is_group else "Project Title" }}</label>
                         <input
                             type="text"
                             class="form-control"
@@ -20,6 +28,38 @@
                             required
                         >
                     </div>
+                    {% if is_group %}
+                        <fieldset class="mb-3">
+                            <legend class="form-label fs-6 mb-1">Projects in the group</legend>
+                            <div class="form-text mt-0 mb-2">
+                                Pick the projects this group's session is made of. You can change
+                                them later on the group's page. A project can be in one group only,
+                                so picking one that is in another group moves it here.
+                            </div>
+                            {% if group_choices %}
+                                <div class="group-choice-list">
+                                    {% for choice in group_choices %}
+                                        <div class="form-check">
+                                            <input
+                                                class="form-check-input"
+                                                type="checkbox"
+                                                id="member-{{ choice.id }}"
+                                                name="member_ids"
+                                                value="{{ choice.id }}"
+                                                {% if choice.id in chosen_member_ids %}checked{% endif %}
+                                            >
+                                            <label class="form-check-label" for="member-{{ choice.id }}">
+                                                {{ choice.title }}
+                                                {% if choice.active_group %}<span class="text-muted small">(now in {{ choice.active_group.title }})</span>{% endif %}
+                                            </label>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="small text-muted mb-0">No projects to add yet.</p>
+                            {% endif %}
+                        </fieldset>
+                    {% else %}
                     <div class="mb-3">
                         <label for="short_goal" class="form-label">Thoughts</label>
                         <textarea
@@ -46,6 +86,7 @@
                             The working project plan. Markdown is supported here.
                         </div>
                     </div>
+                    {% endif %}
                     <div class="form-check mb-3">
                         <input
                             class="form-check-input"
@@ -55,7 +96,7 @@
                             value="true"
                             {% if project and project.is_private %}checked{% endif %}
                         >
-                        <label class="form-check-label" for="is_private">Private project</label>
+                        <label class="form-check-label" for="is_private">{{ "Private group" if is_group else "Private project" }}</label>
                     </div>
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">{{ submit_label }}</button>

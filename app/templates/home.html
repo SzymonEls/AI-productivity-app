@@ -136,7 +136,9 @@
                                 {# stretched-link makes the whole card the hit area without
                                    wrapping the card in an anchor, which would turn the time
                                    and the badges into link text for a screen reader. #}
-                                <a class="slot-card-title stretched-link" href="{{ url_for('projects.project_detail', project_id=card.project.id) }}">
+                                {# A group's block starts its session: it opens on the
+                                   first of its projects still to do today. #}
+                                <a class="slot-card-title stretched-link" href="{{ url_for('projects.start_group_session' if card.project.is_group else 'projects.project_detail', project_id=card.project.id) }}">
                                     {{ card.project.title }}
                                 </a>
                                 {% if card.project.is_starred %}<span class="switcher-badge" title="Starred" aria-hidden="true">★</span>{% endif %}
@@ -144,6 +146,7 @@
                                    shoulder should be able to pick out of today's three cards.
                                    Privacy shows on the project's own page instead, where the plan
                                    and the thoughts stay behind a button. #}
+                                {% if card.group_progress and not card.is_done %}<span class="slot-group-progress" title="Projects done in this group's session">{{ card.group_progress }}</span>{% endif %}
                                 {% if card.is_done %}<span class="slot-done-tag">Done</span>{% endif %}
                                 {% if card.is_failed %}<span class="slot-done-tag slot-failed-tag">Failed</span>{% endif %}
                                 {# The schedule's red !, here too: the project is

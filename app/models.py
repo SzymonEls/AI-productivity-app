@@ -2,6 +2,7 @@ import secrets
 from datetime import datetime, timezone
 
 from flask_login import UserMixin
+from sqlalchemy import func
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from .extensions import db, login_manager
@@ -188,6 +189,14 @@ class Project(db.Model):
     # in the project's settings. While it is on, every session still to come is
     # flagged with the full "!!", whatever its postponement count.
     is_problematic = db.Column(db.Boolean, default=False, nullable=False)
+    # A group of projects planned as one: it is booked, moved and warned about
+    # like any project, and its session is worked through project by project
+    # (``ProjectDaySlot.done_member_ids``). See app/projects/groups.py.
+    is_group = db.Column(db.Boolean, nullable=False, default=False, server_default=db.false())
+    # The group this project is planned with, or None. One group at most, and
+    # a group is never itself a member. Like ``waiting_for_project_id``, SQLite
+    # does not enforce the key, so deleting a group lets its members go by hand.
+    group_id = db.Column(db.Integer, db.ForeignKey("projects.id"), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
@@ -197,13 +206,47 @@ class Project(db.Model):
     )
 
     owner = db.relationship("User", back_populates="projects")
+    group = db.relationship(
+        "Project",
+        remote_side=[id],
+        foreign_keys=[group_id],
+        back_populates="members",
+    )
+    members = db.relationship(
+        "Project",
+        foreign_keys=[group_id],
+        back_populates="group",
+        lazy=True,
+        order_by=lambda: func.lower(Project.title),
+    )
+
+    @property
+    def active_group(self):
+        """The group this project is planned with, unless that group is archived.
+
+        An archived group is out of the planning, so its members are back on
+        their own: in the Not scheduled list, in the picker, without the tabs.
+        """
+        group = self.group
+        if group is None or group.is_archived or not group.is_group:
+            return None
+        return group
+
+    @property
+    def active_members(self):
+        """A group's members that are still in the planning, by title."""
+        if not self.is_group:
+            return []
+        return [member for member in self.members if not member.is_archived]
     waiting_for = db.relationship(
         "Project",
         remote_side=[id],
+        foreign_keys=[waiting_for_project_id],
         back_populates="waited_on_by",
     )
     waited_on_by = db.relationship(
         "Project",
+        foreign_keys=[waiting_for_project_id],
         back_populates="waiting_for",
         lazy=True,
         order_by=lambda: Project.title,
@@ -343,6 +386,10 @@ class ProjectDaySlot(db.Model):
     # out. Never set together with ``is_done``; marking it also marks the
     # project problematic (``Project.is_problematic``).
     is_failed = db.Column(db.Boolean, default=False, nullable=False)
+    # For a group's session: the ids of the members finished in it so far,
+    # which is what "2/3" counts. Like ``is_done`` it belongs to the day, so a
+    # move to another date empties it. None and [] mean the same.
+    done_member_ids = db.Column(db.JSON, nullable=True)
     # How often this session has been pushed onto a later day, which is what
     # colours the block on the schedule. It belongs to the booking rather than
     # to the project on purpose: freeing the block and booking the project again

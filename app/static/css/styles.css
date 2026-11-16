@@ -4570,3 +4570,128 @@ button.picker-row:hover {
 body.pbe-touchbar-open {
     padding-bottom: 3.6rem;
 }
+
+/* ------------------------------------------------------------------ *
+ * Groups of projects: the tabs a group's session is worked through,
+ * the strip that ticks one project off in it, and the "2/3" a group's
+ * block carries on the home page and the schedule.
+ * ------------------------------------------------------------------ */
+.group-tabs {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+    scrollbar-width: thin;
+}
+
+.group-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 16rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: calc(var(--radius) - 0.28rem);
+    color: var(--muted-foreground);
+    font-size: 0.88rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.group-tab:hover { color: var(--foreground); }
+
+/* The tab being shown: filled in the accent colour, so which project of the
+   group's session is open reads at a glance. */
+.group-tab.is-active,
+.group-tab.is-active:hover {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: var(--shadow-sm);
+}
+
+.group-tab.is-active .group-tab-check,
+.group-tab.is-active.is-done .group-tab-check { color: inherit; }
+.group-tab.is-active.is-done .group-tab-title { text-decoration-color: currentColor; }
+
+.group-tab.is-active .group-tab-progress {
+    background: color-mix(in srgb, var(--primary-foreground) 22%, transparent);
+    color: inherit;
+}
+
+.group-tab.is-group { padding-right: 0.9rem; border-right: 1px solid var(--border); border-radius: calc(var(--radius) - 0.28rem) 0 0 calc(var(--radius) - 0.28rem); }
+
+.group-tab-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-tab-check { color: var(--muted-foreground); }
+.group-tab.is-done .group-tab-check { color: var(--success); }
+.group-tab.is-done .group-tab-title { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--success) 60%, transparent); }
+
+.group-tab-progress,
+.slot-group-progress,
+.day-slot-group-progress {
+    padding: 0.05rem 0.45rem;
+    border-radius: var(--radius-pill);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.group-tab.is-group.is-done .group-tab-progress {
+    background: color-mix(in srgb, var(--success) 18%, var(--surface));
+    color: var(--success);
+}
+
+.day-slot-group-progress { margin-left: 0.25rem; font-size: 0.68rem; }
+
+
+.group-member-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.group-member-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.group-member-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.group-member-add .form-select { max-width: 22rem; }
+
+.project-table-group td { font-weight: 600; }
+.project-table-member td:first-child { padding-left: 1.25rem; }
+.project-table-indent { margin-right: 0.35rem; color: var(--muted-foreground); }
+
+.group-choice-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+    gap: 0.35rem 1rem;
+    max-height: 18rem;
+    overflow-y: auto;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+}
