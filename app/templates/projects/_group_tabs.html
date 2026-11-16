@@ -1,0 +1,32 @@
+{# The tabs of a group: the group itself, then one per project in it. Shown on
+   the group's page and on each member's, so a group's session is worked
+   through one tab at a time. With a session of the group today, each tab says
+   whether its project is finished in it, and the group's tab says how far the
+   session has got ("2/3"). #}
+{% set tabs = group_tabs %}
+<nav class="group-tabs mb-3" aria-label="Projects in {{ tabs.group.title }}">
+    <a
+        class="group-tab is-group{% if tabs.is_group_page %} is-active{% endif %}{% if tabs.session and tabs.session.is_done %} is-done{% endif %}"
+        href="{{ url_for('projects.project_detail', project_id=tabs.group.id) }}"
+        {% if tabs.is_group_page %}aria-current="page"{% endif %}
+    >
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+        <span class="group-tab-title">{{ tabs.group.title }}</span>
+        {% if tabs.progress %}
+            <span class="group-tab-progress" title="Projects done in today's session">{{ tabs.progress }}</span>
+        {% endif %}
+    </a>
+    {% for entry in tabs.members %}
+        {% set is_current = entry.project.id == tabs.current_id %}
+        <a
+            class="group-tab{% if is_current %} is-active{% endif %}{% if tabs.session_open and entry.is_done %} is-done{% endif %}"
+            href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}"
+            {% if is_current %}aria-current="page"{% endif %}
+        >
+            {% if tabs.session_open %}
+                <span class="group-tab-check" aria-label="{{ 'Done' if entry.is_done else 'Not done yet' }}">{% if entry.is_done %}<i class="fa-solid fa-circle-check" aria-hidden="true"></i>{% else %}<i class="fa-regular fa-circle" aria-hidden="true"></i>{% endif %}</span>
+            {% endif %}
+            <span class="group-tab-title">{{ entry.project.title }}</span>
+        </a>
+    {% endfor %}
+</nav>

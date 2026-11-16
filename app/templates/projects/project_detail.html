@@ -8,6 +8,7 @@
 {% endblock %}
 
 {% block content %}
+{% if group_tabs %}{% include "projects/_group_tabs.html" %}{% endif %}
 <header class="project-detail-header mb-4">
     <div class="project-detail-heading min-w-0">
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -26,6 +27,7 @@
             </div>
             {% if project.is_starred %}<span class="project-badge project-badge-star" title="Starred (context for AI Daily Planning)">★ Starred</span>{% endif %}
             {% if project.is_private %}<span class="project-badge">🔒 Private</span>{% endif %}
+            {% if project.is_group %}<span class="project-badge" title="A group of projects, planned as one session"><i class="fa-solid fa-layer-group" aria-hidden="true"></i>Group</span>{% endif %}
             {% if project.is_archived %}<span class="project-badge project-badge-archived">Archived</span>{% endif %}
             {% if project.waiting_for %}<span class="project-badge project-badge-waiting" title="Waiting for {{ project.waiting_for.title }}"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i>Waiting</span>{% endif %}
             {% if project.session_deadline %}
@@ -81,6 +83,21 @@
                     <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
                     <span>Next: {{ next_session_label }}</span>
                 </button>
+            {% elif project.active_group %}
+                {# A project in a group is planned through the group, so having
+                   no session of its own is no warning - booking one is the
+                   option, not the to-do. #}
+                <button
+                    type="button"
+                    class="btn btn-outline-secondary plan-session-button"
+                    data-plan-session
+                    data-project-id="{{ project.id }}"
+                    data-project-title="{{ project.title }}"
+                    title="Planned with {{ project.active_group.title }} — click to book a session of this project on its own"
+                >
+                    <i class="fa-regular fa-calendar-plus" aria-hidden="true"></i>
+                    <span>Plan separate session</span>
+                </button>
             {% else %}
                 <button
                     type="button"
@@ -95,6 +112,22 @@
                     <span class="plan-session-flag">Not planned</span>
                 </button>
             {% endif %}
+        {% endif %}
+        {% if group_tabs and group_tabs.session_open and not group_tabs.is_group_page %}
+            {# This project's part of its group's session today: ticking it
+               goes on to the next project still to do. Separate from the Done
+               switch below, which is about a session of this project on its own. #}
+            <button
+                type="button"
+                class="btn {% if group_tabs.current_done %}btn-success{% else %}btn-outline-success{% endif %}"
+                data-group-member-done
+                data-url="{{ url_for('projects.toggle_group_member_done', project_id=group_tabs.group.id, member_id=project.id) }}"
+                data-done="{{ 1 if group_tabs.current_done else 0 }}"
+                title="Today's session of {{ group_tabs.group.title }} · slot {{ group_tabs.session.slot }} · {{ group_tabs.progress }} done"
+            >
+                <i class="fa-regular fa-circle-check" aria-hidden="true"></i>
+                <span>{{ "Done" if group_tabs.current_done else "Mark done & next" }}</span>
+            </button>
         {% endif %}
         {% if today_slot %}
             {# Only shown when the project actually has a session today - there is
@@ -136,12 +169,15 @@
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectSettingsModal"><i class="fa-solid fa-gear" aria-hidden="true"></i>Settings</button>
                 </li>
+                {# A group has no plan of its own to download or archive from. #}
+                {% if not project.is_group %}
                 <li>
                     <button type="button" class="dropdown-item" data-download-project-markdown><i class="fa-solid fa-download" aria-hidden="true"></i>Download markdown</button>
                 </li>
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectArchiveModal" data-archive-open-button><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Archived sections</button>
                 </li>
+                {% endif %}
                 <li>
                     <button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#projectWaitingModal"><i class="fa-regular fa-hourglass-half" aria-hidden="true"></i>{{ "Change what it waits for" if project.waiting_for else "Waiting for…" }}</button>
                 </li>
@@ -248,6 +284,55 @@
     </div>
 {% endif %}
 
+{% if project.is_group %}
+    {# What the group is made of. Its session is worked through these, one tab
+       each; adding a project that is in another group moves it here. #}
+    <section class="card shadow-sm mb-3 group-members-card">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-baseline flex-wrap gap-2 mb-2">
+                <h2 class="h6 mb-0">Projects in this group{% if group_tabs and group_tabs.progress %} <span class="text-muted fw-normal">· today {{ group_tabs.progress }} done</span>{% endif %}</h2>
+                <span class="small text-muted">Planned together as one session. A project here can still get a session of its own from its page.</span>
+            </div>
+            {% if group_tabs and group_tabs.members %}
+                <ul class="group-member-list">
+                    {% for entry in group_tabs.members %}
+                        <li class="group-member-row">
+                            {% if group_tabs.session_open %}
+                                <button
+                                    type="button"
+                                    class="btn btn-sm {% if entry.is_done %}btn-success{% else %}btn-outline-success{% endif %}"
+                                    data-group-member-done
+                                    data-stay
+                                    data-url="{{ url_for('projects.toggle_group_member_done', project_id=project.id, member_id=entry.project.id) }}"
+                                    data-done="{{ 1 if entry.is_done else 0 }}"
+                                    aria-label="{{ 'Reopen' if entry.is_done else 'Mark done' }}: {{ entry.project.title }}"
+                                ><i class="fa-regular fa-circle-check" aria-hidden="true"></i></button>
+                            {% endif %}
+                            <a class="group-member-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
+                            <form method="post" action="{{ url_for('projects.remove_group_member', project_id=project.id, member_id=entry.project.id) }}" class="ms-auto">
+                                <button type="submit" class="btn btn-link btn-sm text-muted p-0" title="Take {{ entry.project.title }} out of the group">Remove</button>
+                            </form>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="small text-muted mb-2">No projects in this group yet.</p>
+            {% endif %}
+            {% if group_member_choices %}
+                <form method="post" action="{{ url_for('projects.add_group_member', project_id=project.id) }}" class="d-flex gap-2 align-items-center mt-2 group-member-add">
+                    <select name="member_id" class="form-select form-select-sm" aria-label="Project to add" required>
+                        <option value="" selected disabled>Add a project…</option>
+                        {% for choice in group_member_choices %}
+                            <option value="{{ choice.id }}">{{ choice.title }}{% if choice.active_group %} (now in {{ choice.active_group.title }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-outline-primary btn-sm">Add</button>
+                </form>
+            {% endif %}
+        </div>
+    </section>
+{% endif %}
+
 <div class="d-none mb-3" data-inline-alert></div>
 
 <form
@@ -256,7 +341,10 @@
     id="project-editor"
     data-unsaved-warning="true"
 >
-    <div class="project-detail-body">
+    {# A group's page is its projects, not a plan of its own: the plan, the
+       thoughts and the statistics belong to the projects in it. The form stays,
+       empty, because renaming the group saves through it. #}
+    <div class="project-detail-body{% if project.is_group %} d-none{% endif %}">
         <div class="project-plan-col">
             {# A private project opens with the plan behind a button. The card is
                rendered veiled and the script lifts it when the reveal is still
@@ -663,6 +751,38 @@
 <script src="{{ url_for('static', filename='js/day-planner.js') }}"></script>
 <script src="{{ url_for('static', filename='js/project-statistics.js') }}"></script>
 <script src="{{ url_for('static', filename='js/waiting-for.js') }}"></script>
+<script>
+    // Ticking a project off in its group's session. On a member's tab, ticking
+    // it goes on to the next project still to do; the group's own list stays.
+    document.addEventListener("click", async (event) => {
+        const button = event.target.closest("[data-group-member-done]");
+        if (!button) {
+            return;
+        }
+        event.preventDefault();
+        const done = button.dataset.done === "1" ? 0 : 1;
+        button.disabled = true;
+        try {
+            const response = await fetch(button.dataset.url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest" },
+                body: JSON.stringify({ done }),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+                throw new Error(payload.message || "Could not update the session.");
+            }
+            if (done && !("stay" in button.dataset) && payload.next_url) {
+                window.location.assign(payload.next_url);
+            } else {
+                window.location.reload();
+            }
+        } catch (error) {
+            window.alert(error.message);
+            button.disabled = false;
+        }
+    });
+</script>
 <script>
     (() => {
         const form = document.querySelector("#project-editor");

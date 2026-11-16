@@ -18,7 +18,10 @@
             </nav>
             <a href="{{ url_for('projects.archived_projects') }}" class="btn btn-outline-secondary btn-sm">{{ icon("archive") }}Archived</a>
         </div>
-        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('projects.create_project', group=1) }}" class="btn btn-outline-primary">{{ icon("layers") }}Create Group</a>
+            <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">{{ icon("plus") }}Create Project</a>
+        </div>
     </div>
     {% if view == "timeline" and projects %}
     <div class="project-view-toolbar dashboard-header-toolbar">
@@ -102,9 +105,15 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for project in projects %}
-                        <tr>
-                            <td><a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a></td>
+                    {# A group, then its projects indented under it. #}
+                    {% for project, depth in table_rows %}
+                        <tr class="{% if project.is_group %}project-table-group{% endif %}{% if depth %} project-table-member{% endif %}">
+                            <td>
+                                {% if depth %}<span class="project-table-indent" aria-hidden="true">↳</span>{% endif %}
+                                {% if project.is_group %}<span class="text-muted me-1">{{ icon("layers", 14) }}</span>{% endif %}
+                                <a href="{{ url_for('projects.project_detail', project_id=project.id) }}">{{ project.title }}</a>
+                                {% if project.is_group %}<span class="small text-muted ms-1">· {{ project.active_members|length }} project{{ "s" if project.active_members|length != 1 }}</span>{% endif %}
+                            </td>
                             <td>
                                 <div class="form-check form-switch mb-0">
                                     <input class="form-check-input" type="checkbox" role="switch"
@@ -115,7 +124,7 @@
                                 </div>
                             </td>
                             <td class="small">
-                                {% if project.waiting_for %}Waiting for {{ project.waiting_for.title }}{% else %}Active{% endif %}
+                                {% if project.waiting_for %}Waiting for {{ project.waiting_for.title }}{% elif project.is_group %}Group{% elif depth %}In group{% else %}Active{% endif %}
                             </td>
                             <td class="small text-muted">{{ project_last_session_labels.get(project.id, "Last session: none") | replace("Last session: ", "") }}</td>
                         </tr>

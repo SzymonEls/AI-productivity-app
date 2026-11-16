@@ -46,7 +46,8 @@
             {% if not readonly %}data-slot-content data-project-id="{{ entry.project.id if entry.project else '' }}" data-done="{{ 1 if entry.is_done else 0 }}" data-session-gap="{{ entry.session_gap }}" data-sessions-per-week="{{ entry.sessions_per_week }}" data-session-before="{{ entry.session_before.isoformat() if entry.session_before else '' }}" data-session-before-creation="{{ 1 if entry.session_before_is_creation else 0 }}" data-failed="{{ 1 if entry.is_failed else 0 }}" data-problematic="{{ 1 if entry.is_problematic else 0 }}" data-deadline="{{ entry.deadline.isoformat() if entry.deadline else '' }}" data-deadline-last="{{ entry.deadline_last.isoformat() if entry.deadline_last else '' }}" data-deadline-label="{{ entry.deadline_label }}" data-deadline-time="{{ entry.deadline_time }}"{% endif %}
         >
             {% if entry.project %}
-                <a class="day-slot-title" href="{{ url_for('projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
+                <a class="day-slot-title" href="{{ url_for('projects.start_group_session' if entry.project.is_group and day.is_today else 'projects.project_detail', project_id=entry.project.id) }}">{{ entry.project.title }}</a>
+                {% if entry.group_progress and not entry.is_done %}<span class="day-slot-group-progress" title="Projects done in this group's session">{{ entry.group_progress }}</span>{% endif %}
                 {% if entry.is_done and not readonly %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
                 {% if entry.is_failed %}<span class="day-slot-failed" data-slot-failed title="Session failed" aria-label="Session failed">✗</span>{% endif %}
                 {% if entry.plan_heading %}<span class="day-slot-step{% if entry.project.is_private %} private-plan-heading{% endif %}">{{ entry.plan_heading }}</span>{% endif %}

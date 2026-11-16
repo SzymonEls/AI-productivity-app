@@ -19,6 +19,16 @@ from ..time_tracking.service import (
 )
 from ..integrations.feeds import events_by_date, has_grouped_feeds, has_stale_feeds
 from .day_notes import add_note, delete_note, notes_from, shift_notes_forward, update_note
+from .groups import (
+    add_member,
+    first_open_member,
+    group_heading,
+    group_progress_label,
+    group_tabs,
+    member_choices,
+    remove_member,
+    set_member_done,
+)
 from ..tasks.routes import shift_tasks_forward, tasks_from
 from .slots import (
     ARCHIVE_WEEKS,
@@ -174,7 +184,10 @@ def serialize_slot_card(slot, booking, totals, day):
         "slot": slot,
         "project": project,
         "is_done": is_done,
-        "plan_heading": first_plan_section_title(project.long_goal),
+        "plan_heading": group_heading(project)
+        if project.is_group
+        else first_plan_section_title(project.long_goal),
+        "group_progress": group_progress_label(booking),
         "shows_time": shows_time,
         # The compact format, not "00:45:00": format_duration() stays for the
         # time-tracking pages, where seconds matter.
@@ -462,8 +475,15 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
             "slot": slot,
             "project": booked[slot].project if booked[slot] else None,
             "plan_heading": (
-                first_plan_section_title(booked[slot].project.long_goal) if booked[slot] else ""
+                (
+                    group_heading(booked[slot].project)
+                    if booked[slot].project.is_group
+                    else first_plan_section_title(booked[slot].project.long_goal)
+                )
+                if booked[slot]
+                else ""
             ),
+            "group_progress": group_progress_label(booked[slot]),
             "is_done": bool(booked[slot].is_done) if booked[slot] else False,
             # C is the spare slot; it stays visibly secondary once it is filled.
             "is_optional": slot not in TIMED_SLOTS,
@@ -527,6 +547,7 @@ def timeline_view():
             "projects/timeline.html",
             view="all",
             projects=projects,
+            table_rows=_project_table_rows(projects),
             project_last_session_labels=project_last_session_labels(current_user.id, projects),
         )
 
@@ -549,6 +570,29 @@ def timeline_view():
         backlog_data=backlog_data,
         project_last_session_labels=last_session_labels,
     )
+
+
+def _project_table_rows(projects):
+    """The All projects table as ``(project, depth)`` rows.
+
+    A group comes where its name sorts, with its projects straight under it
+    (depth 1), so a project in a group is listed once - in its group - rather
+    than also on its own further down.
+    """
+    by_group = {}
+    for project in projects:
+        if project.group_id is not None:
+            by_group.setdefault(project.group_id, []).append(project)
+    shown_groups = {project.id for project in projects if project.is_group}
+
+    rows = []
+    for project in projects:
+        if project.group_id in shown_groups:
+            continue
+        rows.append((project, 0))
+        if project.is_group:
+            rows.extend((member, 1) for member in by_group.get(project.id, []))
+    return rows
 
 
 # The waiting diagram's grid, in pixels. Every card is the same size, so the
@@ -1099,6 +1143,108 @@ def delete_day_note():
     return jsonify({"ok": True, "message": message})
 
 
+@projects_bp.route("/<int:project_id>/start")
+@login_required
+def start_group_session(project_id):
+    """Where a group's block leads: the first member still to do today.
+
+    Starting a group's session is working through its projects one tab at a
+    time, so the block opens on the first one not yet ticked. With nothing left
+    to work through - or for a project that is not a group - it is the
+    project's own page.
+    """
+    project = _get_user_project_or_404(project_id)
+    if project.is_group:
+        member = first_open_member(current_user.id, project, today_local())
+        if member is not None:
+            return redirect(url_for("projects.project_detail", project_id=member.id))
+    return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+@projects_bp.route("/<int:project_id>/members", methods=["POST"])
+@login_required
+def add_group_member(project_id):
+    """Put a project into this group."""
+    group = _get_user_project_or_404(project_id)
+    payload = request.get_json(silent=True) or request.form
+    member = Project.query.filter_by(
+        id=_coerce_int(payload.get("member_id")), user_id=current_user.id
+    ).first()
+    if member is None:
+        return _group_answer(group, False, "Pick a project to add.", 400)
+
+    ok, message = add_member(group, member)
+    return _group_answer(group, ok, message, 409)
+
+
+@projects_bp.route("/<int:project_id>/members/<int:member_id>/remove", methods=["POST"])
+@login_required
+def remove_group_member(project_id, member_id):
+    """Take a project out of this group; it goes back to being planned on its own."""
+    group = _get_user_project_or_404(project_id)
+    member = _get_user_project_or_404(member_id)
+    ok, message = remove_member(group, member)
+    return _group_answer(group, ok, message, 409)
+
+
+def _group_answer(group, ok, message, error_status):
+    """Commit a change to a group's members and answer as the caller asked.
+
+    The group card posts a plain form, so the answer is a flash and the
+    group's page again; a script gets the same as JSON.
+    """
+    if ok:
+        try:
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            ok, message, error_status = False, "Failed to save the group.", 500
+    else:
+        db.session.rollback()
+
+    if _wants_json_response():
+        return jsonify({"ok": ok, "message": message}), (200 if ok else error_status)
+    flash(message, "success" if ok else "danger")
+    return redirect(url_for("projects.project_detail", project_id=group.id))
+
+
+@projects_bp.route("/<int:project_id>/members/<int:member_id>/session-done", methods=["POST"])
+@login_required
+def toggle_group_member_done(project_id, member_id):
+    """Tick one project off in today's session of its group, or untick it.
+
+    Ticking the last one finishes the group's session. The page then reloads,
+    so the tabs and the group's own Done switch say so.
+    """
+    group = _get_user_project_or_404(project_id)
+    member = _get_user_project_or_404(member_id)
+    payload = request.get_json(silent=True) or request.form
+    done = _payload_flag(payload, "done")
+
+    ok, message, state = set_member_done(current_user.id, group, member, today_local(), done)
+    if not ok:
+        return jsonify({"ok": False, "message": message}), 409
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        return jsonify({"ok": False, "message": "Failed to update the session."}), 500
+
+    next_member = first_open_member(current_user.id, group, today_local())
+    return jsonify(
+        {
+            "ok": True,
+            "message": message,
+            **state,
+            # Where "next project" goes once this one is ticked.
+            "next_url": url_for("projects.project_detail", project_id=next_member.id)
+            if next_member is not None
+            else url_for("projects.project_detail", project_id=group.id),
+        }
+    )
+
+
 @projects_bp.route("/archived")
 @login_required
 def archived_projects():
@@ -1453,46 +1599,77 @@ def _undone_bookings_from_today(project_id):
 @projects_bp.route("/create", methods=["GET", "POST"])
 @login_required
 def create_project():
+    is_group = (
+        _form_bool("is_group", default=False)
+        if request.method == "POST"
+        else request.args.get("group") == "1"
+    )
+    # A group is made of projects rather than written: its form asks which
+    # projects go in, in place of the thoughts and the plan.
+    member_ids = {
+        value for value in (_coerce_int(raw) for raw in request.form.getlist("member_ids"))
+        if value is not None
+    }
+
+    def render_form():
+        return render_template(
+            "projects/project_form.html",
+            page_title="Create Group" if is_group else "Create Project",
+            form_title="New Group" if is_group else "New Project",
+            submit_label="Create Group" if is_group else "Create Project",
+            project=None,
+            is_group=is_group,
+            group_choices=_group_choices() if is_group else [],
+            chosen_member_ids=member_ids,
+        )
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
-        short_goal = request.form.get("short_goal", "").strip()
-        long_goal = request.form.get("long_goal", "").strip()
+        short_goal = "" if is_group else request.form.get("short_goal", "").strip()
+        long_goal = "" if is_group else request.form.get("long_goal", "").strip()
         is_private = _form_bool("is_private", default=False)
 
         # Only the name is required: the thoughts and the plan can be written
-        # later, on the project's page.
+        # later, on the project's page, and a group's projects added on its.
         if not title:
-            flash("Please give the project a name.", "danger")
+            flash("Please give the group a name." if is_group else "Please give the project a name.", "danger")
         else:
             project = Project(
                 title=title,
                 short_goal=short_goal,
                 long_goal=long_goal,
                 is_private=is_private,
+                is_group=is_group,
                 owner=current_user,
             )
             db.session.add(project)
+            if is_group and member_ids:
+                db.session.flush()
+                for member in Project.query.filter(
+                    Project.user_id == current_user.id, Project.id.in_(sorted(member_ids))
+                ).all():
+                    add_member(project, member)
             try:
                 db.session.commit()
             except SQLAlchemyError:
                 db.session.rollback()
                 flash("Failed to create the project. The database is unavailable for writing.", "danger")
-                return render_template(
-                    "projects/project_form.html",
-                    page_title="Create Project",
-                    form_title="New Project",
-                    submit_label="Create Project",
-                    project=None,
-                )
+                return render_form()
+            if is_group:
+                flash("Group created.", "success")
+                return redirect(url_for("projects.project_detail", project_id=project.id))
             flash("Project created successfully.", "success")
             return redirect(url_for("main.home"))
 
-    return render_template(
-        "projects/project_form.html",
-        page_title="Create Project",
-        form_title="New Project",
-        submit_label="Create Project",
-        project=None,
+    return render_form()
+
+
+def _group_choices():
+    """The projects a new group can be made of: active ones that are not groups."""
+    return (
+        Project.query.filter_by(user_id=current_user.id, is_archived=False, is_group=False)
+        .order_by(func.lower(Project.title).asc())
+        .all()
     )
 
 
@@ -1514,6 +1691,9 @@ def project_detail(project_id):
     return render_template(
         "projects/project_detail.html",
         project=project,
+        # The tabs of a group's session, on the group and on each member.
+        group_tabs=group_tabs(current_user.id, project, today_local()),
+        group_member_choices=member_choices(project) if project.is_group else [],
         timer_summary=today_project_summary(current_user.id, project.id),
         today_slot=today_booking.slot if today_booking else "",
         today_session_done=bool(today_booking and today_booking.is_done),
@@ -1767,6 +1947,9 @@ def delete_project(project_id):
     for waiting in project.waited_on_by:
         waiting.waiting_for_project_id = None
         waiting.waiting_for_note = ""
+    # Deleting a group leaves its projects as they were, only on their own.
+    for member in project.members:
+        member.group_id = None
     db.session.delete(project)
     db.session.commit()
     flash("Project deleted.", "info")

@@ -17,6 +17,7 @@ from sqlalchemy.orm import joinedload
 from ..extensions import db
 from ..models import Project, ProjectDaySlot
 from ..time_tracking.service import app_timezone, ensure_utc, tracked_seconds_by_day, utc_now
+from .groups import active_group_member_ids, group_heading, sync_members_with_done
 
 
 SLOTS = ("A", "B", "C")
@@ -627,7 +628,8 @@ def unscheduled_projects(user_id):
 
     A project waiting for another one is left off too: there is no next session
     to plan until the milestone it waits for is reached, so listing it would
-    only be a reminder nobody can act on.
+    only be a reminder nobody can act on. So is a member of an active group:
+    the group is what gets planned, and it is on this list in its place.
     """
     today = today_local()
     planned = (
@@ -641,6 +643,7 @@ def unscheduled_projects(user_id):
             Project.is_archived.is_(False),
             Project.waiting_for_project_id.is_(None),
             Project.id.notin_(planned),
+            Project.id.notin_(sorted(active_group_member_ids(user_id))),
         )
         .order_by(func.lower(Project.title).asc())
         .all()
@@ -1021,11 +1024,18 @@ def slot_candidates(user_id, day, slot):
 
     # A project waiting for another one is left out too: until the milestone is
     # reached there is no session to offer it. Its own page can still book one.
-    projects = (
-        Project.query.filter_by(user_id=user_id, is_archived=False, waiting_for_project_id=None)
+    # The same goes for a member of an active group - its group is offered in
+    # its place, and a session of its own is booked from its page.
+    members = active_group_member_ids(user_id)
+    projects = [
+        project
+        for project in Project.query.filter_by(
+            user_id=user_id, is_archived=False, waiting_for_project_id=None
+        )
         .order_by(func.lower(Project.title).asc())
         .all()
-    )
+        if project.id not in members
+    ]
     taken = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
     labels = project_last_session_labels(user_id, projects)
     today = today_local()
@@ -1045,7 +1055,10 @@ def slot_candidates(user_id, day, slot):
             {
                 "id": project.id,
                 "title": project.title,
-                "plan_heading": first_plan_section_title(project.long_goal),
+                "plan_heading": group_heading(project)
+                if project.is_group
+                else first_plan_section_title(project.long_goal),
+                "is_group": bool(project.is_group),
                 "last_session": labels.get(project.id, ""),
                 "is_starred": bool(project.is_starred),
                 "is_private": bool(project.is_private),
@@ -1135,6 +1148,7 @@ def set_session_done(user_id, project_id, day, done):
     if booking.is_done:
         booking.is_failed = False
     meet_deadline(booking)
+    sync_members_with_done(booking)
     return True, "Session marked done." if booking.is_done else "Session reopened.", booking.is_done
 
 
@@ -1158,6 +1172,7 @@ def set_session_failed(user_id, project_id, day, failed):
     booking.is_failed = bool(failed)
     if booking.is_failed:
         booking.is_done = False
+        booking.done_member_ids = []
         booking.project.is_problematic = True
         return True, "Session marked failed — the project is now problematic.", True
     return True, "Session reopened.", False
@@ -1184,6 +1199,7 @@ def set_block_done(user_id, day, slot, done):
     if booking.is_done:
         booking.is_failed = False
     meet_deadline(booking)
+    sync_members_with_done(booking)
     return (
         True,
         "Session marked done." if booking.is_done else "Session reopened.",
@@ -1243,6 +1259,7 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
             target.is_failed,
             postponement_after(target.postponed_count, to_day, from_day),
             target.project.title,
+            list(target.done_member_ids or []),
         )
         if target is not None
         else None
@@ -1260,10 +1277,11 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
     if to_day != from_day:
         source.is_done = False
         source.is_failed = False
+        source.done_member_ids = []
     db.session.flush()
 
     if displaced is not None:
-        project_id, was_done, was_failed, was_postponed, displaced_title = displaced
+        project_id, was_done, was_failed, was_postponed, displaced_title, was_members = displaced
         db.session.add(
             ProjectDaySlot(
                 user_id=user_id,
@@ -1272,6 +1290,7 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
                 slot=from_slot,
                 is_done=was_done if to_day == from_day else False,
                 is_failed=was_failed if to_day == from_day else False,
+                done_member_ids=was_members if to_day == from_day else [],
                 postponed_count=was_postponed,
             )
         )
@@ -1362,6 +1381,8 @@ def shift_bookings_forward(user_id, from_day, days=1):
         )
         was_late = is_after_deadline(entry.project, entry.slot_date)
         entry.slot_date = target[0]
+        # A group's members ticked so far were ticked on the day it left.
+        entry.done_member_ids = []
         db.session.flush()
         moved += 1
         if not was_late and is_after_deadline(entry.project, entry.slot_date):
