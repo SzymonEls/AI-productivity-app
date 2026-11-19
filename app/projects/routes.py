@@ -889,6 +889,18 @@ def toggle_session_done(project_id):
     """Mark today's session for this project as done, or reopen it."""
 
     project = _get_user_project_or_404(project_id)
+    if project.is_group:
+        # A group's session follows its projects: it is done once every one
+        # of them is ticked, and reopened by unticking one.
+        return (
+            jsonify(
+                {
+                    "ok": False,
+                    "message": "A group's session is done once every project in it is ticked.",
+                }
+            ),
+            409,
+        )
     payload = request.get_json(silent=True) or request.form
     done = _payload_flag(payload, "done")
     if done:
@@ -1213,8 +1225,9 @@ def _group_answer(group, ok, message, error_status):
 def toggle_group_member_done(project_id, member_id):
     """Tick one project off in today's session of its group, or untick it.
 
-    Ticking the last one finishes the group's session. The page then reloads,
-    so the tabs and the group's own Done switch say so.
+    Ticking the last one finishes the group's session - the only way it gets
+    done today, as a group has no Done switch of its own. The page then
+    reloads, so the tabs say so.
     """
     group = _get_user_project_or_404(project_id)
     member = _get_user_project_or_404(member_id)

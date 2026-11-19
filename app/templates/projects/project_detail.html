@@ -129,10 +129,11 @@
                 <span>{{ "Done" if group_tabs.current_done else "Mark done & next" }}</span>
             </button>
         {% endif %}
-        {% if today_slot %}
+        {% if today_slot and not project.is_group %}
             {# Only shown when the project actually has a session today - there is
                nothing to finish otherwise. The flag lives on today's slot, so it
-               clears itself tomorrow. #}
+               clears itself tomorrow. A group has no switch of its own: its
+               session is done once every project in it is ticked. #}
             <button
                 type="button"
                 class="btn {% if today_session_done %}btn-success{% else %}btn-outline-secondary{% endif %}"
