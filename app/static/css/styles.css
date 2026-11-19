@@ -935,6 +935,8 @@
 
 /* Show only the editor that matches the current app setting, without a flash. */
 :root[data-plan-editor="blocks"] [data-plan-classic] { display: none !important; }
+:root[data-tasks="hidden"] [data-tasks-ui],
+:root[data-tasks="hidden"] .day-tasks { display: none !important; }
 :root[data-plan-editor="markdown"] [data-plan-blocks] { display: none !important; }
 
 .plan-block-editor {
