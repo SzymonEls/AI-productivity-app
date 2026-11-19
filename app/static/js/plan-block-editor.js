@@ -42,39 +42,107 @@
         return found;
     };
 
+    const appendTagged = (parent, text, paint) => {
+        const tags = paint ? tagsIn(text) : [];
+        let index = 0;
+        tags.forEach((tag) => {
+            if (tag.start > index) {
+                parent.appendChild(document.createTextNode(text.slice(index, tag.start)));
+            }
+            const span = document.createElement("span");
+            span.className = "plan-tag";
+            span.textContent = `#${tag.name}`;
+            parent.appendChild(span);
+            index = tag.start + tag.name.length + 1;
+        });
+        if (index < text.length) {
+            parent.appendChild(document.createTextNode(text.slice(index)));
+        }
+    };
+
+    // Inline Markdown, painted the way the server renders it. Each rule says how
+    // many characters its opening and closing markers take, so the markers can be
+    // dimmed rather than hidden. Written without lookbehind, which older Safari
+    // would not run; the underscore rule captures the character before instead.
+    const INLINE_RULES = [
+        { kind: "code", re: /`[^`\n]+`/, open: () => 1, close: () => 1, nested: false },
+        { kind: "link", re: /\[[^\]\n]+\]\([^)\s]+\)/, open: () => 1, close: (run) => run.length - run.indexOf("]("), nested: true },
+        { kind: "bold", re: /\*\*(?![\s*])[^\n]+?\*\*|__(?![\s_])[^\n]+?__/, open: () => 2, close: () => 2, nested: true },
+        { kind: "strike", re: /~~(?!~)[^\n]+?~~/, open: () => 2, close: () => 2, nested: true },
+        { kind: "italic", re: /\*(?![\s*])[^*\n]+\*/, open: () => 1, close: () => 1, nested: true },
+        { kind: "italic", re: /(^|[^\p{L}\p{N}_])_(?![\s_])[^_\n]+_(?![\p{L}\p{N}_])/u, lead: true, open: () => 1, close: () => 1, nested: true },
+    ];
+
+    // The earliest run in the text; on a tie the rule listed first wins, which is
+    // what keeps "**bold**" from being read as an italic "*".
+    const findInline = (text) => {
+        let best = null;
+        INLINE_RULES.forEach((rule) => {
+            const match = rule.re.exec(text || "");
+            if (!match) return;
+            const start = match.index + (rule.lead ? match[1].length : 0);
+            if (!best || start < best.start) {
+                best = { rule, start, end: match.index + match[0].length };
+            }
+        });
+        return best;
+    };
+
+    const appendMarker = (parent, text) => {
+        const span = document.createElement("span");
+        span.className = "pbe-md-mark";
+        span.textContent = text;
+        parent.appendChild(span);
+    };
+
+    const appendInline = (parent, text, paint) => {
+        let rest = text;
+        while (rest) {
+            const run = findInline(rest);
+            if (!run) {
+                appendTagged(parent, rest, paint);
+                return;
+            }
+            appendTagged(parent, rest.slice(0, run.start), paint);
+            const whole = rest.slice(run.start, run.end);
+            const open = run.rule.open(whole);
+            const close = run.rule.close(whole);
+            const inner = whole.slice(open, whole.length - close);
+            const span = document.createElement("span");
+            span.className = `pbe-md pbe-md-${run.rule.kind}`;
+            appendMarker(span, whole.slice(0, open));
+            if (run.rule.nested) {
+                appendInline(span, inner, paint);
+            } else {
+                span.appendChild(document.createTextNode(inner));
+            }
+            appendMarker(span, whole.slice(whole.length - close));
+            parent.appendChild(span);
+            rest = rest.slice(run.end);
+        }
+    };
+
+    const needsPainting = (text, paint) => findInline(text) !== null || (paint && tagsIn(text).length > 0);
+
     /**
-     * Paint the tags in one line of plain text.
+     * Paint the inline Markdown and the tags in one line of plain text.
      *
-     * A tag is characters in the plan, never a node: this only wraps what is
-     * already there, so el.textContent still reads back the block's text exactly
-     * and the Markdown round-trip is untouched.
+     * Both are characters in the plan, never a node: this only wraps what is
+     * already there, markers included, so el.textContent still reads back the
+     * block's text exactly and the Markdown round-trip is untouched.
      *
      * ``paint`` is false for everything but a list item, because that is where a
      * tag counts - the tag list reads list items only, and a "#word" painted in a
      * paragraph would promise to show up there and then not.
      */
     const renderInlineText = (el, text, paint) => {
-        const tags = paint ? tagsIn(text) : [];
-        if (!tags.length) {
-            el.textContent = text || "";
+        text = text || "";
+        if (!needsPainting(text, paint)) {
+            el.textContent = text;
             return;
         }
-
         const fragment = document.createDocumentFragment();
-        let index = 0;
-        tags.forEach((tag) => {
-            if (tag.start > index) {
-                fragment.appendChild(document.createTextNode(text.slice(index, tag.start)));
-            }
-            const span = document.createElement("span");
-            span.className = "plan-tag";
-            span.textContent = `#${tag.name}`;
-            fragment.appendChild(span);
-            index = tag.start + tag.name.length + 1;
-        });
-        if (index < text.length) {
-            fragment.appendChild(document.createTextNode(text.slice(index)));
-        }
+        appendInline(fragment, text, paint);
         el.replaceChildren(fragment);
     };
     const indentLevel = (spaces) => Math.min(Math.floor(spaces.replace(/\t/g, "  ").length / 2), MAX_LEVEL);
@@ -657,7 +725,7 @@
         }
 
         /**
-         * Repaint the tags of the block being typed in, caret and all.
+         * Repaint the inline Markdown and tags of the block being typed in, caret and all.
          *
          * Only when there is something to paint or something painted already, so
          * an ordinary line is never rebuilt under the caret. Left alone mid-IME
@@ -667,8 +735,8 @@
             if (event && event.isComposing) return;
             const { block, content } = ctx;
             const paint = isListType(block.type);
-            const painted = content.querySelector(".plan-tag") !== null;
-            if (!painted && (!paint || !tagsIn(block.text).length)) return;
+            const painted = content.querySelector(".plan-tag, .pbe-md") !== null;
+            if (!painted && !needsPainting(block.text, paint)) return;
 
             const offset = getCaretOffset(content);
             renderInlineText(content, block.text || "", paint);
