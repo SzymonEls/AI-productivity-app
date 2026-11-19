@@ -163,6 +163,37 @@
             </div>
         </div>
 
+        {% if projects %}
+            <form class="row g-2 align-items-end mb-4" method="post" action="{{ url_for('time_tracking.add_entry') }}">
+                <input type="hidden" name="selected_date_mode" value="{{ date_mode }}">
+                <input type="hidden" name="selected_date" value="{{ selected_day.isoformat() if selected_day else '' }}">
+                <input type="hidden" name="selected_project_id" value="{{ selected_project_id }}">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1" for="add-entry-project">Project</label>
+                    <select class="form-select form-select-sm" id="add-entry-project" name="project_id" required>
+                        {% for project in projects %}
+                            <option value="{{ project.id }}" {% if project.id == selected_project_id %}selected{% endif %}>{{ project.title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1" for="add-entry-start">Start</label>
+                    <input class="form-control form-control-sm" id="add-entry-start" type="datetime-local" name="started_at" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1" for="add-entry-end">End</label>
+                    <input class="form-control form-control-sm" id="add-entry-end" type="datetime-local" name="ended_at" required>
+                </div>
+                <div class="col-md">
+                    <label class="form-label small mb-1" for="add-entry-description">Description</label>
+                    <input class="form-control form-control-sm" id="add-entry-description" type="text" name="description">
+                </div>
+                <div class="col-md-auto">
+                    <button class="btn btn-primary btn-sm" type="submit">Add session</button>
+                </div>
+            </form>
+        {% endif %}
+
         {% if entries %}
             <div class="table-responsive">
                 <table class="table align-middle">
