@@ -30,3 +30,36 @@
         </a>
     {% endfor %}
 </nav>
+<script>
+    /* On a phone the strip scrolls sideways, and every tab is a page of its
+       own - so without this, each tap would open the next page with the strip
+       back at its start and the tab just tapped out of sight. Where the strip
+       was is kept for the group when leaving the page (a tab, or "Mark done &
+       next"), put back here before the page is drawn, and then the open tab is
+       brought into view if it still is not. Right after the strip, not on
+       load, so it never visibly jumps. */
+    (function () {
+        const strip = document.currentScript.previousElementSibling;
+        const key = "group-tabs-scroll:{{ tabs.group.id }}";
+        try {
+            const saved = Number(sessionStorage.getItem(key));
+            if (saved) strip.scrollLeft = saved;
+        } catch (error) { /* No storage: the open tab is still shown below. */ }
+
+        const active = strip.querySelector(".group-tab.is-active");
+        if (active) {
+            const left =
+                active.getBoundingClientRect().left - strip.getBoundingClientRect().left + strip.scrollLeft;
+            const right = left + active.offsetWidth;
+            if (left < strip.scrollLeft || right > strip.scrollLeft + strip.clientWidth) {
+                strip.scrollLeft = left - (strip.clientWidth - active.offsetWidth) / 2;
+            }
+        }
+
+        window.addEventListener("pagehide", () => {
+            try {
+                sessionStorage.setItem(key, String(strip.scrollLeft));
+            } catch (error) { /* Nothing to keep it in. */ }
+        });
+    })();
+</script>
