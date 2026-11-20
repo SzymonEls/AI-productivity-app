@@ -55,6 +55,29 @@
         monthly: "Every month",
         yearly: "Every year",
     };
+    // Every N weeks, stored as "weeks:N"; mirrors WEEKS_RULE_PREFIX and
+    // MAX_REPEAT_WEEKS in app/tasks/routes.py. One and two weeks are the
+    // "weekly" and "biweekly" presets.
+    const WEEKS_PREFIX = "weeks:";
+    const MAX_REPEAT_WEEKS = 52;
+
+    function weeksOf(rule) {
+        if (!rule || !rule.startsWith(WEEKS_PREFIX)) {
+            return null;
+        }
+        const weeks = Number(rule.slice(WEEKS_PREFIX.length));
+        return Number.isInteger(weeks) && weeks >= 1 && weeks <= MAX_REPEAT_WEEKS ? weeks : null;
+    }
+
+    /* The rule for "every `weeks` weeks", spelled the way the server stores it. */
+    function weeksRule(weeks) {
+        return { 1: "weekly", 2: "biweekly" }[weeks] || `${WEEKS_PREFIX}${weeks}`;
+    }
+
+    function repeatLabel(rule) {
+        const weeks = weeksOf(rule);
+        return weeks ? `Every ${weeks} weeks` : REPEAT_LABELS[rule] || rule;
+    }
     const REPEAT_ICON =
         '<svg class="app-icon " width="12" height="12" viewBox="0 0 24 24" fill="none"' +
         ' stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' +
@@ -191,7 +214,7 @@
             repeat.className = "task-repeat";
             repeat.setAttribute("data-task-repeat", "");
             repeat.setAttribute("role", "img");
-            const label = `Repeats: ${(REPEAT_LABELS[task.repeat] || task.repeat).toLowerCase()}`;
+            const label = `Repeats: ${repeatLabel(task.repeat).toLowerCase()}`;
             repeat.title = label;
             repeat.setAttribute("aria-label", label);
             repeat.innerHTML = REPEAT_ICON;
@@ -853,7 +876,7 @@
         rule.className = "task-menu-rule";
         menu.append(rule);
         menu.append(
-            menuItem("Repeat", task.repeat ? REPEAT_LABELS[task.repeat] || task.repeat : "Never", () =>
+            menuItem("Repeat", task.repeat ? repeatLabel(task.repeat) : "Never", () =>
                 showRepeatChoices(row, task)
             )
         );
@@ -909,6 +932,53 @@
                 )
             );
         });
+
+        // Any other number of weeks: a number field that opens under the item,
+        // the way "Pick a date…" opens a date field.
+        const customWeeks = weeksOf(task.repeat);
+        const weeksForm = document.createElement("form");
+        weeksForm.className = "task-menu-weeks";
+        weeksForm.hidden = !customWeeks;
+        const weeksInput = document.createElement("input");
+        weeksInput.type = "number";
+        weeksInput.inputMode = "numeric";
+        weeksInput.min = "1";
+        weeksInput.max = String(MAX_REPEAT_WEEKS);
+        weeksInput.step = "1";
+        weeksInput.required = true;
+        weeksInput.value = String(customWeeks || 3);
+        weeksInput.setAttribute("aria-label", "Number of weeks");
+        const weeksUnit = document.createElement("span");
+        weeksUnit.textContent = "weeks";
+        const weeksSave = document.createElement("button");
+        weeksSave.type = "submit";
+        weeksSave.className = "btn btn-primary btn-sm";
+        weeksSave.textContent = "Set";
+        weeksForm.append(weeksInput, weeksUnit, weeksSave);
+        weeksForm.addEventListener("submit", (event) => {
+            event.preventDefault();
+            const weeks = Number(weeksInput.value);
+            if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_REPEAT_WEEKS) {
+                weeksInput.reportValidity();
+                return;
+            }
+            closeMenu();
+            setRepeat(row, weeksRule(weeks));
+        });
+        menu.append(
+            menuItem(
+                "Every … weeks",
+                customWeeks ? `${customWeeks} ✓` : "",
+                () => {
+                    weeksForm.hidden = false;
+                    positionMenu();
+                    weeksInput.focus();
+                    weeksInput.select();
+                },
+                customWeeks ? "is-current" : ""
+            ),
+            weeksForm
+        );
         positionMenu();
         menu.querySelector(".is-current, [role='menuitem']")?.focus({ preventScroll: true });
     }
@@ -985,6 +1055,10 @@
     }
 
     menu.addEventListener("keydown", (event) => {
+        // Inside the weeks field the arrows count and Tab reaches Set.
+        if (event.target.closest(".task-menu-weeks") && event.key !== "Escape") {
+            return;
+        }
         const items = [...menu.querySelectorAll("[role='menuitem']")];
         const index = items.indexOf(document.activeElement);
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -1117,6 +1191,21 @@
         const titleInput = form.querySelector("[data-task-quick-title]");
         const dateInput = form.querySelector("[data-task-quick-date]");
         const repeatInput = form.querySelector("[data-task-quick-repeat]");
+        const weeksInput = form.querySelector("[data-task-quick-weeks]");
+        const weeksField = weeksInput.closest("[data-task-quick-weeks-field]");
+
+        function syncWeeks() {
+            weeksField.hidden = repeatInput.value !== "weeks";
+            weeksInput.required = !weeksField.hidden;
+        }
+        repeatInput.addEventListener("change", () => {
+            syncWeeks();
+            if (!weeksField.hidden) {
+                weeksInput.focus();
+                weeksInput.select();
+            }
+        });
+        syncWeeks();
         const chips = page.querySelector("[data-task-quick-chips]");
 
         const chipChoices = [
@@ -1153,15 +1242,25 @@
                 titleInput.focus();
                 return;
             }
+            let repeat = repeatInput.value || null;
+            if (repeat === "weeks") {
+                const weeks = Number(weeksInput.value);
+                if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_REPEAT_WEEKS) {
+                    weeksInput.reportValidity();
+                    return;
+                }
+                repeat = weeksRule(weeks);
+            }
             const submit = form.querySelector("[type='submit']");
             submit.disabled = true;
             setStatus("Saving the task…", "");
-            create(title, dateInput.value || null, repeatInput.value || null)
+            create(title, dateInput.value || null, repeat)
                 .then((task) => {
                     titleInput.value = "";
                     // The day stays for the next task, written into the same
                     // day more often than not; a repeat is rarely shared.
                     repeatInput.value = "";
+                    syncWeeks();
                     upsert(task);
                     render();
                     const placed = groupsHost.querySelector(`[data-task-id="${task.id}"]`);

@@ -69,8 +69,8 @@ container, no external services.
   click, or a long press on a phone) moves it to today, tomorrow, the day after, the weekend,
   next week or any day you pick, takes its date away, sets it repeating, or deletes it. "Day
   off" moves the open tasks along with the bookings; a finished one stays on the day it was done.
-  A task can **repeat** every day, every weekday, every week, every two weeks, every month or
-  every year. Only the next occurrence exists: ticking it off keeps it as done and writes the
+  A task can **repeat** every day, every weekday, every week, every two weeks, every chosen
+  number of weeks (up to 52), every month or every year. Only the next occurrence exists: ticking it off keeps it as done and writes the
   one after it on its date, so the schedule is never filled with copies; taking the tick back
   takes that new one away again. A ↻ beside the text marks a repeating task.
 - **Inbox** — somewhere to put a thought before deciding which project it belongs to. Long-press

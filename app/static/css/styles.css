@@ -3545,6 +3545,50 @@ button.picker-row:hover {
     display: none;
 }
 
+/* "Every … weeks": how many, then Set. */
+.task-menu-weeks {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0.15rem 0.3rem 0.3rem;
+    font-size: 0.85rem;
+}
+
+.task-menu-weeks[hidden] {
+    display: none;
+}
+
+.task-menu-weeks input {
+    width: 4.5rem;
+    padding: 0.3rem 0.4rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--foreground);
+    font-size: 0.85rem;
+}
+
+.task-menu-weeks span {
+    flex: 1;
+    color: var(--muted-foreground);
+}
+
+.task-quick-weeks {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+    color: var(--muted-foreground);
+}
+
+.task-quick-weeks[hidden] {
+    display: none;
+}
+
+.task-quick-weeks input {
+    width: 5rem;
+}
+
 /* The Tasks page */
 .task-quick-add {
     display: flex;

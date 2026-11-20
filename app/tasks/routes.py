@@ -54,6 +54,47 @@ REPEAT_RULES = {
     "yearly": "Every year",
 }
 
+# Besides the rules above, a task can come back every N weeks, stored as
+# "weeks:N". One and two weeks are the "weekly" and "biweekly" presets, so they
+# are stored as those; the rest go up to a year of weeks. Mirrored in tasks.js
+# (WEEKS_PREFIX, MAX_REPEAT_WEEKS).
+WEEKS_RULE_PREFIX = "weeks:"
+MAX_REPEAT_WEEKS = 52
+
+
+def _weeks_of(rule):
+    """The N in an every-N-weeks rule, or None for any other rule."""
+    if not rule or not rule.startswith(WEEKS_RULE_PREFIX):
+        return None
+    try:
+        weeks = int(rule[len(WEEKS_RULE_PREFIX):])
+    except ValueError:
+        return None
+    return weeks if 1 <= weeks <= MAX_REPEAT_WEEKS else None
+
+
+def clean_repeat_rule(raw):
+    """The rule to store for ``raw``: ``(rule, ok)``, rule None for no repeat.
+
+    ``ok`` is False when ``raw`` names no rule at all. "weeks:1" and "weeks:2"
+    come back as "weekly" and "biweekly", so one repetition has one spelling.
+    """
+    rule = (raw or "").strip().lower() or None
+    if rule is None or rule in REPEAT_RULES:
+        return rule, True
+    weeks = _weeks_of(rule)
+    if weeks is None:
+        return None, False
+    return {1: "weekly", 2: "biweekly"}.get(weeks, f"{WEEKS_RULE_PREFIX}{weeks}"), True
+
+
+def repeat_label(rule):
+    """How a rule reads in a sentence's first word: "Every 3 weeks"."""
+    weeks = _weeks_of(rule)
+    if weeks is not None:
+        return f"Every {weeks} weeks"
+    return REPEAT_RULES.get(rule, rule)
+
 
 def _add_months(day, months):
     """The same day ``months`` later, or the month's last day when it is shorter.
@@ -79,6 +120,9 @@ def _step(rule, day):
         return day + timedelta(days=7)
     if rule == "biweekly":
         return day + timedelta(days=14)
+    weeks = _weeks_of(rule)
+    if weeks is not None:
+        return day + timedelta(weeks=weeks)
     if rule == "monthly":
         return _add_months(day, 1)
     if rule == "yearly":
@@ -295,9 +339,13 @@ def parse_tasks_csv(text, today):
             errors.append(f"Line {line}: “{raw_date}” is not a date (use 2026-10-01 or 01.10.2026).")
             continue
 
-        rule = cells.get("repeat", "").lower() or None
-        if rule is not None and rule not in REPEAT_RULES:
-            errors.append(f"Line {line}: unknown repeat “{rule}” (one of {', '.join(REPEAT_RULES)}).")
+        raw_rule = cells.get("repeat", "")
+        rule, ok = clean_repeat_rule(raw_rule)
+        if not ok:
+            errors.append(
+                f"Line {line}: unknown repeat “{raw_rule}” "
+                f"(one of {', '.join(REPEAT_RULES)}, or weeks:N for every N weeks)."
+            )
             continue
         if rule and due_date is None:
             due_date = today
@@ -374,8 +422,8 @@ def add_task():
     if raw_date and due_date is None:
         return jsonify({"ok": False, "message": "That is not a date."}), 400
 
-    rule = (payload.get("repeat") or "").strip() or None
-    if rule is not None and rule not in REPEAT_RULES:
+    rule, ok = clean_repeat_rule(payload.get("repeat"))
+    if not ok:
         return jsonify({"ok": False, "message": "Unknown repeat."}), 400
     if rule and due_date is None:
         due_date = today_local()
@@ -423,11 +471,11 @@ def update_task(task_id):
         )
 
     if "repeat" in payload:
-        rule = (payload.get("repeat") or "").strip() or None
-        if rule is not None and rule not in REPEAT_RULES:
+        rule, ok = clean_repeat_rule(payload.get("repeat"))
+        if not ok:
             return jsonify({"ok": False, "message": "Unknown repeat."}), 400
         task.repeat_rule = rule
-        message = f"Repeats: {REPEAT_RULES[rule].lower()}." if rule else "No longer repeats."
+        message = f"Repeats: {repeat_label(rule).lower()}." if rule else "No longer repeats."
         # A repetition is counted from a day, so a repeating task has one - today,
         # when it had none.
         if rule and task.due_date is None:
