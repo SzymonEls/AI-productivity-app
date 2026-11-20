@@ -111,7 +111,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **Task** — one thing to do: a `title` (at most `TASK_TITLE_MAX_LENGTH` characters), an
   optional `due_date` (a day in `CALENDAR_TIMEZONE`, like a slot's; None means "no date") and
   `is_done`, with `done_at` kept so the Completed list can run newest first. `repeat_rule`
-  (one of `REPEAT_RULES` in [app/tasks/routes.py](../app/tasks/routes.py), or None) makes it come
+  (one of `REPEAT_RULES` in [app/tasks/routes.py](../app/tasks/routes.py), `weeks:N` for
+  every N weeks — 3 to 52, since 1 and 2 are stored as `weekly`/`biweekly` — or None) makes it come
   back when ticked off; `previous_task_id` is set on an occurrence written that way and names
   the one that wrote it — a plain integer, not a foreign key. It belongs to the user, never to
   a project or a slot, and a day takes as many as get written. See point 21.

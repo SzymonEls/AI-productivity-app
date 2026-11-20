@@ -72,9 +72,10 @@ def register_template_context(app):
     # at exactly the number the server enforces.
     app.jinja_env.globals["day_note_max_length"] = DAY_NOTE_MAX_LENGTH
     app.jinja_env.globals["task_title_max_length"] = TASK_TITLE_MAX_LENGTH
-    from .tasks.routes import REPEAT_RULES
+    from .tasks.routes import REPEAT_RULES, repeat_label
 
     app.jinja_env.globals["task_repeat_rules"] = REPEAT_RULES
+    app.jinja_env.globals["task_repeat_label"] = repeat_label
     from .integrations.feeds import local_now_stamp
 
     app.jinja_env.globals["calendar_now"] = local_now_stamp

@@ -559,7 +559,8 @@ class Task(db.Model):
     is_done = db.Column(db.Boolean, default=False, nullable=False)
     done_at = db.Column(db.DateTime, nullable=True)
     # How the task comes back once it is ticked off - one of REPEAT_RULES in
-    # app/tasks/routes.py, or None for a task done once. Only ever one row of a
+    # app/tasks/routes.py, "weeks:N" for every N weeks, or None for a task done
+    # once. Only ever one row of a
     # repeating task is open: ticking it off writes the next one, on the next
     # date, instead of the calendar carrying every occurrence in advance.
     repeat_rule = db.Column(db.String(20), nullable=True)

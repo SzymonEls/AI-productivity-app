@@ -42,7 +42,22 @@
                 {% for rule, label in repeat_rules.items() %}
                     <option value="{{ rule }}">{{ label }}</option>
                 {% endfor %}
+                <option value="weeks">Every &hellip; weeks</option>
             </select>
+            <label class="task-quick-weeks" data-task-quick-weeks-field hidden>
+                <input
+                    type="number"
+                    class="form-control"
+                    data-task-quick-weeks
+                    min="1"
+                    max="52"
+                    step="1"
+                    value="3"
+                    inputmode="numeric"
+                    aria-label="Repeat every this many weeks"
+                >
+                <span>weeks</span>
+            </label>
             <button type="submit" class="btn btn-primary">{{ icon("plus", 14) }}Add</button>
         </form>
         <div class="task-quick-chips" data-task-quick-chips>

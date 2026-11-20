@@ -36,7 +36,7 @@
         {# Only the open occurrence exists ahead of time; the mark says another
            one will be written once this is ticked off. #}
         {% if task.repeat_rule %}
-            <span class="task-repeat" data-task-repeat role="img" title="Repeats: {{ task_repeat_rules.get(task.repeat_rule, task.repeat_rule)|lower }}" aria-label="Repeats: {{ task_repeat_rules.get(task.repeat_rule, task.repeat_rule)|lower }}">{{ icon("repeat", 12) }}</span>
+            <span class="task-repeat" data-task-repeat role="img" title="Repeats: {{ task_repeat_label(task.repeat_rule)|lower }}" aria-label="Repeats: {{ task_repeat_label(task.repeat_rule)|lower }}">{{ icon("repeat", 12) }}</span>
         {% endif %}
         {% if show_due %}
             <span class="task-due{% if today and task.due_date < today and not task.is_done %} is-overdue{% endif %}" data-task-due>{{ task.due_date.strftime("%a %d %b") }}</span>

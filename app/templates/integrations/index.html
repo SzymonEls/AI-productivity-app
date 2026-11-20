@@ -150,7 +150,7 @@
                     One task per row: <code>title</code>, then optionally <code>due_date</code>
                     (<code>2026-10-01</code> or <code>01.10.2026</code>, empty for no day),
                     <code>done</code> (<code>yes</code>/<code>1</code>) and <code>repeat</code>
-                    ({{ task_repeat_rules | join(", ") }}). A header row naming the columns is
+                    ({{ task_repeat_rules | join(", ") }}, or <code>weeks:3</code> for every 3 weeks). A header row naming the columns is
                     optional; commas and semicolons both work. Up to {{ csv_max_rows }} rows, and
                     if any row cannot be read nothing is imported.
                 </p>
