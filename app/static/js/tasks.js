@@ -1026,49 +1026,17 @@
             );
         }
 
-        // In place of a session: one of the A/B/C blocks of the task's day, or
-        // of today for a task with no day or one already gone. An open task
-        // only - a finished one can still be taken out of the block it is in.
-        if (!task.is_done || task.slot) {
-            const blockRule = document.createElement("hr");
-            blockRule.className = "task-menu-rule";
-            const blockHeading = document.createElement("p");
-            blockHeading.className = "task-menu-heading";
-            const day = task.slot ? task.due_date : blockDay(task);
-            blockHeading.textContent = `Block · ${day === TODAY_ISO ? "today" : dayLabel(day)}`;
-            menu.append(blockRule, blockHeading);
-            if (!task.is_done) {
-                BLOCKS.filter((slot) => slot !== task.slot).forEach((slot) => {
-                    const taken = blockTaken(day, slot, task.id);
-                    const item = menuItem(
-                        `${task.slot ? "Move to" : "Put in"} block ${slot}`,
-                        taken ? "Taken" : "",
-                        () => {
-                            closeMenu();
-                            setBlock(row, slot);
-                        },
-                        taken ? "is-disabled" : ""
-                    );
-                    if (taken) {
-                        item.disabled = true;
-                        item.title = `Block ${slot} already holds a session or a task`;
-                    }
-                    menu.append(item);
-                });
-            }
-            if (task.slot) {
-                menu.append(
-                    menuItem(`Take out of block ${task.slot}`, "", () => {
-                        closeMenu();
-                        setBlock(row, null);
-                    })
-                );
-            }
-        }
-
         const rule = document.createElement("hr");
         rule.className = "task-menu-rule";
         menu.append(rule);
+        // In place of a session: one of the A/B/C blocks, on a page of its own
+        // like Repeat. An open task only - a finished one can still be taken
+        // out of the block it is in.
+        if (!task.is_done || task.slot) {
+            menu.append(
+                menuItem("Block", task.slot ? task.slot : "None", () => showBlockChoices(row, task))
+            );
+        }
         menu.append(
             menuItem("Repeat", task.repeat ? repeatLabel(task.repeat) : "Never", () =>
                 showRepeatChoices(row, task)
@@ -1097,6 +1065,60 @@
         anchor.setAttribute("aria-expanded", "true");
         positionMenu();
         menu.querySelector("[role='menuitem']:not([disabled])")?.focus({ preventScroll: true });
+    }
+
+    /* The menu's other second page: which of the day's blocks the task takes
+       in place of a session - the task's own day, or today for a task with no
+       day or one already gone. A block holding a session or another task is
+       listed but cannot be picked. */
+    function showBlockChoices(row, task) {
+        menu.replaceChildren();
+        menu.append(
+            menuItem("‹ Back", "", () => openMenu(row, menuAnchor, menuPoint), "is-back")
+        );
+        const day = task.slot ? task.due_date : blockDay(task);
+        const heading = document.createElement("p");
+        heading.className = "task-menu-heading";
+        heading.textContent = `Block · ${day === TODAY_ISO ? "today" : dayLabel(day)}`;
+        menu.append(heading);
+
+        menu.append(
+            menuItem(
+                "None",
+                task.slot ? "" : "✓",
+                () => {
+                    closeMenu();
+                    if (task.slot) {
+                        setBlock(row, null);
+                    }
+                },
+                task.slot ? "" : "is-current"
+            )
+        );
+        if (!task.is_done) {
+            BLOCKS.forEach((slot) => {
+                const current = task.slot === slot;
+                const taken = !current && blockTaken(day, slot, task.id);
+                const item = menuItem(
+                    `Block ${slot}`,
+                    current ? "✓" : taken ? "Taken" : "",
+                    () => {
+                        closeMenu();
+                        if (!current) {
+                            setBlock(row, slot);
+                        }
+                    },
+                    current ? "is-current" : taken ? "is-disabled" : ""
+                );
+                if (taken) {
+                    item.disabled = true;
+                    item.title = `Block ${slot} already holds a session or a task`;
+                }
+                menu.append(item);
+            });
+        }
+        positionMenu();
+        menu.querySelector(".is-current, [role='menuitem']:not([disabled])")?.focus({ preventScroll: true });
     }
 
     /* The menu's second page: how the task comes back. Swapped in place
