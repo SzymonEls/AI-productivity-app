@@ -173,7 +173,7 @@ def serialize_slot_card(slot, booking, totals, day):
 
     project = booking.project if booking else None
     if project is None:
-        return {"slot": slot, "project": None}
+        return {"slot": slot, "project": None, "task": None}
 
     is_done = bool(booking.is_done)
 
@@ -183,6 +183,7 @@ def serialize_slot_card(slot, booking, totals, day):
     return {
         "slot": slot,
         "project": project,
+        "task": None,
         "is_done": is_done,
         "plan_heading": group_heading(project)
         if project.is_group
@@ -468,12 +469,22 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
     "Lines" is the foot of the sheet: the day's events, read off the subscribed
     calendars, and then the notes written here by hand. Two sources, one list -
     what is on that day, whoever put it there.
+
+    A task put in a block in place of a session is drawn in that block and
+    left out of the day's list. A booking wins if the two ever met in one block
+    (nothing lets them), so the task would still show, in the list.
     """
 
+    in_blocks = {
+        task.slot: task
+        for task in tasks
+        if task.slot in SLOTS and not booked[task.slot]
+    }
     slots = [
         {
             "slot": slot,
             "project": booked[slot].project if booked[slot] else None,
+            "task": in_blocks.get(slot),
             "plan_heading": (
                 (
                     group_heading(booked[slot].project)
@@ -500,7 +511,7 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
         "slots": slots,
         "notes": list(notes),
         "events": list(events),
-        "tasks": list(tasks),
+        "tasks": [task for task in tasks if in_blocks.get(task.slot) is not task],
         # The projects whose deadline is this day, for the header's D.
         "deadlines": [
             {
@@ -512,7 +523,7 @@ def _serialize_schedule_day(day, booked, today, notes=(), events=(), tasks=(), d
             }
             for project in deadlines
         ],
-        "booked_count": sum(1 for entry in slots if entry["project"]),
+        "booked_count": sum(1 for entry in slots if entry["project"] or entry["task"]),
     }
 
 

@@ -2775,6 +2775,58 @@ button.picker-row:hover {
     --slot-card-accent: var(--danger);
 }
 
+/* A task in the block in place of a session: the primary colour rather than a
+   session's amber, so a block that is a task reads as one at a glance - green
+   once it is ticked off, like a finished session. */
+.day-slot.is-task {
+    --slot-card-accent: var(--primary);
+    border-color: color-mix(in srgb, var(--slot-card-accent) 32%, var(--border));
+    border-left: 3px solid var(--slot-card-accent);
+    background: color-mix(in srgb, var(--slot-card-accent) 6%, var(--surface));
+}
+
+.day-slot.is-task.is-task-done {
+    --slot-card-accent: var(--success);
+}
+
+.day-slot.is-task .day-slot-letter {
+    color: var(--slot-card-accent);
+}
+
+/* The task's own row, flattened into the block: the block is its frame. */
+.day-slot-task-list,
+.slot-card-task-list {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+}
+
+.day-slot-task-list .task,
+.slot-card-task-list .task {
+    padding-left: 0;
+    padding-right: 0;
+    background: transparent;
+}
+
+/* Outranks the card's session amber, and its optional grey for a C. */
+.slot-card-task:not(.slot-card-empty) {
+    --slot-card-accent: var(--primary);
+}
+
+.slot-card-task.slot-card-done:not(.slot-card-empty) {
+    --slot-card-accent: var(--success);
+}
+
+/* A task card is not a link: its row's own buttons are what answer. */
+.slot-card-task:not(.slot-card-empty):hover {
+    background: color-mix(in srgb, var(--slot-card-accent) 7%, var(--surface));
+}
+
+.slot-card-task-list .task {
+    font-size: 1rem;
+}
+
 /* The ! on a red block, between the title and the block's own buttons. It
    takes the accent the block has just been given rather than a third colour;
    the tooltip says whether the project is problematic or behind. */
@@ -3383,6 +3435,25 @@ button.picker-row:hover {
     height: 0.75rem;
 }
 
+/* The block a task holds in place of a session, on the lists that are not the
+   block itself - the Tasks page, or a day list it has been moved onto. */
+.task-block {
+    flex: 0 0 auto;
+    align-self: center;
+    padding: 0 0.35rem;
+    border-radius: var(--radius-pill);
+    background: var(--primary-soft);
+    color: var(--primary);
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.day-slot-task-list .task-block,
+.slot-card-task-list .task-block {
+    display: none;
+}
+
 .task-due {
     flex: 0 0 auto;
     margin-top: 0.1em;
@@ -3514,6 +3585,19 @@ button.picker-row:hover {
 
 .task-menu-item.is-current .task-menu-hint {
     color: var(--primary);
+}
+
+/* A block that already holds a session or a task: shown, so the letters stay
+   in order, but not something to pick. */
+.task-menu-item.is-disabled,
+.task-menu-item:disabled {
+    color: var(--muted-foreground);
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.task-menu-item:disabled:hover {
+    background: transparent;
 }
 
 .task-menu-item.is-back {

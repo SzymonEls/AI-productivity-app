@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 {% from "projects/_day_sheet.html" import day_notes %}
-{% from "tasks/_tasks.html" import day_tasks %}
+{% from "tasks/_tasks.html" import day_tasks, task_row %}
 
 {% block title %}Home{% endblock %}
 
@@ -120,7 +120,12 @@
         <section class="day-slots-main">
             {% for card in slot_cards %}
                 {% set is_optional = card.slot not in timed_slots %}
-                <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project %} slot-card-empty{% endif %}{% if card.is_done %} slot-card-done{% endif %}{% if card.is_failed %} slot-card-failed{% endif %}{% if card.project and card.warn_level %} slot-card-warned{% endif %}">
+                <article class="slot-card slot-card-linked{% if is_optional %} slot-card-optional{% endif %}{% if not card.project and not card.task %} slot-card-empty{% endif %}{% if card.task %} slot-card-task{% if card.task.is_done %} slot-card-done{% endif %}{% endif %}{% if card.is_done %} slot-card-done{% endif %}{% if card.is_failed %} slot-card-failed{% endif %}{% if card.project and card.warn_level %} slot-card-warned{% endif %}"
+                    data-slot-card
+                    data-date="{{ today.isoformat() }}"
+                    data-slot="{{ card.slot }}"
+                    data-slot-taken="{{ 1 if card.project or card.task else 0 }}"
+                    {% if card.task %}data-slot-task="{{ card.task.id }}"{% endif %}>
                     {% if card.shows_deadline %}
                         {# The session's deadline, on end, in place of the letter. #}
                         <div
@@ -161,6 +166,10 @@
                             {% else %}
                                 <p class="slot-card-step slot-card-step-empty mb-0">No <code>#</code> section in the plan yet</p>
                             {% endif %}
+                        {% elif card.task %}
+                            {# A task in the block in place of a session - the row
+                               the task list draws, so tasks.js drives it here too. #}
+                            <ul class="task-list slot-card-task-list">{{ task_row(card.task, today, today) }}</ul>
                         {% else %}
                             <p class="slot-card-step mb-0">Nothing planned &mdash; pick a project.</p>
                             {# Covers the whole card, mirroring the stretched link on a filled one. #}

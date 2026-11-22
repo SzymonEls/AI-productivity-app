@@ -161,6 +161,17 @@
         }
     }
 
+    // What a change that reloaded the page for its blocks had to say.
+    try {
+        const carried = window.sessionStorage.getItem("tasks-block-message");
+        if (carried !== null) {
+            window.sessionStorage.removeItem("tasks-block-message");
+            window.setTimeout(() => setStatus(carried, "success"), 0);
+        }
+    } catch (error) {
+        /* No session storage: nothing to carry. */
+    }
+
     function postJson(url, body, fallbackMessage) {
         return fetch(url, {
             method: "POST",
@@ -190,6 +201,7 @@
         item.dataset.due = task.due_date || "";
         item.dataset.done = task.is_done ? "1" : "0";
         item.dataset.repeat = task.repeat || "";
+        item.dataset.block = task.slot || "";
 
         const check = document.createElement("button");
         check.type = "button";
@@ -221,6 +233,17 @@
             item.append(repeat);
         }
 
+        if (task.slot) {
+            const block = document.createElement("span");
+            block.className = "task-block";
+            block.setAttribute("data-task-block", "");
+            const label = `In block ${task.slot}`;
+            block.title = label;
+            block.setAttribute("aria-label", label);
+            block.textContent = task.slot;
+            item.append(block);
+        }
+
         if (task.due_date && task.due_date !== (listDate || null)) {
             const due = document.createElement("span");
             due.className = `task-due${!task.is_done && task.due_date < TODAY_ISO ? " is-overdue" : ""}`;
@@ -240,6 +263,95 @@
         item.append(menuButton);
 
         return item;
+    }
+
+    /* ------------------------------------------------------------ blocks */
+
+    /* A task can take one of its day's A/B/C blocks in place of a session.
+       The schedule, the archive and the home page draw such a task inside the
+       block rather than in the day's list, and redrawing a block - the board's
+       letters, marks and drag targets - is the server's template's job, so
+       any change that puts a task into a block or takes one out of it reloads
+       a page that shows blocks. The Tasks page has none and just redraws. */
+    const BLOCKS = ["A", "B", "C"];
+
+    function blockOnPage(date, slot) {
+        return document.querySelector(
+            `[data-slot-cell][data-date="${date}"][data-slot="${slot}"], ` +
+                `[data-slot-card][data-date="${date}"][data-slot="${slot}"]`
+        );
+    }
+
+    /* Whether a block on the page is taken by something other than this task:
+       true, false, or null when the page does not show that block. */
+    function blockTaken(date, slot, taskId) {
+        const block = blockOnPage(date, slot);
+        if (!block) {
+            return null;
+        }
+        const heldBy = block.dataset.slotTask;
+        if (heldBy) {
+            return Number(heldBy) !== taskId;
+        }
+        if (block.hasAttribute("data-slot-card")) {
+            return block.dataset.slotTaken === "1";
+        }
+        return Boolean(block.querySelector("[data-slot-content]")?.dataset.projectId);
+    }
+
+    function pageShowsBlocks(date) {
+        return Boolean(
+            document.querySelector(
+                `[data-slot-cell][data-date="${date}"], [data-slot-card][data-date="${date}"]`
+            )
+        );
+    }
+
+    function inBlock(row) {
+        return Boolean(row?.closest("[data-slot-task]"));
+    }
+
+    function reloadForBlocks(message) {
+        try {
+            window.sessionStorage.setItem(BLOCK_MESSAGE_KEY, message || "");
+        } catch (error) {
+            /* No session storage: the reload just says nothing. */
+        }
+        window.location.reload();
+    }
+
+    const BLOCK_MESSAGE_KEY = "tasks-block-message";
+
+    /* The day a block is taken on: the task's own, or today for one with no
+       day or with a day already gone - no block in the past can be filled. */
+    function blockDay(task) {
+        return task.due_date && task.due_date >= TODAY_ISO ? task.due_date : TODAY_ISO;
+    }
+
+    function setBlock(row, slot) {
+        const before = taskOf(row);
+        const day = blockDay(before);
+        const body = { slot: slot || "" };
+        if (slot && day !== before.due_date) {
+            body.due_date = day;
+        }
+        row.classList.add("is-pending");
+        postJson(`${ENDPOINT}/${before.id}/update`, body, "Could not save the task.")
+            .then((payload) => {
+                row.classList.remove("is-pending");
+                const task = payload.task;
+                if (inBlock(row) || (task.slot && task.due_date && pageShowsBlocks(task.due_date))) {
+                    reloadForBlocks(payload.message);
+                    return;
+                }
+                const placed = place(row, task);
+                placed?.querySelector("[data-task-menu]")?.focus({ preventScroll: true });
+                setStatus(payload.message, "success");
+            })
+            .catch((error) => {
+                row.classList.remove("is-pending");
+                setStatus(error.message, "danger");
+            });
     }
 
     function rowOf(element) {
@@ -266,6 +378,7 @@
             due_date: row.dataset.due || null,
             is_done: row.dataset.done === "1",
             repeat: row.dataset.repeat || null,
+            slot: row.dataset.block || null,
         };
     }
 
@@ -516,8 +629,21 @@
             "Could not save the task."
         )
             .then((payload) => {
-                if (payload.next) {
-                    placeOccurrence(payload.next);
+                const next = payload.next;
+                const removedRow = payload.removed_id
+                    ? document.querySelector(`[data-task][data-task-id="${payload.removed_id}"]`)
+                    : null;
+                // The next occurrence of a task kept in a block comes back in
+                // that block, which only the page's own template draws.
+                if (
+                    (next?.slot && next.due_date && pageShowsBlocks(next.due_date)) ||
+                    inBlock(removedRow)
+                ) {
+                    reloadForBlocks(payload.message);
+                    return;
+                }
+                if (next) {
+                    placeOccurrence(next);
                 }
                 if (payload.removed_id) {
                     dropTask(payload.removed_id);
@@ -537,6 +663,9 @@
 
     function applyDone(row, isDone) {
         row.classList.toggle("is-done", isDone);
+        // A task in a block colours the block, green once it is done.
+        row.closest(".day-slot.is-task")?.classList.toggle("is-task-done", isDone);
+        row.closest(".slot-card-task")?.classList.toggle("slot-card-done", isDone);
         row.dataset.done = isDone ? "1" : "0";
         row.querySelector("[data-task-toggle]").setAttribute("aria-checked", isDone ? "true" : "false");
         row.querySelector("[data-task-due]")?.classList.toggle(
@@ -649,12 +778,29 @@
             setStatus(dueDate ? `Moving to ${dayLabel(dueDate)}…` : "Removing the date…", "");
         }
 
+        const wasInBlock = inBlock(row);
         postJson(
             `${ENDPOINT}/${before.id}/update`,
             { due_date: dueDate || "" },
             "Could not move the task."
         )
-            .then((payload) => setStatus(payload.message, "success"))
+            .then((payload) => {
+                // A task in a block keeps it on the new day when it is free
+                // there; the row placed above is in the day's list, so a page
+                // of blocks is redrawn.
+                const task = payload.task;
+                if (wasInBlock || (task.slot && task.due_date && pageShowsBlocks(task.due_date))) {
+                    reloadForBlocks(payload.message);
+                    return;
+                }
+                // The server may have taken it out of its block, the one thing
+                // a move can change that the page did not do itself.
+                if (tasks && (task.slot || null) !== (before.slot || null)) {
+                    upsert(task);
+                    render();
+                }
+                setStatus(payload.message, "success");
+            })
             .catch((error) => {
                 // Back to the list it came from, wherever the row is by now.
                 const current = document.querySelector(`[data-task][data-task-id="${before.id}"]`);
@@ -675,6 +821,7 @@
         const task = taskOf(row);
         const parent = row.parentElement;
         const next = row.nextElementSibling;
+        const wasInBlock = inBlock(row);
         row.remove();
         if (tasks) {
             tasks = tasks.filter((entry) => entry.id !== task.id);
@@ -683,7 +830,14 @@
         setStatus("Deleting…", "");
 
         postJson(`${ENDPOINT}/${task.id}/delete`, {}, "Could not delete the task.")
-            .then((payload) => setStatus(payload.message, "success"))
+            .then((payload) => {
+                if (wasInBlock) {
+                    // The block it held is free again; let the board draw it so.
+                    reloadForBlocks(payload.message);
+                    return;
+                }
+                setStatus(payload.message, "success");
+            })
             .catch((error) => {
                 if (tasks) {
                     upsert(task);
@@ -872,6 +1026,46 @@
             );
         }
 
+        // In place of a session: one of the A/B/C blocks of the task's day, or
+        // of today for a task with no day or one already gone. An open task
+        // only - a finished one can still be taken out of the block it is in.
+        if (!task.is_done || task.slot) {
+            const blockRule = document.createElement("hr");
+            blockRule.className = "task-menu-rule";
+            const blockHeading = document.createElement("p");
+            blockHeading.className = "task-menu-heading";
+            const day = task.slot ? task.due_date : blockDay(task);
+            blockHeading.textContent = `Block · ${day === TODAY_ISO ? "today" : dayLabel(day)}`;
+            menu.append(blockRule, blockHeading);
+            if (!task.is_done) {
+                BLOCKS.filter((slot) => slot !== task.slot).forEach((slot) => {
+                    const taken = blockTaken(day, slot, task.id);
+                    const item = menuItem(
+                        `${task.slot ? "Move to" : "Put in"} block ${slot}`,
+                        taken ? "Taken" : "",
+                        () => {
+                            closeMenu();
+                            setBlock(row, slot);
+                        },
+                        taken ? "is-disabled" : ""
+                    );
+                    if (taken) {
+                        item.disabled = true;
+                        item.title = `Block ${slot} already holds a session or a task`;
+                    }
+                    menu.append(item);
+                });
+            }
+            if (task.slot) {
+                menu.append(
+                    menuItem(`Take out of block ${task.slot}`, "", () => {
+                        closeMenu();
+                        setBlock(row, null);
+                    })
+                );
+            }
+        }
+
         const rule = document.createElement("hr");
         rule.className = "task-menu-rule";
         menu.append(rule);
@@ -902,7 +1096,7 @@
         row.classList.add("is-menu-open");
         anchor.setAttribute("aria-expanded", "true");
         positionMenu();
-        menu.querySelector("[role='menuitem']")?.focus({ preventScroll: true });
+        menu.querySelector("[role='menuitem']:not([disabled])")?.focus({ preventScroll: true });
     }
 
     /* The menu's second page: how the task comes back. Swapped in place
@@ -1059,7 +1253,7 @@
         if (event.target.closest(".task-menu-weeks") && event.key !== "Escape") {
             return;
         }
-        const items = [...menu.querySelectorAll("[role='menuitem']")];
+        const items = [...menu.querySelectorAll("[role='menuitem']:not([disabled])")];
         const index = items.indexOf(document.activeElement);
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();

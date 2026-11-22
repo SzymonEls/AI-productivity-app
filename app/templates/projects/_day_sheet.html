@@ -13,7 +13,7 @@
   answers, and readonly leaves them alone.
 #}
 {% from "icons.html" import icon %}
-{% from "tasks/_tasks.html" import day_tasks %}
+{% from "tasks/_tasks.html" import day_tasks, task_row %}
 
 {# What a deadline printed in place of the letter says on hover. #}
 {% macro deadline_title(entry) %}Session deadline {{ entry.deadline_label }}{% if entry.after_deadline %} — this session is after it{% endif %}{% endmacro %}
@@ -25,8 +25,11 @@
        session before today) is carried on the content rather than on the
        block, even though it is the block that gets tinted. #}
     <li
-        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}{% if entry.is_failed %} is-failed{% endif %}{% if entry.project and entry.warn_level %} is-warned{% endif %}"
+        class="day-slot{% if entry.is_optional %} day-slot-optional{% endif %} {% if entry.project %}is-booked{% elif entry.task %}is-task{% else %}is-free{% endif %}{% if entry.is_done %} is-done{% endif %}{% if entry.task and entry.task.is_done %} is-task-done{% endif %}{% if entry.is_failed %} is-failed{% endif %}{% if entry.project and entry.warn_level %} is-warned{% endif %}"
         {% if not readonly %}data-slot-cell data-date="{{ day.date.isoformat() }}" data-slot="{{ entry.slot }}"{% endif %}
+        {# A task in the block in place of a session: the board leaves it where
+           it is - it is not a session to move or swap - and drops nothing on it. #}
+        {% if entry.task %}data-slot-task="{{ entry.task.id }}"{% endif %}
     >
         {# A session with a deadline shows that day instead of the letter. The
            deadline belongs to the project, so it rides on the content like the
@@ -51,6 +54,10 @@
                 {% if entry.is_done and not readonly %}<span class="day-slot-done" data-slot-done title="Session done" aria-label="Session done">✓</span>{% endif %}
                 {% if entry.is_failed %}<span class="day-slot-failed" data-slot-failed title="Session failed" aria-label="Session failed">✗</span>{% endif %}
                 {% if entry.plan_heading %}<span class="day-slot-step{% if entry.project.is_private %} private-plan-heading{% endif %}">{{ entry.plan_heading }}</span>{% endif %}
+            {% elif entry.task %}
+                {# The same row the day's list draws, so ticking it off, rewriting
+                   it and its menu work here as they do there (tasks.js). #}
+                <ul class="task-list day-slot-task-list">{{ task_row(entry.task, day.date, day.today) }}</ul>
             {% else %}
                 <span class="day-slot-free">Free</span>
             {% endif %}
@@ -101,7 +108,7 @@
             {# Covers the whole block, so an empty one is one click away from a project. #}
             <button
                 type="button"
-                class="day-slot-fill{% if entry.project %} d-none{% endif %}"
+                class="day-slot-fill{% if entry.project or entry.task %} d-none{% endif %}"
                 data-fill-slot
                 data-date="{{ day.date.isoformat() }}"
                 data-slot="{{ entry.slot }}"

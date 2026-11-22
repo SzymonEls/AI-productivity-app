@@ -21,6 +21,7 @@
         data-due="{{ task.due_date.isoformat() if task.due_date else '' }}"
         data-done="{{ 1 if task.is_done else 0 }}"
         data-repeat="{{ task.repeat_rule or '' }}"
+        data-block="{{ task.slot or '' }}"
     >
         <button
             type="button"
@@ -37,6 +38,11 @@
            one will be written once this is ticked off. #}
         {% if task.repeat_rule %}
             <span class="task-repeat" data-task-repeat role="img" title="Repeats: {{ task_repeat_label(task.repeat_rule)|lower }}" aria-label="Repeats: {{ task_repeat_label(task.repeat_rule)|lower }}">{{ icon("repeat", 12) }}</span>
+        {% endif %}
+        {# The block it holds in place of a session, where the row is not
+           drawn inside that block itself (the stylesheet hides it there). #}
+        {% if task.slot %}
+            <span class="task-block" data-task-block title="In block {{ task.slot }}" aria-label="In block {{ task.slot }}">{{ task.slot }}</span>
         {% endif %}
         {% if show_due %}
             <span class="task-due{% if today and task.due_date < today and not task.is_done %} is-overdue{% endif %}" data-task-due>{{ task.due_date.strftime("%a %d %b") }}</span>

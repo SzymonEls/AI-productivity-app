@@ -114,8 +114,9 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   (one of `REPEAT_RULES` in [app/tasks/routes.py](../app/tasks/routes.py), `weeks:N` for
   every N weeks — 3 to 52, since 1 and 2 are stored as `weekly`/`biweekly` — or None) makes it come
   back when ticked off; `previous_task_id` is set on an occurrence written that way and names
-  the one that wrote it — a plain integer, not a foreign key. It belongs to the user, never to
-  a project or a slot, and a day takes as many as get written. See point 21.
+  the one that wrote it — a plain integer, not a foreign key. `slot` (`"A"`/`"B"`/`"C"` or None)
+  puts it in one of its day's blocks in place of a session — see point 21. It belongs to the
+  user, never to a project, and a day takes as many as get written.
 
 - **MoodRating** — how one day felt: `rating_date` (a day in `CALENDAR_TIMEZONE`) and `score`,
   `MOOD_MIN`…`MOOD_MAX` (1…5). Unique on `(user_id, rating_date)`, so rating a day again rewrites
@@ -130,7 +131,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
   (point 17).
 
-The schema in the code matches the latest migration (`20261027_0034`).
+The schema in the code matches the latest migration (`20261122_0039`).
 
 ## Responsibility boundaries
 
@@ -544,6 +545,29 @@ The schema in the code matches the latest migration (`20261027_0034`).
 
     The rule labels exist twice — `REPEAT_RULES` on the server, `REPEAT_LABELS` in
     [tasks.js](../app/static/js/tasks.js) — change both together.
+
+    **A task can take a block in place of a session.** The menu's "Block" section puts it in
+    A, B or C of its day (of today, for a task with no day or an overdue one — the same
+    request moves it there), moves it to another block, or takes it out; `Task.slot` holds
+    the letter. A block holds one thing, but bookings and tasks are two tables, so the unique
+    constraint on `project_day_slots` cannot say so: `slot_task` / `block_taken_by` in
+    [slots.py](../app/projects/slots.py) do, and every way of filling a block asks them —
+    `assign_slot` and `move_booking` refuse a block holding a task, the planner shows it as
+    taken, and `update_task` refuses a block holding a session or another task (409). The
+    schedule, the archive and the home page draw such a task **inside the block**, with the
+    usual task row, and leave it out of the day's list; the board neither moves it nor drops
+    anything on it (`holdsTask` in [schedule-board.js](../app/static/js/schedule-board.js)).
+    Elsewhere the row carries the letter as a small badge.
+
+    It follows the task: moved to another day it keeps the letter if that block is free
+    there and goes into the day's list if not (or with no day, or a day already gone); a
+    repeating one's next occurrence comes back in the same block when it is free on its
+    day; a day off moves an open one with the bookings and drops the letter only if what
+    is in its way stayed put, and a finished one stays and holds its block like a finished
+    session (`shift_bookings_forward` counts it as staying). It is not a session: it counts
+    nowhere in the health score, the statistics or the API's slots. Any change that puts a
+    task into a block or takes one out reloads a page that draws blocks — redrawing a block
+    is the template's job — and the status line carries the message across the reload.
 
     **Tasks can also arrive in bulk, from CSV**, on the Integrations page
     (`POST /integrations/tasks/import`, a file or pasted text). Columns are `title`, `due_date`,

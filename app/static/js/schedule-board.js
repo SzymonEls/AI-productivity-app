@@ -73,6 +73,13 @@
         return Boolean(contentOf(cell).dataset.projectId);
     }
 
+    /* A task put in the block in place of a session. It is not a session: it
+       neither moves on the board nor gets swapped away, and nothing is dropped
+       on it - it leaves the block from its own menu. */
+    function holdsTask(cell) {
+        return cell.hasAttribute("data-slot-task");
+    }
+
     const DAY_MS = 24 * 60 * 60 * 1000;
 
     function daysBetween(fromIso, toIso) {
@@ -237,15 +244,16 @@
         const failed = booked && content.dataset.failed === "1";
         const warning = booked ? warnFor(cell, done || failed) : "";
 
+        const task = holdsTask(cell);
         cell.classList.toggle("is-booked", booked);
-        cell.classList.toggle("is-free", !booked);
+        cell.classList.toggle("is-free", !booked && !task);
         cell.classList.toggle("is-done", done);
         cell.classList.toggle("is-failed", failed);
         cell.classList.toggle("is-warned", Boolean(warning));
         setWarn(cell, warning);
         setLetter(cell, booked, done || failed);
         cell.querySelector("[data-clear-slot]").classList.toggle("d-none", !booked);
-        cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked);
+        cell.querySelector("[data-fill-slot]").classList.toggle("d-none", booked || task);
         content.draggable = booked;
     }
 
@@ -394,6 +402,10 @@
 
     function requestMove(fromCell, toCell) {
         if (fromCell === toCell) {
+            return;
+        }
+        if (holdsTask(toCell) || holdsTask(fromCell)) {
+            setStatus(`Block ${toCell.dataset.slot} holds a task — take it out of the block from its menu first.`, "danger");
             return;
         }
 
@@ -714,7 +726,7 @@
 
     root.addEventListener("dragover", (event) => {
         const cell = event.target.closest("[data-slot-cell]");
-        if (!draggedContent || !cell || cell.contains(draggedContent)) {
+        if (!draggedContent || !cell || cell.contains(draggedContent) || holdsTask(cell)) {
             return;
         }
         event.preventDefault();
