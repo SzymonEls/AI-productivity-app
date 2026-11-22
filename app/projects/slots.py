@@ -15,7 +15,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import joinedload
 
 from ..extensions import db
-from ..models import Project, ProjectDaySlot
+from ..models import Project, ProjectDaySlot, Task
 from ..time_tracking.service import app_timezone, ensure_utc, tracked_seconds_by_day, utc_now
 from .groups import active_group_member_ids, group_heading, sync_members_with_done
 
@@ -466,6 +466,49 @@ def warn_title(booking):
     return frequency_title(booking)
 
 
+def slot_task(user_id, day, slot, ignore_task_id=None):
+    """The task holding a day's block in place of a session, or None.
+
+    A block holds one thing: a booked project or a task. Bookings keep that
+    among themselves with the unique constraint on project_day_slots; a task is
+    another table, so every place that fills a block asks this as well.
+    """
+    if day is None or slot not in SLOTS:
+        return None
+    query = Task.query.filter_by(user_id=user_id, due_date=day, slot=slot)
+    if ignore_task_id is not None:
+        query = query.filter(Task.id != ignore_task_id)
+    return query.first()
+
+
+def block_taken_by(user_id, day, slot, ignore_task_id=None):
+    """What already fills a day's block, named for a refusal, or "".
+
+    For putting a task in a block: a booked session or another task both count.
+    """
+    booking = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=day, slot=slot).first()
+    if booking is not None:
+        return booking.project.title if booking.project else "a session"
+    task = slot_task(user_id, day, slot, ignore_task_id)
+    if task is not None:
+        return f"the task “{task.title}”"
+    return ""
+
+
+def slot_tasks_from(user_id, start_day, end_day):
+    """``{date: {slot: Task}}`` for the tasks holding a block across a range."""
+    entries = Task.query.filter(
+        Task.user_id == user_id,
+        Task.slot.isnot(None),
+        Task.due_date >= start_day,
+        Task.due_date <= end_day,
+    ).all()
+    by_date = {}
+    for entry in entries:
+        by_date.setdefault(entry.due_date, {})[entry.slot] = entry
+    return by_date
+
+
 def slots_for_date(user_id, day):
     """Return {"A": ProjectDaySlot|None, "B": ..., "C": ...} for one day."""
     booked = (
@@ -902,6 +945,7 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
     today = today_local()
     last_day = today + timedelta(days=days - 1)
     booked = slots_from(user_id, today, last_day)
+    held = slot_tasks_from(user_id, today, last_day)
     # The project's own two bookings do not change from day to day, so they are
     # read once for the whole grid rather than per row.
     bookings = project_bookings(user_id, project_id)
@@ -912,6 +956,7 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
         day = today + timedelta(days=offset)
         blocker = blocker_for_day(bookings, day, today)
         day_slots = booked.get(day, {slot: None for slot in SLOTS})
+        day_tasks = held.get(day, {})
 
         window.append(
             {
@@ -924,9 +969,13 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
                     {
                         "slot": slot,
                         "project_id": day_slots[slot].project_id if day_slots[slot] else None,
-                        "project_title": day_slots[slot].project.title if day_slots[slot] else "",
+                        # A task in the block is named like a project there.
+                        "project_title": day_slots[slot].project.title
+                        if day_slots[slot]
+                        else (day_tasks[slot].title if slot in day_tasks else ""),
                         "is_this_project": bool(day_slots[slot]) and day_slots[slot].project_id == project_id,
-                        "can_take": day_slots[slot] is None and blocker is None,
+                        "is_task": slot in day_tasks and day_slots[slot] is None,
+                        "can_take": day_slots[slot] is None and slot not in day_tasks and blocker is None,
                         # The dialog colours a slot exactly like the home page does,
                         # so it needs the same two facts about it.
                         "is_done": bool(day_slots[slot]) and bool(day_slots[slot].is_done),
@@ -1121,6 +1170,9 @@ def assign_slot(user_id, project_id, day, slot):
         if taken.project_id == project_id:
             return True, "Already scheduled here."
         return False, f"Slot {slot} is taken by {taken.project.title}."
+    task = slot_task(user_id, day, slot)
+    if task is not None:
+        return False, f"Slot {slot} holds the task “{task.title}”."
 
     blocker = blocking_booking(user_id, project_id, day)
     if blocker is not None:
@@ -1233,6 +1285,11 @@ def move_booking(user_id, from_day, from_slot, to_day, to_slot):
         return True, "Nothing moved."
 
     target = ProjectDaySlot.query.filter_by(user_id=user_id, slot_date=to_day, slot=to_slot).first()
+    # A task in the block is not a session to swap with: it stays on its day.
+    if target is None:
+        task = slot_task(user_id, to_day, to_slot)
+        if task is not None:
+            return False, f"Block {to_slot} holds the task “{task.title}”."
     moves = [(source, to_day)]
     if target is not None:
         moves.append((target, from_day))
@@ -1368,6 +1425,16 @@ def shift_bookings_forward(user_id, from_day, days=1):
     # The (date, slot) spots nothing may move onto: a finished session, or a
     # booking stuck behind one.
     staying = set()
+    # A finished task holding a block stays on its day, as a finished session
+    # does, so nothing may land on it either. Open ones move with the day
+    # (shift_tasks_forward), in step with the bookings around them.
+    for task in Task.query.filter(
+        Task.user_id == user_id,
+        Task.is_done.is_(True),
+        Task.slot.isnot(None),
+        Task.due_date >= from_day,
+    ):
+        staying.add((task.due_date, task.slot))
     for entry in entries:
         target = (entry.slot_date + timedelta(days=days), entry.slot)
         # A failed session ended too, on the day it was meant for - it stays

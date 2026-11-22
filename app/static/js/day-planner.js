@@ -292,6 +292,15 @@
                     );
                     remove.addEventListener("click", () => releaseSlot(day.date, slot.slot));
                     cell.appendChild(remove);
+                } else if (slot.is_task) {
+                    // A task holds the block. It is taken out of it from its
+                    // own menu, not from here, so there is no ×.
+                    cell.classList.add("planner-slot-taken", "planner-slot-task");
+                    const name = document.createElement("span");
+                    name.className = "planner-slot-name";
+                    name.textContent = slot.project_title;
+                    name.title = `Task: ${slot.project_title}`;
+                    cell.appendChild(name);
                 } else if (slot.can_take) {
                     cell.classList.add("planner-slot-free");
                     const button = document.createElement("button");

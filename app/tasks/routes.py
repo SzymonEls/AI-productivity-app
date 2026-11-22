@@ -32,7 +32,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from ..extensions import db
 from ..models import TASK_TITLE_MAX_LENGTH, Task
-from ..projects.slots import parse_slot_date, today_local
+from ..projects.slots import SLOTS, block_taken_by, parse_slot_date, today_local
 from ..time_tracking.service import utc_now
 
 
@@ -194,6 +194,7 @@ def serialize_task(task):
         "due_date": task.due_date.isoformat() if task.due_date else None,
         "is_done": bool(task.is_done),
         "repeat": task.repeat_rule,
+        "slot": task.slot,
     }
 
 
@@ -259,6 +260,14 @@ def shift_tasks_forward(user_id, from_day, days=1):
     ).all()
     for entry in entries:
         entry.due_date = entry.due_date + timedelta(days=days)
+    db.session.flush()
+    # A task in a block moves in step with the bookings around it, so it lands
+    # in a free block - unless what was there stayed put (a finished session or
+    # task, or a session held back behind one). Then it leaves the block for
+    # its day's list rather than share it.
+    for entry in entries:
+        if entry.slot and block_taken_by(user_id, entry.due_date, entry.slot, entry.id):
+            entry.slot = None
     return len(entries)
 
 
@@ -440,6 +449,39 @@ def add_task():
     return jsonify({"ok": True, "message": "Task added.", "task": serialize_task(task)})
 
 
+def _slot_refusal(task, slot):
+    """Why ``task`` cannot take block ``slot`` of its day, or "" when it can."""
+    if slot not in SLOTS:
+        return "Unknown block."
+    if task.due_date is None:
+        return "Give the task a day first."
+    if task.due_date < today_local():
+        return "That day is in the past."
+    taken_by = block_taken_by(task.user_id, task.due_date, slot, task.id)
+    if taken_by:
+        return f"Block {slot} on {task.due_date.strftime('%a %d %b')} is taken by {taken_by}."
+    return ""
+
+
+def _keep_slot_after_move(task):
+    """After a task changed day: whether it keeps its block there. Returns a note.
+
+    It keeps the letter when that block is free on the new day, and goes into
+    the day's list when it is not - or when it has no day any more, or a day
+    already gone, where no block can be filled.
+    """
+    if not task.slot:
+        return ""
+    letter = task.slot
+    if task.due_date is None or task.due_date < today_local():
+        task.slot = None
+        return f" Out of block {letter}."
+    if block_taken_by(task.user_id, task.due_date, letter, task.id):
+        task.slot = None
+        return f" Block {letter} is taken there, so it is in the day's list."
+    return f" Block {letter}."
+
+
 @tasks_bp.route("/<int:task_id>/update", methods=["POST"])
 @login_required
 def update_task(task_id):
@@ -469,6 +511,25 @@ def update_task(task_id):
         message = (
             f"Moved to {due_date.strftime('%a %d %b')}." if due_date else "Date removed."
         )
+        if "slot" not in payload:
+            message += _keep_slot_after_move(task)
+
+    # Taking a block in place of a session, or "" to go back to the day's list.
+    # Checked after the day, so one request can move a task onto today and put
+    # it in a block there.
+    if "slot" in payload:
+        slot = (payload.get("slot") or "").strip().upper() or None
+        if slot is None:
+            if task.slot:
+                message = f"Out of block {task.slot}."
+            task.slot = None
+        else:
+            why_not = _slot_refusal(task, slot)
+            if why_not:
+                db.session.rollback()
+                return jsonify({"ok": False, "message": why_not}), 409
+            task.slot = slot
+            message = f"In block {slot} on {task.due_date.strftime('%a %d %b')}."
 
     if "repeat" in payload:
         rule, ok = clean_repeat_rule(payload.get("repeat"))
@@ -494,7 +555,8 @@ def update_task(task_id):
                 removed_id = _take_back_next_occurrence(task)
         message = "Done." if is_done else "Reopened."
         if next_task is not None:
-            message = f"Done. Next: {next_task.due_date.strftime('%a %d %b')}."
+            message = f"Done. Next: {next_task.due_date.strftime('%a %d %b')}"
+            message += f", block {next_task.slot}." if next_task.slot else "."
 
     try:
         db.session.commit()
@@ -529,12 +591,18 @@ def _write_next_occurrence(task):
     if existing is not None:
         return None if existing.is_done else existing
 
+    due_date = next_due(task.repeat_rule, task.due_date, today_local())
     next_task = Task(
         user_id=task.user_id,
         title=task.title,
-        due_date=next_due(task.repeat_rule, task.due_date, today_local()),
+        due_date=due_date,
         repeat_rule=task.repeat_rule,
         previous_task_id=task.id,
+        # A task kept in a block comes back in the same block, when that one
+        # is free on its next day; otherwise it waits in that day's list.
+        slot=task.slot
+        if task.slot and not block_taken_by(task.user_id, due_date, task.slot)
+        else None,
     )
     db.session.add(next_task)
     db.session.flush()

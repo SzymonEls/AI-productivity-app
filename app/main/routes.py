@@ -68,9 +68,16 @@ def home():
 
     # Today's tasks, with whatever was left open on a day already gone above
     # them: this is the one page that would otherwise never show those again.
-    task_lines = overdue_tasks(current_user.id, today) + tasks_from(
-        current_user.id, today, today
-    ).get(today, [])
+    todays_tasks = tasks_from(current_user.id, today, today).get(today, [])
+    # A task put in one of today's blocks is that block's card instead of a
+    # line in the list, the way the schedule draws it.
+    for card in slot_cards:
+        if card["project"] is None:
+            card["task"] = next((task for task in todays_tasks if task.slot == card["slot"]), None)
+    in_cards = {id(card["task"]) for card in slot_cards if card["task"] is not None}
+    task_lines = overdue_tasks(current_user.id, today) + [
+        task for task in todays_tasks if id(task) not in in_cards
+    ]
 
     return render_template(
         "home.html",

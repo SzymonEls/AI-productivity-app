@@ -569,6 +569,12 @@ class Task(db.Model):
     # takes back the occurrence it wrote. A plain id rather than a foreign key -
     # the earlier row may be deleted and this one must not care.
     previous_task_id = db.Column(db.Integer, nullable=True)
+    # The block of its day the task takes in place of a session - "A", "B",
+    # "C" - or None for a task that sits in the day's list. Only meaningful
+    # with a due_date. Not part of project_day_slots' unique constraint, so
+    # "one thing per block" across bookings and tasks is kept by
+    # app/projects/slots.py (block_holder) rather than by the schema.
+    slot = db.Column(db.String(1), nullable=True)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = db.Column(
         db.DateTime,
