@@ -546,9 +546,9 @@ The schema in the code matches the latest migration (`20261122_0039`).
     The rule labels exist twice — `REPEAT_RULES` on the server, `REPEAT_LABELS` in
     [tasks.js](../app/static/js/tasks.js) — change both together.
 
-    **A task can take a block in place of a session.** The menu's "Block" section puts it in
-    A, B or C of its day (of today, for a task with no day or an overdue one — the same
-    request moves it there), moves it to another block, or takes it out; `Task.slot` holds
+    **A task can take a block in place of a session.** The menu's **Block** item opens a page of
+    its own, as Repeat does (`showBlockChoices` in tasks.js): None, A, B or C of its day (of today, for a task with no day or an overdue one — the same
+    request moves it there), with the current one ticked and a taken one greyed out; `Task.slot` holds
     the letter. A block holds one thing, but bookings and tasks are two tables, so the unique
     constraint on `project_day_slots` cannot say so: `slot_task` / `block_taken_by` in
     [slots.py](../app/projects/slots.py) do, and every way of filling a block asks them —
