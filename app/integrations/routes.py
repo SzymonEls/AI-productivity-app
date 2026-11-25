@@ -11,9 +11,10 @@ the request the schedule makes once it is on the screen, which is where reading
 a calendar is allowed to take its time. See its docstring.
 """
 
+import io
 from datetime import timedelta
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, flash, jsonify, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -21,6 +22,7 @@ from ..extensions import db
 from ..projects.slots import parse_slot_date, today_local
 from ..tasks.routes import CSV_MAX_BYTES, CSV_MAX_ROWS, import_tasks, parse_tasks_csv
 from ..models import MAX_REFRESH_MINUTES, MIN_REFRESH_MINUTES
+from .export import build_export
 from .feeds import (
     MAX_FEEDS_PER_USER,
     add_feed,
@@ -49,6 +51,23 @@ def integrations_page():
         min_refresh_minutes=MIN_REFRESH_MINUTES,
         max_refresh_minutes=MAX_REFRESH_MINUTES,
         csv_max_rows=CSV_MAX_ROWS,
+    )
+
+
+@integrations_bp.route("/export")
+@login_required
+def export_everything():
+    """Every project, task, note and rating as a zip of Markdown files.
+
+    A GET, because it changes nothing: the browser downloads it like any file.
+    What goes into the zip, and why calendar addresses do not, is in export.py.
+    """
+    filename, data = build_export(current_user)
+    return send_file(
+        io.BytesIO(data),
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=filename,
     )
 
 

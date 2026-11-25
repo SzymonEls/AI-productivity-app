@@ -93,6 +93,11 @@ container, no external services.
   without forgetting its address. Recurring events, all-day events, exceptions and moved
   occurrences are understood; the events themselves are read-only here, because the calendar owns
   them.
+- **Export** — the Integrations page downloads everything as one zip of Markdown files: a file
+  per project with its data on top (sessions ahead and behind, deadline, rhythm, tracked time)
+  and its plan underneath, plus tasks, day notes, the inbox, mood, tracked time and the
+  timeline. It is made for reading — picking which files to hand on — rather than restoring,
+  and it leaves calendar addresses out, since a private one opens the whole calendar.
 - **Time tracking** — start/stop a timer per project, with daily and weekly totals. Deleting a
   project keeps its entries: they hold a snapshot of the title, so past weeks stay correct.
 - **JSON API** — `/api/v1` exposes today's slots and start/stop for the timer, authenticated by a
