@@ -11,8 +11,8 @@
                 <h1 class="h2 mb-1">Integrations</h1>
                 <p class="text-muted mb-0">
                     Calendars read into the schedule - their events show under the blocks of each
-                    day sheet, beside the notes you write there yourself - and tasks brought in
-                    from a CSV file.
+                    day sheet, beside the notes you write there yourself - tasks brought in
+                    from a CSV file, and everything exported as Markdown.
                 </p>
             </div>
             <a href="{{ url_for('projects.schedule') }}" class="btn btn-outline-secondary">{{ icon("calendar") }}Schedule</a>
@@ -171,6 +171,23 @@ Read the contract,,,</pre>
                         <button type="submit" class="btn btn-primary">{{ icon("download") }}Import tasks</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body p-4">
+                <h2 class="h5 mb-1">Export everything</h2>
+                {# For reading the data somewhere else - picking which files to hand
+                   on, or keeping a copy to look through - not a backup: nothing in
+                   the zip can be imported back. #}
+                <p class="text-body-secondary small mb-3">
+                    One zip of Markdown files. Every project is a file of its own, with its data on
+                    top — sessions ahead and behind, deadline, rhythm, tracked time — and its plan
+                    underneath, exactly as written. Tasks, day notes, the inbox, mood, tracked time
+                    and the timeline get a file each. Calendars are listed by name only: a private
+                    calendar address opens the whole calendar to whoever holds it.
+                </p>
+                <a href="{{ url_for('integrations.export_everything') }}" class="btn btn-outline-primary">{{ icon("download") }}Download .zip</a>
             </div>
         </div>
 
