@@ -103,6 +103,11 @@ container, no external services.
 - **JSON API** — `/api/v1` exposes today's slots and start/stop for the timer, authenticated by a
   bearer token you generate on the account page. It is what the macOS menu bar client talks to;
   the token is separate from your password, so changing one leaves the other working.
+- **Claude over MCP** — `/mcp` lets Claude (Claude Code, or claude.ai and its apps as a custom
+  connector) read and plan your projects, schedule, tasks, notes and inbox and run the timer.
+  Switch it on, off or to a new credential on the account page. **Private projects stay private
+  there**: Claude sees their title, settings and bookings, never their thoughts or plan, and
+  cannot edit those.
 - **Installable (PWA)** and mobile-first, because most of the ticking off happens on a phone.
 
 ## Stack

@@ -35,6 +35,7 @@ def create_app(config_class=Config):
     from .inbox.routes import inbox_bp
     from .integrations.routes import integrations_bp
     from .main.routes import main_bp
+    from .mcp.routes import mcp_bp
     from .mood.routes import mood_bp
     from .projects.routes import projects_bp
     from .tasks.routes import tasks_bp
@@ -45,6 +46,7 @@ def create_app(config_class=Config):
     app.register_blueprint(projects_bp)
     app.register_blueprint(time_tracking_bp)
     app.register_blueprint(api_bp)
+    app.register_blueprint(mcp_bp)
     app.register_blueprint(integrations_bp)
     app.register_blueprint(inbox_bp)
     app.register_blueprint(tasks_bp)

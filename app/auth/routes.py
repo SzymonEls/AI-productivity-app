@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from . import lockout
 from ..extensions import db
-from ..models import User
+from ..models import MCP_CREDENTIAL_KINDS, User
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/auth")
@@ -139,6 +139,56 @@ def regenerate_api_token():
 
     flash("A new API token is ready. Paste it into the app - the old one stopped working.", "success")
     return redirect(url_for("auth.change_password"))
+
+
+MCP_CREDENTIAL_NAMES = {"token": "MCP token", "url": "connector URL"}
+
+
+@auth_bp.route("/mcp/<kind>/regenerate", methods=["POST"])
+@login_required
+def regenerate_mcp_credential(kind):
+    """Turn on one of Claude's two ways in, or replace it.
+
+    Each is its own switch: a new connector URL leaves Claude Code's token
+    working, and neither touches the menu bar app's API token.
+    """
+    if kind not in MCP_CREDENTIAL_KINDS:
+        abort(404)
+    user = current_user._get_current_object()
+    user.regenerate_mcp_credential(kind)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash(f"Failed to issue a new {MCP_CREDENTIAL_NAMES[kind]}.", "danger")
+        return redirect(url_for("auth.change_password", _anchor="mcp"))
+
+    flash(
+        f"A new {MCP_CREDENTIAL_NAMES[kind]} is ready - the previous one, if any, stopped working.",
+        "success",
+    )
+    return redirect(url_for("auth.change_password", _anchor="mcp"))
+
+
+@auth_bp.route("/mcp/<kind>/disable", methods=["POST"])
+@login_required
+def disable_mcp_credential(kind):
+    """Cut Claude off through one door; it gets a 401 from the next request on."""
+    if kind not in MCP_CREDENTIAL_KINDS:
+        abort(404)
+    user = current_user._get_current_object()
+    user.disable_mcp_credential(kind)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        flash(f"Failed to switch off the {MCP_CREDENTIAL_NAMES[kind]}.", "danger")
+        return redirect(url_for("auth.change_password", _anchor="mcp"))
+
+    flash(f"The {MCP_CREDENTIAL_NAMES[kind]} is switched off.", "info")
+    return redirect(url_for("auth.change_password", _anchor="mcp"))
 
 
 @auth_bp.route("/logout")
