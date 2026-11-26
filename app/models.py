@@ -15,6 +15,10 @@ DEFAULT_REFRESH_MINUTES = 30
 MIN_REFRESH_MINUTES = 5
 MAX_REFRESH_MINUTES = 1440
 
+# Which User column holds each kind of MCP credential.
+_MCP_CREDENTIAL_COLUMNS = {"token": "mcp_token", "url": "mcp_url_secret"}
+MCP_CREDENTIAL_KINDS = tuple(_MCP_CREDENTIAL_COLUMNS)
+
 
 class User(UserMixin, db.Model):
     """Authenticated user model."""
@@ -36,6 +40,13 @@ class User(UserMixin, db.Model):
     api_token = db.Column(
         db.String(64), nullable=False, default=lambda: secrets.token_urlsafe(32)
     )
+    # The two ways Claude reaches the MCP endpoint, each switched off (None)
+    # until it is turned on from the account page, and each retired on its own:
+    # a bearer token for Claude Code, and a secret inside the URL for a claude.ai
+    # connector, which has nowhere to put a header. Apart from api_token so that
+    # cutting Claude off leaves the menu bar app signed in.
+    mcp_token = db.Column(db.String(64), nullable=True, unique=True, index=True)
+    mcp_url_secret = db.Column(db.String(64), nullable=True, unique=True, index=True)
     # How stale a subscribed calendar may get before the schedule page goes and
     # re-reads it. On the user rather than in the config file: it is a taste
     # ("how live does this have to feel") and it is set from the Integrations
@@ -135,6 +146,19 @@ class User(UserMixin, db.Model):
         """
         self.api_token = secrets.token_urlsafe(32)
         return self.api_token
+
+    def regenerate_mcp_credential(self, kind):
+        """Turn one MCP credential on, or replace it - the old value stops working.
+
+        ``kind`` is "token" (the bearer token) or "url" (the secret in the URL).
+        """
+        value = secrets.token_urlsafe(32)
+        setattr(self, _MCP_CREDENTIAL_COLUMNS[kind], value)
+        return value
+
+    def disable_mcp_credential(self, kind):
+        """Switch one MCP credential off; the other one keeps working."""
+        setattr(self, _MCP_CREDENTIAL_COLUMNS[kind], None)
 
     def get_id(self):
         """Identify the session by user *and* password generation.

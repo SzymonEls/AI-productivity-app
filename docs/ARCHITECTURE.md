@@ -31,7 +31,8 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/mood/](../app/mood/) | The daily mood: rating today from 1 to 5 (`POST /mood`, one row per day, rewritten when rated again), and the 7-day average the home page and the health chart read - see point 26. |
 | [app/inbox/](../app/inbox/) | The inbox: capturing a thought before a project has been chosen for it, and filing one into a project's plan as a to-do. Also the one-box page the PWA shortcut opens - see point 19. |
 | [app/api/](../app/api/) | Token-authenticated JSON API (`/api/v1`) for the macOS menu bar client: today's slots, and starting/stopping a timer. |
-| [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token. |
+| [app/mcp/](../app/mcp/) | The MCP server Claude connects to (`/mcp`): the transport and its two credentials (`routes.py`) and the tools with the private-project rule (`tools.py`) - see point 29. |
+| [app/auth/](../app/auth/) | Registration, login, logout, password change, issuing the API token and switching the two MCP credentials on and off. |
 | [app/main/](../app/main/) | Home page (today's A/B/C slots, today's calendar events and day notes, unscheduled projects, health score and mood average, the inbox widget) + PWA files (manifest, service worker). |
 | [app/projects/](../app/projects/) | Projects: CRUD, archiving plan sections, saving the timeline, waiting for another project and its diagram. |
 | [app/time_tracking/](../app/time_tracking/) | Time tracking: `routes.py` + `service.py` (time/timezone logic). |
@@ -58,6 +59,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
 - **User** — username, email (both unique), hashed password. `session_token` is half of what the
   cookies carry, so a password change invalidates them; `api_token` is the separate bearer
   credential for `/api/v1`, which a password change deliberately leaves alone.
+  `mcp_token` and `mcp_url_secret` are Claude's two ways into `/mcp` (point 29): NULL is
+  switched off, which is how every account starts, and each is replaced or cleared on its own.
   `calendar_refresh_minutes` is how stale a subscribed calendar may get before the schedule
   re-reads it — a taste rather than a deployment setting, so it lives here and is set on the
   Integrations page, clamped to 5…1440 both where it is saved and where it is read.
@@ -71,7 +74,8 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   [app/static/js/private-reveal.js](../app/static/js/private-reveal.js) lifts a card for five
   minutes at a time and re-veils everything when safe mode is switched on again. The text is in
   the page all along — nothing is withheld from the browser, and nothing about it is enforced
-  server-side.
+  server-side. **The one exception is MCP** (point 29): there the flag is enforced, and a
+  private project's contents never reach Claude.
   `waiting_for_project_id` (with `waiting_for_note`, the milestone) puts the project on hold
   until something in another project is reached — see point 23. `session_deadline` is the
   project's deadline, `session_deadline_time` an optional hour on it, and
@@ -131,7 +135,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   The folded events are sent along anyway, hidden, for the schedule's "Ungroup calendars" switch
   (point 17).
 
-The schema in the code matches the latest migration (`20261122_0039`).
+The schema in the code matches the latest migration (`20261126_0040`).
 
 ## Responsibility boundaries
 
@@ -796,6 +800,30 @@ The schema in the code matches the latest migration (`20261122_0039`).
     **Calendar addresses are left out on purpose**: a private iCal URL is a credential, and the
     zip is made to be handed on, so `calendars.md` lists names only. The zip is built in memory
     from one query per table.
+
+29. **Over MCP a private project is withheld, not veiled.** `/mcp` ([app/mcp/](../app/mcp/)) is a
+    Model Context Protocol server in its stateless Streamable HTTP form: each JSON-RPC message is
+    one POST answered with JSON, spoken directly rather than through the `mcp` package (which
+    needs an ASGI server). Two credentials reach it, both off until the account page turns them
+    on: `POST /mcp` with `Authorization: Bearer <mcp_token>` for Claude Code, and
+    `POST /mcp/<mcp_url_secret>` for a claude.ai connector, which cannot send a header. Neither
+    is `api_token`, so cutting Claude off leaves the menu bar app working.
+    - **Private projects** ([app/mcp/tools.py](../app/mcp/tools.py)): listed, booked, timed and
+      configured like any other, but their thoughts, plan, archived plan, the plan's first heading
+      (wherever a block or timer would quote it), the milestone they wait for and their sessions'
+      descriptions all read `[private]`. update_project refuses their thoughts and plan, filing an
+      inbox item into one is refused, nothing can change `is_private`, and a project created here
+      is never private. Every read goes through `_hidden`/`_step`, so that rule lives in one place.
+    - **Reads are serialised field by field** in tools.py, never passed on from the pages' JSON,
+      so a field added to a page later does not reach Claude unless it is added there too.
+    - **Writes go through the pages' own JSON endpoints** (`_through`): a nested request on the
+      same app context, with `current_user` (and the API's `g.api_user`) set to the credential's
+      owner, so a booking from Claude obeys the two-block rule exactly as a click does. Only the
+      keys in `PASSED_THROUGH` come back from those answers. The project settings, whose
+      endpoints answer with a redirect and a flash, are written in tools.py directly.
+    - The tests in [tests/test_mcp.py](../tests/test_mcp.py) mark every private field with one
+      word and check that no answer from any tool contains it
+      (`python -m unittest discover tests`).
 
 Things not determined (literally "I don't know"):
 - [app/templates/icons.html](../app/templates/icons.html) is not rendered by anything — purpose unknown.
