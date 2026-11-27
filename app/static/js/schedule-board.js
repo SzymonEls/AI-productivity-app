@@ -12,7 +12,7 @@
  * on the board a click means "move this".
  *
  * Moves and clears are applied to the page first and posted afterwards; a
- * refused one (the "one block today plus one in the future" rule) is undone
+ * refused one (the "one block a day per project" rule) is undone
  * again, so the page never has to reload to stay truthful.
  */
 (function () {

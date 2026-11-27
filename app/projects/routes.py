@@ -864,9 +864,10 @@ def _needs_next_session(project, payload):
     """
     if _payload_flag(payload, "skip_next", default="0"):
         return None
-    today_slot, future_slot = project_bookings(current_user.id, project.id)
+    today_slot, next_slot = project_bookings(current_user.id, project.id)
     # No session today: nothing to end, and the caller's own answer says so.
-    if today_slot is None or future_slot is not None:
+    # Any session after today will do - the next one is the earliest of them.
+    if today_slot is None or next_slot is not None:
         return None
     return (
         jsonify(

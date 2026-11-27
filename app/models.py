@@ -391,7 +391,7 @@ class ProjectDaySlot(db.Model):
 
     Slots are A, B and the optional C. The unique constraint is what actually
     guarantees "at most one project per slot"; the service layer only adds the
-    rule that a project may hold at most one slot today and one in the future.
+    rule that a project may hold at most one slot a day.
     Unlike ``ProjectTimeEntry``, this cascades from ``Project``: a slot left
     behind by a deleted project is an empty booking, not history worth keeping.
     """

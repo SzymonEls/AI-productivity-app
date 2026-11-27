@@ -234,7 +234,7 @@
         <span>
             Out of the planning.
             {% if planned_sessions %}
-                Still booked: {{ planned_sessions | join(" and ") }}.
+                Still booked: {{ planned_sessions | join(", ") }}.
             {% else %}
                 Nothing booked from today on.
             {% endif %}

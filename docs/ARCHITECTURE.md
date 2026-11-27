@@ -24,7 +24,7 @@ per day, a timeline, and time tracking. Data lives in SQLite (a single file).
 | [app/models.py](../app/models.py) | Definitions of all database tables + loading the session user. |
 | [app/markdown_utils.py](../app/markdown_utils.py) | Markdown → HTML conversion with extras (checkboxes, colored sections, `#tags` painted inside list items) + `TAG_PATTERN`, the definition of a tag. |
 | [app/demo.py](../app/demo.py) | Read-only demo mode (`DEMO_MODE`) + the `seed-demo` command. Inert when off. |
-| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the two-block rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), whether a session is behind its project's sessions a week, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its two weeks of history, and the three-week figures behind the Statistics card on a project page. |
+| [app/projects/slots.py](../app/projects/slots.py) | Daily A/B/C slots: date arithmetic, the one-block-a-day rule, the fortnight-long planner window, the calendar forwards (a month, on the schedule page) and backwards (three weeks a page, in the archive), moving a booking between blocks, taking a day off (pushing every booking from a day on one day later), whether a session is behind its project's sessions a week, marking a booked block's session done on any day (the archive ticks past ones off), the home page's health score and its two weeks of history, and the three-week figures behind the Statistics card on a project page. |
 | [app/projects/day_notes.py](../app/projects/day_notes.py) | The other half of a day sheet: the list of notes under its three blocks. Reading a page's notes in one query, adding, rewriting and removing one, and moving a day's notes along with its bookings when a day is taken off. |
 | [app/integrations/](../app/integrations/) | Subscribed calendars: the Integrations page (`routes.py`), fetching and caching an iCal URL (`feeds.py`) and reading the .ics itself (`ical.py`). One way only - the app never writes to a calendar. The same page imports tasks from CSV (`parse_tasks_csv`/`import_tasks` in `app/tasks/routes.py`) - see point 21 - and exports everything as a zip of Markdown files (`export.py`) - see point 28. |
 | [app/tasks/](../app/tasks/) | Tasks: the Tasks page, adding/rewriting/moving/ticking off/deleting one, and the day-keyed reads the schedule, the archive and the home page use (`tasks_from`, `overdue_tasks`) plus `shift_tasks_forward` for a day off. One script, [tasks.js](../app/static/js/tasks.js), drives every list - see point 21. |
@@ -95,7 +95,7 @@ All tables are in [app/models.py](../app/models.py). All of them have `created_a
   it no longer colours anything (see point 18).
   Unique on `(user_id, slot_date, slot)`, so a slot never holds two projects. Unlike
   `ProjectTimeEntry` it **does** cascade from `Project`: a slot left by a deleted project is an
-  empty booking, not history. The rule "one slot today plus one in the future" is enforced in
+  empty booking, not history. The rule "at most one slot a day per project" (as many days as you like) is enforced in
   [app/projects/slots.py](../app/projects/slots.py), not by the schema.
 
 - **DayNote** — one line of notes against one day (`note_date`, `body`, at most
@@ -818,7 +818,7 @@ The schema in the code matches the latest migration (`20261126_0040`).
       so a field added to a page later does not reach Claude unless it is added there too.
     - **Writes go through the pages' own JSON endpoints** (`_through`): a nested request on the
       same app context, with `current_user` (and the API's `g.api_user`) set to the credential's
-      owner, so a booking from Claude obeys the two-block rule exactly as a click does. Only the
+      owner, so a booking from Claude obeys the one-block-a-day rule exactly as a click does. Only the
       keys in `PASSED_THROUGH` come back from those answers. The project settings, whose
       endpoints answer with a redirect and a flash, are written in tools.py directly.
     - The tests in [tests/test_mcp.py](../tests/test_mcp.py) mark every private field with one
