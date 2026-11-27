@@ -862,77 +862,80 @@ def project_statistics(user_id, project_id, weeks=STATISTICS_WEEKS):
     }
 
 
-def project_bookings(user_id, project_id, ignore_ids=()):
-    """The project's slots from today on, as (today_slot, future_slot).
+def upcoming_bookings(user_id, project_id, ignore_ids=()):
+    """The project's bookings from today on, earliest first.
 
     ``ignore_ids`` drops bookings that are on their way out - the row being
     dragged elsewhere, or the one about to be deleted. Without it a booking
     would count as its own blocker and no move could ever be legal.
     """
-    today = today_local()
     entries = (
         ProjectDaySlot.query.filter(
             ProjectDaySlot.user_id == user_id,
             ProjectDaySlot.project_id == project_id,
-            ProjectDaySlot.slot_date >= today,
+            ProjectDaySlot.slot_date >= today_local(),
         )
         .order_by(ProjectDaySlot.slot_date.asc())
         .all()
     )
-    entries = [entry for entry in entries if entry.id not in ignore_ids]
+    return [entry for entry in entries if entry.id not in ignore_ids]
+
+
+def project_bookings(user_id, project_id, ignore_ids=()):
+    """The project's slot today and its next one after today, as (today_slot, next_slot).
+
+    A project may hold any number of later sessions; this pair is what "is the
+    next one planned" asks about - the next one is the earliest after today.
+    """
+    today = today_local()
+    entries = upcoming_bookings(user_id, project_id, ignore_ids)
     today_slot = next((entry for entry in entries if entry.slot_date == today), None)
-    future_slot = next((entry for entry in entries if entry.slot_date > today), None)
-    return today_slot, future_slot
+    next_slot = next((entry for entry in entries if entry.slot_date > today), None)
+    return today_slot, next_slot
 
 
 def bookings_by_project(user_id):
     """
-    ``{project_id: (today_slot, future_slot)}`` for every booked project, in one
-    query.
+    ``{project_id: [booking, ...]}`` for every booked project, from today on,
+    earliest first, in one query.
 
-    The bulk form of project_bookings(). Asking per project is fine for one
+    The bulk form of upcoming_bookings(). Asking per project is fine for one
     project, but the picker weighs the rule against the whole project list at
     once, and that turned into a query each.
     """
-    today = today_local()
     entries = (
         ProjectDaySlot.query.filter(
-            ProjectDaySlot.user_id == user_id, ProjectDaySlot.slot_date >= today
+            ProjectDaySlot.user_id == user_id, ProjectDaySlot.slot_date >= today_local()
         )
-        .order_by(ProjectDaySlot.slot_date.asc())
+        .order_by(ProjectDaySlot.slot_date.asc(), ProjectDaySlot.slot.asc())
         .all()
     )
 
     by_project = {}
     for entry in entries:
-        today_slot, future_slot = by_project.get(entry.project_id, (None, None))
-        if entry.slot_date == today:
-            today_slot = today_slot or entry
-        elif future_slot is None:
-            future_slot = entry
-        by_project[entry.project_id] = (today_slot, future_slot)
+        by_project.setdefault(entry.project_id, []).append(entry)
     return by_project
 
 
-def blocker_for_day(bookings, day, today=None):
+def blocker_for_day(bookings, day):
     """
-    Which of a project's two bookings stands in the way on ``day``, if any.
+    The project's booking already on ``day``, if any - the one thing in the way.
 
-    ``bookings`` is a ``(today_slot, future_slot)`` pair from either
-    project_bookings() or bookings_by_project() - the rule itself lives here, so
-    both the single-project and the bulk path answer identically.
+    ``bookings`` is a list from either upcoming_bookings() or
+    bookings_by_project() - the rule itself lives here, so both the
+    single-project and the bulk path answer identically: a project takes at
+    most one block a day, and as many days as it likes.
     """
-    today_slot, future_slot = bookings
-    return today_slot if day == (today or today_local()) else future_slot
+    return next((entry for entry in bookings if entry.slot_date == day), None)
 
 
 def blocking_booking(user_id, project_id, day, ignore_ids=()):
     """
     Why ``project_id`` may not take a slot on ``day``, or None if it may.
 
-    A project gets at most two bookings: one today and one in the future.
+    A project gets at most one booking a day.
     """
-    return blocker_for_day(project_bookings(user_id, project_id, ignore_ids), day)
+    return blocker_for_day(upcoming_bookings(user_id, project_id, ignore_ids), day)
 
 
 def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
@@ -946,15 +949,15 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
     last_day = today + timedelta(days=days - 1)
     booked = slots_from(user_id, today, last_day)
     held = slot_tasks_from(user_id, today, last_day)
-    # The project's own two bookings do not change from day to day, so they are
+    # The project's own bookings do not change from day to day, so they are
     # read once for the whole grid rather than per row.
-    bookings = project_bookings(user_id, project_id)
+    bookings = upcoming_bookings(user_id, project_id)
     project = Project.query.filter_by(id=project_id, user_id=user_id).first()
 
     window = []
     for offset in range(days):
         day = today + timedelta(days=offset)
-        blocker = blocker_for_day(bookings, day, today)
+        blocker = blocker_for_day(bookings, day)
         day_slots = booked.get(day, {slot: None for slot in SLOTS})
         day_tasks = held.get(day, {})
 
@@ -989,25 +992,24 @@ def schedule_window(user_id, project_id, days=SCHEDULE_WINDOW_DAYS):
 
 
 def _booking_labels(bookings):
-    """A ``(today_slot, future_slot)`` pair named: ``["today in slot A", ...]``.
+    """A project's bookings from today on, named: ``["today in slot A", ...]``.
 
     Empty when nothing is booked. The planner's note, the banner on an archived
-    project and the archived list all say the same thing about the same two
+    project and the archived list all say the same thing about the same
     bookings, so they word it in one place.
     """
-    today_slot, future_slot = bookings
-
-    labels = []
-    if today_slot is not None:
-        labels.append(f"today in slot {today_slot.slot}")
-    if future_slot is not None:
-        labels.append(f"{future_slot.slot_date.strftime('%d %b')} in slot {future_slot.slot}")
-    return labels
+    today = today_local()
+    return [
+        f"today in slot {entry.slot}"
+        if entry.slot_date == today
+        else f"{entry.slot_date.strftime('%d %b')} in slot {entry.slot}"
+        for entry in bookings
+    ]
 
 
 def planned_session_labels(user_id, project_id):
     """What this project still has booked from today on, as named sessions."""
-    return _booking_labels(project_bookings(user_id, project_id))
+    return _booking_labels(upcoming_bookings(user_id, project_id))
 
 
 def planned_session_labels_by_project(user_id):
@@ -1027,9 +1029,9 @@ def booking_note(user_id, project_id):
     """
     Where this project already stands, as the one line the planner shows.
 
-    The two-block rule blocks whole days at a time, so saying it per day - or
-    once per booking - only repeats itself. One sentence names both bookings and
-    the rule behind them, or nothing at all when the project is free to plan.
+    The rule blocks whole days at a time, so saying it per day - or once per
+    booking - only repeats itself. One sentence names the bookings and the rule
+    behind them, or nothing at all when nothing is booked yet.
     """
     booked = planned_session_labels(user_id, project_id)
     project = Project.query.filter_by(id=project_id, user_id=user_id).first()
@@ -1044,12 +1046,19 @@ def booking_note(user_id, project_id):
     return " ".join(
         part
         for part in (
-            f"Already planned for {' and '.join(booked)} — "
-            "a project takes at most one block today and one later.",
+            f"Already planned for {_joined(booked)} — "
+            "a project takes at most one block a day.",
             deadline,
         )
         if part
     )
+
+
+def _joined(labels):
+    """``a``, ``a and b``, ``a, b and c``."""
+    if len(labels) < 2:
+        return "".join(labels)
+    return f"{', '.join(labels[:-1])} and {labels[-1]}"
 
 
 def _blocked_reason(blocker, day, today):
@@ -1065,7 +1074,7 @@ def slot_candidates(user_id, day, slot):
     Every active project not waiting for another one, annotated with whether it
     can take this slot.
 
-    Projects the two-block rule rules out are returned too, with the reason,
+    Projects the one-block-a-day rule rules out are returned too, with the reason,
     rather than silently missing from the list - "where did that project go" is
     a worse experience than a greyed-out row that explains itself.
     """
@@ -1097,7 +1106,7 @@ def slot_candidates(user_id, day, slot):
         if taken is not None:
             reason = f"Slot {slot} is taken by {taken.project.title}."
         else:
-            blocker = blocker_for_day(bookings.get(project.id, (None, None)), day, today)
+            blocker = blocker_for_day(bookings.get(project.id, []), day)
             reason = _blocked_reason(blocker, day, today)
 
         candidates.append(

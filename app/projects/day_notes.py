@@ -3,7 +3,7 @@ A day's notes: the short list under the three blocks on a calendar sheet.
 
 Kept beside slots.py rather than inside it. A note shares the sheet with the
 blocks and travels with them when a day is taken off, but it is not a booking:
-it belongs to no project, obeys none of the "one block today and one later"
+it belongs to no project, obeys none of the "one block a day per project"
 arithmetic, and a day takes as many as get written.
 
 Unlike the blocks, the list is live on a past sheet too. The archive refuses

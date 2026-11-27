@@ -26,7 +26,7 @@
                     {% if booked %}
                         {# Archiving left these standing, so the list says so rather than
                            letting a session turn up on the schedule unaccounted for. #}
-                        <p class="text-muted mb-0 small">Still booked: {{ booked | join(" and ") }}.</p>
+                        <p class="text-muted mb-0 small">Still booked: {{ booked | join(", ") }}.</p>
                     {% endif %}
                 </div>
                 <form method="post" action="{{ url_for('projects.unarchive_project', project_id=project.id) }}">

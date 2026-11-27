@@ -235,12 +235,17 @@ class PrivacyTests(McpTestCase):
 
 
 class PlanningTests(McpTestCase):
-    def test_booking_follows_the_two_block_rule(self):
+    def test_booking_takes_one_block_a_day(self):
         today = today_local()
         first = self.call("book_session", project_id=self.public.id, date=(today + timedelta(days=1)).isoformat(), slot="A")
         self.assertTrue(first["ok"], first)
-        second = self.call("book_session", project_id=self.public.id, date=(today + timedelta(days=2)).isoformat(), slot="A")
-        self.assertFalse(second["ok"])
+        # Any number of later days...
+        for offset in (2, 5):
+            later = self.call("book_session", project_id=self.public.id, date=(today + timedelta(days=offset)).isoformat(), slot="A")
+            self.assertTrue(later["ok"], later)
+        # ...but one block a day.
+        same_day = self.call("book_session", project_id=self.public.id, date=(today + timedelta(days=1)).isoformat(), slot="B")
+        self.assertFalse(same_day["ok"])
         taken = self.call("book_session", project_id=self.public.id, date=today.isoformat(), slot="A")
         self.assertFalse(taken["ok"])
         self.assertIn("Hidden project", taken["message"])
@@ -251,6 +256,15 @@ class PlanningTests(McpTestCase):
         answer = self.call("set_session_state", date=today.isoformat(), slot="B", state="done")
         self.assertTrue(answer["ok"], answer)
         self.assertIn("plan its next session", answer["warning"])
+
+    def test_done_session_is_quiet_with_later_sessions_planned(self):
+        today = today_local()
+        for offset, slot in ((0, "B"), (3, "A"), (6, "B")):
+            booked = self.call("book_session", project_id=self.public.id, date=(today + timedelta(days=offset)).isoformat(), slot=slot)
+            self.assertTrue(booked["ok"], booked)
+        answer = self.call("set_session_state", date=today.isoformat(), slot="B", state="done")
+        self.assertTrue(answer["ok"], answer)
+        self.assertNotIn("warning", answer)
 
     def test_tasks_notes_and_inbox_round_trip(self):
         today = today_local().isoformat()

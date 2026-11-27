@@ -19,7 +19,7 @@ pages' JSON: a key added to a page's payload later reaches Claude only when it
 is added here too.
 
 **Writes** go through the very endpoint the page calls (``_through``), so a
-booking from Claude obeys the two-block rule, a ticked repeating task writes its
+booking from Claude obeys the one-block-a-day rule, a ticked repeating task writes its
 next occurrence, and so on, exactly as a click does. Only the keys in
 ``PASSED_THROUGH`` come back from those answers - never a page's whole payload,
 which can carry plan text. The project settings, whose endpoints answer with a
@@ -86,8 +86,8 @@ INSTRUCTIONS = (
     "This server is the user's productivity app: projects, each with thoughts and a "
     "Markdown plan; days of three blocks (A and B for real work, C a spare) each holding "
     "one project's session or one task; tasks; notes against days; an inbox of captured "
-    "thoughts; and a timer. A project may have at most one session today plus one on a "
-    "later day; the app refuses anything else and says why. Dates are YYYY-MM-DD in the "
+    "thoughts; and a timer. A project may have at most one session a day, on as many "
+    "days as you like; the app refuses anything else and says why. Dates are YYYY-MM-DD in the "
     f"app's timezone. Projects marked private show {PRIVATE} in place of their thoughts, "
     "plan, current step and session notes; that is deliberate, so never guess at those or "
     "try to work around it. You can still plan private projects' sessions. The user makes "
@@ -445,7 +445,7 @@ def list_inbox(user, arguments):
 @tool(
     "block_options",
     "Which projects could take one block on one day, and why the others cannot (the "
-    "two-block rule, a taken block) - what the planner offers when booking.",
+    "one-block-a-day rule, a taken block) - what the planner offers when booking.",
     {"date": DATE, "slot": SLOT},
     required=("date", "slot"),
     read_only=True,
@@ -524,7 +524,7 @@ def _next_session_warning(user, project):
 @tool(
     "book_session",
     "Book a project's session into a block on a day (today or later). Refused with the "
-    "reason when the block is taken or the two-block rule says no; a warning comes back "
+    "reason when the block is taken or the project already has a session that day; a warning comes back "
     "when the day is past the project's deadline.",
     {"project_id": PROJECT_ID, "date": DATE, "slot": SLOT},
     required=("project_id", "date", "slot"),

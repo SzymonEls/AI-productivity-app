@@ -356,7 +356,7 @@ def _seed_timeline(user, projects):
 
 def _seed_day_slots(user, projects):
     """
-    Book today's A/B/C and one future session.
+    Book today's A/B/C and a few later sessions.
 
     Deliberately leaves several projects without a future slot so the
     "Not scheduled" list on the dashboard has something in it.
@@ -372,7 +372,7 @@ def _seed_day_slots(user, projects):
         (today, "A", active[0]),
         (today, "B", active[1]),
         (today, "C", active[2]),
-        # A project in today's A slot may still hold one future slot.
+        # A project in today's A slot may hold later sessions too.
         (today + timedelta(days=2), "A", active[0]),
         (today + timedelta(days=3), "B", active[3] if len(active) > 3 else active[1]),
     ]
