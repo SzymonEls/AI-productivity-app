@@ -203,19 +203,34 @@ def deadlines_by_day(user_id, first_day, last_day):
     return found
 
 
-def meet_deadline(booking):
-    """A session ticked done meets its project's deadline, which then goes.
+def clear_past_deadline(project, today=None):
+    """Drop the project's deadline once its day has gone by; keep one still to come.
 
-    The deadline is about the next session, so the one that has just happened
-    is the one it was for. Reopening the session does not bring it back.
+    A project is booked on as many days as it needs, so a session done before
+    its deadline is rarely the last one before it - clearing the deadline then
+    took the purple D off the schedule while the work it was for was still
+    under way. Once the day is behind us the deadline has nothing left to say,
+    and the next session done is what puts it away. Its hour does not count:
+    the deadline day itself still shows it.
+    """
+    deadline = project.session_deadline
+    if deadline is not None and deadline < (today or today_local()):
+        project.session_deadline = None
+        project.session_deadline_time = None
+        project.session_deadline_day_before = False
+
+
+def meet_deadline(booking):
+    """A session ticked done: its project's deadline goes if it is already past.
+
+    See ``clear_past_deadline`` for why one still to come stays. Reopening the
+    session does not bring a cleared one back.
 
     It is also the way out of being problematic: one session that did happen
     is what the flag was waiting for, and it is not brought back either.
     """
     if booking.is_done and booking.project is not None:
-        booking.project.session_deadline = None
-        booking.project.session_deadline_time = None
-        booking.project.session_deadline_day_before = False
+        clear_past_deadline(booking.project)
         booking.project.is_problematic = False
 
 

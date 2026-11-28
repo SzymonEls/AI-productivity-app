@@ -82,9 +82,9 @@ def _meet_member_deadline(member):
     """A member finished in a group's session has had its session, as far as
     its own deadline and problematic flag are concerned - the same as
     ``meet_deadline`` does for a booking of its own."""
-    member.session_deadline = None
-    member.session_deadline_time = None
-    member.session_deadline_day_before = False
+    from .slots import clear_past_deadline
+
+    clear_past_deadline(member)
     member.is_problematic = False
 
 

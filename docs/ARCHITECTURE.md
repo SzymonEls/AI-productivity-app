@@ -665,8 +665,11 @@ The schema in the code matches the latest migration (`20261126_0040`).
     their deadline. Setting a deadline that a session already booked overshoots flashes a
     warning.
 
-    **Ticking a session done meets the deadline and clears it** (`meet_deadline`, called from
-    `set_session_done` and `set_block_done`); reopening the session does not bring it back.
+    **Ticking a session done clears the deadline only once its day has gone by**
+    (`meet_deadline` → `clear_past_deadline`, called from `set_session_done`, `set_block_done`
+    and a group member ticked off); a deadline still to come stays, since a project booked on
+    several days is rarely done with the first of them. Reopening the session does not bring a
+    cleared one back.
 
     On the schedule and the home page a booked block still to be done prints the deadline's day
     of the month ("14") on end in place of its A/B/C letter, with the full date in the tooltip,
